@@ -1,0 +1,35 @@
+version: 1.0.{build}
+
+image:
+  - Ubuntu
+  - macos
+
+for:
+  -
+    matrix:
+      only:
+        - image: Ubuntu
+    install:
+      - sh: sudo apt-get install -y libcmocka-dev;
+    build: off
+    build_script:
+      - mkdir build && cd build
+      - cmake .. -DBUILD_TESTS=on
+      - make
+    test_script:
+      - make test
+  -
+    matrix:
+      only:
+        - image: macos
+    install:
+      - sh: export C_INCLUDE_PATH=/usr/local/include
+      - sh: export LIBRARY_PATH=/usr/local/lib
+      - sh: HOMEBREW_NO_AUTO_UPDATE=1 brew install cmocka;
+    build: off
+    build_script:
+      - mkdir build && cd build
+      - cmake .. -DBUILD_TESTS=on -DBUILD_POSIX=on
+      - make
+    test_script:
+      - make test
