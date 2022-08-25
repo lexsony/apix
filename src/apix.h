@@ -7,17 +7,17 @@
 extern "C" {
 #endif
 
-struct apibus;
+struct apix;
 
-struct apibus *apibus_new();
-void apibus_destroy(struct apibus *bus);
-int apibus_poll(struct apibus *bus);
+struct apix *apix_new();
+void apix_destroy(struct apix *ctx);
+int apix_poll(struct apix *ctx);
 
-int /*fd*/ apibus_open(struct apibus *bus, const char *name, const char *addr);
-int apibus_close(struct apibus *bus, int fd);
-int apibus_ioctl(struct apibus *bus, int fd, unsigned int cmd, unsigned long arg);
-int apibus_send(struct apibus *bus, int fd, const void *buf, size_t len);
-int apibus_recv(struct apibus *bus, int fd, void *buf, size_t size);
+int /*fd*/ apix_open(struct apix *ctx, const char *name, const char *addr);
+int apix_close(struct apix *ctx, int fd);
+int apix_ioctl(struct apix *ctx, int fd, unsigned int cmd, unsigned long arg);
+int apix_send(struct apix *ctx, int fd, const void *buf, size_t len);
+int apix_recv(struct apix *ctx, int fd, void *buf, size_t size);
 
 #ifdef __cplusplus
 }

@@ -65,7 +65,7 @@ static int unix_open(struct apisink *sink, const char *addr)
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
     sinkfd->sink = sink;
     list_add(&sinkfd->node_sink, &sink->sinkfds);
-    list_add(&sinkfd->node_bus, &sink->bus->sinkfds);
+    list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
 
     struct posix_sink *unix_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &unix_sink->fds);
@@ -134,7 +134,7 @@ static int unix_poll(struct apisink *sink)
             sinkfd->fd = newfd;
             sinkfd->sink = sink;
             list_add(&sinkfd->node_sink, &sink->sinkfds);
-            list_add(&sinkfd->node_bus, &sink->bus->sinkfds);
+            list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
 
             if (unix_sink->nfds < newfd + 1)
                 unix_sink->nfds = newfd + 1;
@@ -210,7 +210,7 @@ static int tcp_open(struct apisink *sink, const char *addr)
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
     sinkfd->sink = sink;
     list_add(&sinkfd->node_sink, &sink->sinkfds);
-    list_add(&sinkfd->node_bus, &sink->bus->sinkfds);
+    list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
 
     struct posix_sink *tcp_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &tcp_sink->fds);
@@ -252,7 +252,7 @@ static int serial_open(struct apisink *sink, const char *addr)
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
     sinkfd->sink = sink;
     list_add(&sinkfd->node_sink, &sink->sinkfds);
-    list_add(&sinkfd->node_bus, &sink->bus->sinkfds);
+    list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
 
     struct posix_sink *serial_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &serial_sink->fds);
@@ -394,29 +394,29 @@ static apisink_ops_t serial_ops = {
     .poll = serial_poll,
 };
 
-int apibus_enable_posix(struct apibus *bus)
+int apix_enable_posix(struct apix *ctx)
 {
     apisink_init(&__unix_sink.sink, APISINK_UNIX, unix_ops);
-    apibus_add_sink(bus, &__unix_sink.sink);
+    apix_add_sink(ctx, &__unix_sink.sink);
 
     apisink_init(&__tcp_sink.sink, APISINK_TCP, tcp_ops);
-    apibus_add_sink(bus, &__tcp_sink.sink);
+    apix_add_sink(ctx, &__tcp_sink.sink);
 
     apisink_init(&__serial_sink.sink, APISINK_SERIAL, serial_ops);
-    apibus_add_sink(bus, &__serial_sink.sink);
+    apix_add_sink(ctx, &__serial_sink.sink);
 
     return 0;
 }
 
-void apibus_disable_posix(struct apibus *bus)
+void apix_disable_posix(struct apix *ctx)
 {
-    apibus_del_sink(bus, &__unix_sink.sink);
+    apix_del_sink(ctx, &__unix_sink.sink);
     apisink_fini(&__unix_sink.sink);
 
-    apibus_del_sink(bus, &__tcp_sink.sink);
+    apix_del_sink(ctx, &__tcp_sink.sink);
     apisink_fini(&__tcp_sink.sink);
 
-    apibus_del_sink(bus, &__serial_sink.sink);
+    apix_del_sink(ctx, &__serial_sink.sink);
     apisink_fini(&__serial_sink.sink);
 }
 

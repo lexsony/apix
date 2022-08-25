@@ -39,15 +39,15 @@ struct ioctl_serial_param {
     char stop;
 };
 
-#define apibus_open_unix(bus, addr) \
-    apibus_open(bus, APISINK_UNIX, addr)
-#define apibus_open_tcp(bus, addr) \
-    apibus_open(bus, APISINK_TCP, addr)
-#define apibus_open_serial(bus, addr) \
-    apibus_open(bus, APISINK_SERIAL, addr)
+#define apix_open_unix(ctx, addr) \
+    apix_open(ctx, APISINK_UNIX, addr)
+#define apix_open_tcp(ctx, addr) \
+    apix_open(ctx, APISINK_TCP, addr)
+#define apix_open_serial(ctx, addr) \
+    apix_open(ctx, APISINK_SERIAL, addr)
 
-int apibus_enable_posix(struct apibus *bus);
-void apibus_disable_posix(struct apibus *bus);
+int apix_enable_posix(struct apix *ctx);
+void apix_disable_posix(struct apix *ctx);
 
 #ifdef __cplusplus
 }

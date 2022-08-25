@@ -105,9 +105,9 @@ static void *server_thread(void *args)
 
 static void test_api_request_response(void **status)
 {
-    struct apibus *bus = apibus_new();
-    apibus_enable_posix(bus);
-    int fd = apibus_open_unix(bus, UNIX_ADDR);
+    struct apix *ctx = apix_new();
+    apix_enable_posix(ctx);
+    int fd = apix_open_unix(ctx, UNIX_ADDR);
 
     pthread_t server_pid;
     pthread_create(&server_pid, NULL, server_thread, NULL);
@@ -115,14 +115,14 @@ static void test_api_request_response(void **status)
     pthread_create(&client_pid, NULL, client_thread, NULL);
 
     while (client_finished == 0 || server_finished == 0)
-        apibus_poll(bus);
+        apix_poll(ctx);
 
     pthread_join(client_pid, NULL);
     pthread_join(server_pid, NULL);
 
-    apibus_close(bus, fd);
-    apibus_disable_posix(bus);
-    apibus_destroy(bus);
+    apix_close(ctx, fd);
+    apix_disable_posix(ctx);
+    apix_destroy(ctx);
 }
 
 static int publish_finished = 0;
@@ -219,9 +219,9 @@ static void *subscribe_thread(void *args)
 
 static void test_api_subscribe_publish(void **status)
 {
-    struct apibus *bus = apibus_new();
-    apibus_enable_posix(bus);
-    int fd = apibus_open_tcp(bus, TCP_ADDR);
+    struct apix *ctx = apix_new();
+    apix_enable_posix(ctx);
+    int fd = apix_open_tcp(ctx, TCP_ADDR);
 
     pthread_t subscribe_pid;
     pthread_create(&subscribe_pid, NULL, subscribe_thread, NULL);
@@ -229,14 +229,14 @@ static void test_api_subscribe_publish(void **status)
     pthread_create(&publish_pid, NULL, publish_thread, NULL);
 
     while (publish_finished == 0 || subscribe_finished == 0)
-        apibus_poll(bus);
+        apix_poll(ctx);
 
     pthread_join(publish_pid, NULL);
     pthread_join(subscribe_pid, NULL);
 
-    apibus_close(bus, fd);
-    apibus_disable_posix(bus);
-    apibus_destroy(bus);
+    apix_close(ctx, fd);
+    apix_disable_posix(ctx);
+    apix_destroy(ctx);
 }
 
 int main(void)

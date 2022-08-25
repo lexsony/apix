@@ -32,31 +32,31 @@ static struct opt opttab[] = {
     INIT_OPT_NONE(),
 };
 
-static void run_apibus()
+static void run_apix()
 {
     struct opt *ud = find_opt("unix", opttab);
     struct opt *tcp = find_opt("tcp", opttab);
     struct opt *serial = find_opt("serial", opttab);
 
-    struct apibus *bus = apibus_new();
-    apibus_enable_posix(bus);
+    struct apix *ctx = apix_new();
+    apix_enable_posix(ctx);
 
     int fd = 0;
     int rc = 0;
 
-    fd = apibus_open_unix(bus, opt_string(ud));
+    fd = apix_open_unix(ctx, opt_string(ud));
     if (fd == -1) {
         perror("open_unix");
         exit(1);
     }
-    fd = apibus_open_tcp(bus, opt_string(tcp));
+    fd = apix_open_tcp(ctx, opt_string(tcp));
     if (fd == -1) {
         perror("open_tcp");
         exit(1);
     }
 
     if (strcmp(opt_string(serial), "") != 0) {
-        fd = apibus_open_serial(bus, opt_string(serial));
+        fd = apix_open_serial(ctx, opt_string(serial));
         if (fd == -1) {
             perror("open_serial");
             exit(1);
@@ -67,16 +67,16 @@ static void run_apibus()
             .parity = SERIAL_ARG_PARITY_N,
             .stop = SERIAL_ARG_STOP_1,
         };
-        rc = apibus_ioctl(bus, fd, 0, (unsigned long)&sp);
+        rc = apix_ioctl(ctx, fd, 0, (unsigned long)&sp);
         assert(rc != -1);
     }
 
     while (exit_flag == 0) {
-        apibus_poll(bus);
+        apix_poll(ctx);
     }
 
-    apibus_disable_posix(bus);
-    apibus_destroy(bus); // auto close all fds
+    apix_disable_posix(ctx);
+    apix_destroy(ctx); // auto close all fds
 }
 
 int main(int argc, char *argv[])
@@ -85,6 +85,6 @@ int main(int argc, char *argv[])
     opt_init_from_arg(opttab, argc, argv);
     signal(SIGINT, signal_handler);
     signal(SIGQUIT, signal_handler);
-    run_apibus();
+    run_apix();
     return 0;
 }

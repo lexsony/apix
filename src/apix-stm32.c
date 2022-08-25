@@ -33,7 +33,7 @@ static int serial_open(struct apisink *sink, const char *addr)
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
     sinkfd->sink = sink;
     list_add(&sinkfd->node_sink, &sink->sinkfds);
-    list_add(&sinkfd->node_bus, &sink->bus->sinkfds);
+    list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
 
     return fd;
 }
@@ -92,17 +92,17 @@ static apisink_ops_t serial_ops = {
     .poll = serial_poll,
 };
 
-int apibus_enable_stm32(struct apibus *bus)
+int apix_enable_stm32(struct apix *ctx)
 {
     apisink_init(&__serial_sink, APISINK_STM32_SERIAL, serial_ops);
-    apibus_add_sink(bus, &__serial_sink);
+    apix_add_sink(ctx, &__serial_sink);
 
     return 0;
 }
 
-void apibus_disable_stm32(struct apibus *bus)
+void apix_disable_stm32(struct apix *ctx)
 {
-    apibus_del_sink(bus, &__serial_sink);
+    apix_del_sink(ctx, &__serial_sink);
     apisink_fini(&__serial_sink);
 }
 

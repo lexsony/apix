@@ -24,9 +24,9 @@ static void signal_handler(int sig)
 
 static void demo()
 {
-    struct apibus *bus = apibus_new();
-    apibus_enable_posix(bus);
-    int fd = apibus_open_serial(bus, SERIAL_ADDR);
+    struct apix *ctx = apix_new();
+    apix_enable_posix(ctx);
+    int fd = apix_open_serial(ctx, SERIAL_ADDR);
     assert(fd != -1);
 
     struct ioctl_serial_param sp = {
@@ -35,7 +35,7 @@ static void demo()
         .parity = SERIAL_ARG_PARITY_N,
         .stop = SERIAL_ARG_STOP_1,
     };
-    int rc = apibus_ioctl(bus, fd, 0, (unsigned long)&sp);
+    int rc = apix_ioctl(ctx, fd, 0, (unsigned long)&sp);
     assert(rc != -1);
 
     while (exit_flag == 0) {
@@ -44,19 +44,19 @@ static void demo()
 
         struct srrp_packet *pac = srrp_write_request(
             3333, "/8888/echo", "{msg:'hello'}");
-        nr = apibus_send(bus, fd, pac->raw, pac->len);
+        nr = apix_send(ctx, fd, pac->raw, pac->len);
         LOG_INFO("%d, %s", nr, pac->raw);
         srrp_free(pac);
 
         bzero(buf, sizeof(buf));
         sleep(1);
-        nr = apibus_recv(bus, fd, buf, sizeof(buf));
+        nr = apix_recv(ctx, fd, buf, sizeof(buf));
         LOG_INFO("%d, %s", nr, buf);
     }
 
-    apibus_close(bus, fd);
-    apibus_disable_posix(bus);
-    apibus_destroy(bus);
+    apix_close(ctx, fd);
+    apix_disable_posix(ctx);
+    apix_destroy(ctx);
 }
 
 int main(void)

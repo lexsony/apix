@@ -18,8 +18,8 @@
 
 #define API_REQUEST_TIMEOUT 3000 /*ms*/
 #define PARSE_PACKET_TIMEOUT 1000 /*ms*/
-#define APIBUS_IDLE_MAX (1 * 1000 * 1000) /*us*/
-#define APIBUS_STATION_ALIVE_TIMEOUT (600 * 1000) /*ms*/
+#define APIX_IDLE_MAX (1 * 1000 * 1000) /*us*/
+#define APIX_STATION_ALIVE_TIMEOUT (600 * 1000) /*ms*/
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,7 +43,7 @@ typedef struct apisink_ops {
 struct apisink {
     char name[APISINK_NAME_SIZE]; // identify
     apisink_ops_t ops;
-    struct apibus *bus;
+    struct apix *ctx;
     struct list_head sinkfds;
     struct list_head node;
 };
@@ -51,8 +51,8 @@ struct apisink {
 void apisink_init(struct apisink *sink, const char *name, apisink_ops_t ops);
 void apisink_fini(struct apisink *sink);
 
-int apibus_add_sink(struct apibus *bus, struct apisink *sink);
-void apibus_del_sink(struct apibus *bus, struct apisink *sink);
+int apix_add_sink(struct apix *ctx, struct apisink *sink);
+void apix_del_sink(struct apix *ctx, struct apisink *sink);
 
 /*
  * sinkfd
@@ -67,13 +67,13 @@ struct sinkfd {
     struct timeval ts_poll_recv;
     struct apisink *sink;
     struct list_head node_sink;
-    struct list_head node_bus;
+    struct list_head node_ctx;
 };
 
 struct sinkfd *sinkfd_new();
 void sinkfd_destroy();
 
-struct sinkfd *find_sinkfd_in_apibus(struct apibus *bus, int fd);
+struct sinkfd *find_sinkfd_in_apix(struct apix *ctx, int fd);
 struct sinkfd *find_sinkfd_in_apisink(struct apisink *sink, int fd);
 
 /*
@@ -141,10 +141,10 @@ struct api_topic {
 }
 
 /*
- * apibus
+ * apix
  */
 
-struct apibus {
+struct apix {
     struct list_head requests;
     struct list_head responses;
     struct list_head stations;
