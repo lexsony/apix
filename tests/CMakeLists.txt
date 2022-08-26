@@ -8,6 +8,10 @@ add_executable(test-opt test_opt.c)
 target_link_libraries(test-opt cmocka apix)
 add_test(test-opt ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/test-opt)
 
+add_executable(test-ringbuf test_ringbuf.c)
+target_link_libraries(test-ringbuf cmocka apix)
+add_test(test-ringbuf ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/test-ringbuf)
+
 add_executable(test-atbuf test_atbuf.c)
 target_link_libraries(test-atbuf cmocka apix)
 add_test(test-atbuf ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/test-atbuf)
