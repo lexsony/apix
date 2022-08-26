@@ -137,12 +137,15 @@ size_t ringbuf_peek(ringbuf_t *self, void *ptr, size_t size)
 
     if (self->offset_in >= self->offset_out) {
         memcpy(ptr, ringbuf_read_pos(self), cpy_cnt);
-    }
-    else {
+    } else {
         size_t cpy_right = self->size - self->offset_out;
-        size_t cpy_left = cpy_cnt - cpy_right;
-        memcpy(ptr, ringbuf_read_pos(self), cpy_right);
-        memcpy(ptr + cpy_right, self->rawbuf, cpy_left);
+        if (cpy_right >= cpy_cnt) {
+            memcpy(ptr, ringbuf_read_pos(self), cpy_cnt);
+        } else {
+            size_t cpy_left = cpy_cnt - cpy_right;
+            memcpy(ptr, ringbuf_read_pos(self), cpy_right);
+            memcpy(ptr + cpy_right, self->rawbuf, cpy_left);
+        }
     }
 
     return cpy_cnt;
