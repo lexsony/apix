@@ -19,19 +19,25 @@
 static void parse_packet(struct apix *ctx, struct sinkfd *sinkfd)
 {
     while (atbuf_used(sinkfd->rxbuf)) {
+        uint32_t offset = srrp_next_packet_offset(
+            atbuf_read_pos(sinkfd->rxbuf), atbuf_used(sinkfd->rxbuf));
+        if (offset != 0) {
+            LOG_WARN("broken packet: %s", atbuf_read_pos(sinkfd->rxbuf));
+            atbuf_read_advance(sinkfd->rxbuf, offset);
+        }
+        if (atbuf_used(sinkfd->rxbuf) == 0)
+            break;
+
         struct srrp_packet *pac = srrp_read_one_packet(atbuf_read_pos(sinkfd->rxbuf));
         if (pac == NULL) {
             if (time(0) < sinkfd->ts_poll_recv.tv_sec + PARSE_PACKET_TIMEOUT / 1000)
                 break;
 
             LOG_WARN("parse packet failed: %s", atbuf_read_pos(sinkfd->rxbuf));
-            int offset = srrp_next_packet_offset(atbuf_read_pos(sinkfd->rxbuf));
-            if (offset == -1 || offset == 0)
-                atbuf_read_advance(sinkfd->rxbuf, atbuf_used(sinkfd->rxbuf));
-            else {
-                assert((size_t)offset < atbuf_used(sinkfd->rxbuf));
-                atbuf_read_advance(sinkfd->rxbuf, offset);
-            }
+            uint32_t offset = srrp_next_packet_offset(
+                atbuf_read_pos(sinkfd->rxbuf) + 1,
+                atbuf_used(sinkfd->rxbuf) - 1) + 1;
+            atbuf_read_advance(sinkfd->rxbuf, offset);
             break;
         }
 

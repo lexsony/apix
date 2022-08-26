@@ -276,39 +276,20 @@ srrp_write_publish(const char *header, const char *data)
     return pac;
 }
 
-int srrp_next_packet_offset(const char *buf)
+uint32_t srrp_next_packet_offset(const char *buf, uint32_t size)
 {
-    if (isdigit(buf[1])) {
-        if (buf[0] == SRRP_REQUEST_LEADER ||
-            buf[0] == SRRP_RESPONSE_LEADER ||
-            buf[0] == SRRP_SUBSCRIBE_LEADER ||
-            buf[0] == SRRP_UNSUBSCRIBE_LEADER ||
-            buf[0] == SRRP_PUBLISH_LEADER) {
-            return 0;
+    for (int i = 0; i < size; i++) {
+        if (isdigit(buf[i + 1])) {
+            if (buf[i] == SRRP_REQUEST_LEADER)
+                return i;
+            else if (buf[i] == SRRP_RESPONSE_LEADER)
+                return i;
+            else if (buf[i] == SRRP_SUBSCRIBE_LEADER ||
+                     buf[i] == SRRP_UNSUBSCRIBE_LEADER ||
+                     buf[i] == SRRP_PUBLISH_LEADER)
+                return i;
         }
     }
 
-    char *p = NULL;
-
-    p = strchr(buf, SRRP_REQUEST_LEADER);
-    if (p && p[-1] != SRRP_REQUEST_LEADER && isdigit(p[1]))
-        return p - buf;
-
-    p = strchr(buf, SRRP_RESPONSE_LEADER);
-    if (p && p[-1] != SRRP_RESPONSE_LEADER && isdigit(p[1]))
-        return p - buf;
-
-    p = strchr(buf, SRRP_SUBSCRIBE_LEADER);
-    if (p && p[-1] != SRRP_SUBSCRIBE_LEADER && isdigit(p[1]))
-        return p - buf;
-
-    p = strchr(buf, SRRP_UNSUBSCRIBE_LEADER);
-    if (p && p[-1] != SRRP_UNSUBSCRIBE_LEADER && isdigit(p[1]))
-        return p - buf;
-
-    p = strchr(buf, SRRP_PUBLISH_LEADER);
-    if (p && p[-1] != SRRP_PUBLISH_LEADER && isdigit(p[1]))
-        return p - buf;
-
-    return -1;
+    return size;
 }

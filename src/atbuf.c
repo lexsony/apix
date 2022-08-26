@@ -120,6 +120,13 @@ size_t atbuf_tidy(atbuf_t *self)
     return atbuf_spare(self);
 }
 
+void atbuf_clear(atbuf_t *self)
+{
+    self->offset_in = 0;
+    self->offset_out = 0;
+    self->rawbuf[0] = 0;
+}
+
 size_t atbuf_peek(atbuf_t *self, void *ptr, size_t len)
 {
     size_t len_can_out = len <= atbuf_used(self) ? len : atbuf_used(self);

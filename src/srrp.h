@@ -84,7 +84,7 @@ srrp_write_unsubscribe(const char *header);
 struct srrp_packet *
 srrp_write_publish(const char *header, const char *data);
 
-int srrp_next_packet_offset(const char *buf);
+uint32_t srrp_next_packet_offset(const char *buf, uint32_t size);
 
 #ifdef __cplusplus
 }

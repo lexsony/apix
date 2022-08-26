@@ -25,6 +25,7 @@ size_t atbuf_garbage(atbuf_t *self);
 size_t atbuf_used(atbuf_t *self);
 size_t atbuf_spare(atbuf_t *self);
 size_t atbuf_tidy(atbuf_t *self);
+void atbuf_clear(atbuf_t *self);
 
 size_t atbuf_peek(atbuf_t *self, void *ptr, size_t len);
 size_t atbuf_read(atbuf_t *self, void *ptr, size_t len);
