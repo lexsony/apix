@@ -26,7 +26,11 @@ __srrp_read_one_request(const char *buf)
     uint32_t seqno, len, srcid;
 
     // FIXME: shall we use "%c%x,%c,%4x,%4x:%[^{}]%s" to parse header and data ?
+#ifdef __arm__
+    int cnt = sscanf(buf, "%c%lx,%c,%4lx,%4lx:", &leader, &seqno, &seat, &len, &srcid);
+#else
     int cnt = sscanf(buf, "%c%x,%c,%4x,%4x:", &leader, &seqno, &seat, &len, &srcid);
+#endif
     if (cnt != 5) return NULL;
 
     const char *header_delimiter = strstr(buf, ":/");
@@ -66,8 +70,13 @@ __srrp_read_one_response(const char *buf)
     uint32_t seqno, len, srcid, reqcrc16;
 
     // FIXME: shall we use "%c%x,%c,%4x,%4x:%x%[^{}]%s" to parse header and data ?
+#ifdef __arm__
+    int cnt = sscanf(buf, "%c%lx,%c,%4lx,%4lx,%lx:/",
+                     &leader, &seqno, &seat, &len, &srcid, &reqcrc16);
+#else
     int cnt = sscanf(buf, "%c%x,%c,%4x,%4x,%x:/",
                      &leader, &seqno, &seat, &len, &srcid, &reqcrc16);
+#endif
     if (cnt != 6) return NULL;
 
     const char *header_delimiter = strstr(buf, ":/");
@@ -110,7 +119,11 @@ __srrp_read_one_subpub(const char *buf)
     uint32_t seqno, len;
 
     // FIXME: shall we use "%c%x,%c,%4x:%[^{}]%s" to parse header and data ?
+#ifdef __arm__
+    int cnt = sscanf(buf, "%c%lx,%c,%4lx:", &leader, &seqno, &seat, &len);
+#else
     int cnt = sscanf(buf, "%c%x,%c,%4x:", &leader, &seqno, &seat, &len);
+#endif
     if (cnt != 4) return NULL;
 
     const char *header_delimiter = strstr(buf, ":/");
@@ -159,14 +172,19 @@ srrp_read_one_packet(const char *buf)
 struct srrp_packet *
 srrp_write_request(uint16_t srcid, const char *header, const char *data)
 {
-    int len = 15 + strlen(header) + 1 + strlen(data) + 1/*stop*/;
+    uint32_t len = 15 + strlen(header) + 1 + strlen(data) + 1/*stop*/;
     assert(len < SRRP_LENGTH_MAX - 4/*crc16*/);
 
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
     assert(pac);
 
+#ifdef __arm__
+    int nr = snprintf(pac->raw, len, ">0,$,%.4lx,%.4x:%s?%s",
+                      len, srcid, header, data);
+#else
     int nr = snprintf(pac->raw, len, ">0,$,%.4x,%.4x:%s?%s",
-                      (uint32_t)len, srcid, header, data);
+                      len, srcid, header, data);
+#endif
     assert(nr + 1 == len);
 
     pac->leader = SRRP_REQUEST_LEADER;
@@ -184,14 +202,19 @@ srrp_write_request(uint16_t srcid, const char *header, const char *data)
 struct srrp_packet *
 srrp_write_response(uint16_t srcid, uint16_t reqcrc16, const char *header, const char *data)
 {
-    int len = 15 + 5/*crc16*/ + strlen(header) + 1 + strlen(data) + 1/*stop*/;
+    uint32_t len = 15 + 5/*crc16*/ + strlen(header) + 1 + strlen(data) + 1/*stop*/;
     assert(len < SRRP_LENGTH_MAX - 4/*crc16*/);
 
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
     assert(pac);
 
+#ifdef __arm__
+    int nr = snprintf(pac->raw, len, "<0,$,%.4lx,%.4x,%.4x:%s?%s",
+                      len, srcid, reqcrc16, header, data);
+#else
     int nr = snprintf(pac->raw, len, "<0,$,%.4x,%.4x,%.4x:%s?%s",
-                      (uint32_t)len, srcid, reqcrc16, header, data);
+                      len, srcid, reqcrc16, header, data);
+#endif
     assert(nr + 1 == len);
 
     pac->leader = SRRP_RESPONSE_LEADER;
@@ -210,13 +233,17 @@ srrp_write_response(uint16_t srcid, uint16_t reqcrc16, const char *header, const
 struct srrp_packet *
 srrp_write_subscribe(const char *header, const char *ctrl)
 {
-    int len = 10 + strlen(header) + 1 + strlen(ctrl) + 1/*stop*/;
+    uint32_t len = 10 + strlen(header) + 1 + strlen(ctrl) + 1/*stop*/;
     assert(len < SRRP_LENGTH_MAX - 4/*crc16*/);
 
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
     assert(pac);
 
-    int nr = snprintf(pac->raw, len, "#0,$,%.4x:%s?%s", (uint32_t)len, header, ctrl);
+#ifdef __arm__
+    int nr = snprintf(pac->raw, len, "#0,$,%.4lx:%s?%s", len, header, ctrl);
+#else
+    int nr = snprintf(pac->raw, len, "#0,$,%.4x:%s?%s", len, header, ctrl);
+#endif
     assert(nr + 1 == len);
 
     pac->leader = SRRP_SUBSCRIBE_LEADER;
@@ -233,13 +260,17 @@ srrp_write_subscribe(const char *header, const char *ctrl)
 struct srrp_packet *
 srrp_write_unsubscribe(const char *header)
 {
-    int len = 10 + strlen(header) + 1 + 2/*data*/ + 1/*stop*/;
+    uint32_t len = 10 + strlen(header) + 1 + 2/*data*/ + 1/*stop*/;
     assert(len < SRRP_LENGTH_MAX - 4/*crc16*/);
 
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
     assert(pac);
 
-    int nr = snprintf(pac->raw, len, "%%0,$,%.4x:%s?{}", (uint32_t)len, header);
+#ifdef __arm__
+    int nr = snprintf(pac->raw, len, "%%0,$,%.4lx:%s?{}", len, header);
+#else
+    int nr = snprintf(pac->raw, len, "%%0,$,%.4x:%s?{}", len, header);
+#endif
     assert(nr + 1 == len);
 
     pac->leader = SRRP_UNSUBSCRIBE_LEADER;
@@ -256,13 +287,17 @@ srrp_write_unsubscribe(const char *header)
 struct srrp_packet *
 srrp_write_publish(const char *header, const char *data)
 {
-    int len = 10 + strlen(header) + 1 + strlen(data) + 1/*stop*/;
+    uint32_t len = 10 + strlen(header) + 1 + strlen(data) + 1/*stop*/;
     assert(len < SRRP_LENGTH_MAX - 4/*crc16*/);
 
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
     assert(pac);
 
-    int nr = snprintf(pac->raw, len, "@0,$,%.4x:%s?%s", (uint32_t)len, header, data);
+#ifdef __arm__
+    int nr = snprintf(pac->raw, len, "@0,$,%.4lx:%s?%s", len, header, data);
+#else
+    int nr = snprintf(pac->raw, len, "@0,$,%.4x:%s?%s", len, header, data);
+#endif
     assert(nr + 1 == len);
 
     pac->leader = SRRP_PUBLISH_LEADER;
@@ -279,7 +314,7 @@ srrp_write_publish(const char *header, const char *data)
 uint32_t srrp_next_packet_offset(const char *buf, uint32_t size)
 {
     for (int i = 0; i < size; i++) {
-        if (isdigit(buf[i + 1])) {
+        if (isdigit((uint8_t)buf[i + 1])) {
             if (buf[i] == SRRP_REQUEST_LEADER)
                 return i;
             else if (buf[i] == SRRP_RESPONSE_LEADER)

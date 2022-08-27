@@ -1,5 +1,6 @@
 #include "json.h"
 #include <assert.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -109,7 +110,7 @@ static int __json_get_string(struct json_object *jo, char *value, size_t size)
     for (int i = jo->walk_idx - jo->raw; i < strlen(jo->raw); i++) {
         if (str[i] == ' ' || str[i] == ':')
             continue;
-        if (!isprint(str[i])) {
+        if (!isprint((uint8_t)str[i])) {
             jo->errno = JSON_ERR_TYPE;
             return -1;
         }
@@ -117,7 +118,7 @@ static int __json_get_string(struct json_object *jo, char *value, size_t size)
         int j = i;
         for (; j < strlen(str); j++) {
             if (value_end == NULL
-                && isprint(str[j])
+                && isprint((uint8_t)str[j])
                 && str[j] != ' '
                 && str[j] != ','
                 && str[j] != '}')
@@ -171,14 +172,14 @@ static int __json_get_int(struct json_object *jo, int *value)
     for (int i = jo->walk_idx - jo->raw; i < strlen(jo->raw); i++) {
         if (str[i] == ' ' || str[i] == ':')
             continue;
-        if (!isdigit(str[i])) {
+        if (!isdigit((uint8_t)str[i])) {
             jo->errno = JSON_ERR_TYPE;
             return -1;
         }
         char *value_end = NULL;
         int j = i;
         for (; j < strlen(str); j++) {
-            if (value_end == NULL && isdigit(str[j]))
+            if (value_end == NULL && isdigit((uint8_t)str[j]))
                 continue;
             if (str[j] == ' ') {
                 if (value_end == NULL)
