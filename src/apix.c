@@ -262,10 +262,14 @@ static void handle_request(struct apix *ctx)
         LOG_INFO("poll >: %.4x:%s?%s", pos->pac->srcid, pos->pac->header, pos->pac->data);
 
         struct api_station *src = find_station(&ctx->stations, pos->pac->srcid);
-        if (src == NULL)
+        if (src == NULL) {
             add_station(ctx, pos);
-        else
+        } else {
+            // update station fd
+            if (src->fd != pos->fd)
+                src->fd = pos->fd;
             src->ts_alive = time(0);
+        }
 
         int dstid = 0;
         int nr = sscanf(pos->pac->header, "/%d/", &dstid);
