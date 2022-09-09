@@ -2,6 +2,7 @@
 #define __RINGBUF_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,8 +28,10 @@ void ringbuf_write_advance(ringbuf_t *self, size_t len);
 void ringbuf_read_advance(ringbuf_t *self, size_t len);
 
 size_t ringbuf_write(ringbuf_t *self, const void *ptr, size_t len);
+size_t ringbuf_write_byte(ringbuf_t *self, uint8_t byte);
 size_t ringbuf_peek(ringbuf_t *self, void *ptr, size_t size);
 size_t ringbuf_read(ringbuf_t *self, void *ptr, size_t size);
+size_t ringbuf_read_byte(ringbuf_t *self, uint8_t byte);
 
 #ifdef __cplusplus
 }

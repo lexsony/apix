@@ -1,5 +1,6 @@
 #include "ringbuf.h"
 #include <assert.h>
+#include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -116,6 +117,7 @@ size_t ringbuf_write(ringbuf_t *self, const void *ptr, size_t len)
         }
     } else {
         size_t spare = self->offset_out - self->offset_in;
+        assert(len <= spare);
         if (len <= spare) {
             memcpy(ringbuf_write_pos(self), ptr, len);
             cpy_cnt += len;
@@ -127,6 +129,11 @@ size_t ringbuf_write(ringbuf_t *self, const void *ptr, size_t len)
 
     ringbuf_write_advance(self, cpy_cnt);
     return cpy_cnt;
+}
+
+size_t ringbuf_write_byte(ringbuf_t *self, uint8_t byte)
+{
+    return ringbuf_write(self, &byte, 1);
 }
 
 size_t ringbuf_peek(ringbuf_t *self, void *ptr, size_t size)
@@ -156,4 +163,9 @@ size_t ringbuf_read(ringbuf_t *self, void *ptr, size_t size)
     size_t cpy_cnt = ringbuf_peek(self, ptr, size);
     ringbuf_read_advance(self, cpy_cnt);
     return cpy_cnt;
+}
+
+size_t ringbuf_read_byte(ringbuf_t *self, uint8_t byte)
+{
+    return ringbuf_read(self, &byte, 1);
 }
