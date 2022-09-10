@@ -6,5 +6,8 @@ target_link_libraries(apix-client-serial apix)
 add_executable(apix-client-tcp apix-client-tcp.c)
 target_link_libraries(apix-client-tcp apix)
 
-add_executable(apix-server apix-server.c)
+add_executable(apix-client apix-client.c opt.c cli.c)
+target_link_libraries(apix-client apix readline)
+
+add_executable(apix-server apix-server.c opt.c)
 target_link_libraries(apix-server apix)

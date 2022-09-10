@@ -4,8 +4,8 @@ add_executable(test-log test_log.c)
 target_link_libraries(test-log cmocka apix)
 add_test(test-log ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/test-log)
 
-add_executable(test-opt test_opt.c)
-target_link_libraries(test-opt cmocka apix)
+add_executable(test-opt test_opt.c ../demos/opt.c)
+target_link_libraries(test-opt cmocka)
 add_test(test-opt ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/test-opt)
 
 add_executable(test-ringbuf test_ringbuf.c)
