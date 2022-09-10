@@ -20,58 +20,43 @@
 #define UNIX_ADDR "test_apisink_unix"
 #define TCP_ADDR "127.0.0.1:1224"
 
-static int client_finished = 0;
-static int server_finished = 0;
+static int requester_finished = 0;
+static int responser_finished = 0;
 
-static void *client_thread(void *args)
+static void *requester_thread(void *args)
 {
-    int fd = socket(PF_UNIX, SOCK_STREAM, 0);
-    if (fd == -1)
-        return NULL;
-
+    struct apix *ctx = apix_new();
+    apix_enable_posix(ctx);
+    int fd = apix_open_unix_client(ctx, UNIX_ADDR);
     int rc = 0;
-    struct sockaddr_un addr = {0};
-    addr.sun_family = PF_UNIX;
-    strcpy(addr.sun_path, UNIX_ADDR);
-
-    rc = connect(fd, (struct sockaddr *)&addr, sizeof(addr));
-    if (rc == -1) {
-        close(fd);
-        return NULL;
-    }
 
     sleep(1);
 
     struct srrp_packet *pac = srrp_write_request(
         3333, "/8888/hello", "{name:'yon',age:'18',equip:['hat','shoes']}");
     rc = send(fd, pac->raw, pac->len, 0);
+    assert_true(rc != -1);
     srrp_free(pac);
 
     char buf[256] = {0};
     rc = recv(fd, buf, sizeof(buf), 0);
-    LOG_INFO("client recv response: %s", buf);
+    assert_true(rc != -1);
+    LOG_INFO("requester recv response: %s", buf);
 
-    close(fd);
-    client_finished = 1;
+    apix_close(ctx, fd);
+    apix_disable_posix(ctx);
+    apix_destroy(ctx);
+
+    requester_finished = 1;
     return NULL;
 }
 
-static void *server_thread(void *args)
+static void *responser_thread(void *args)
 {
-    int fd = socket(PF_UNIX, SOCK_STREAM, 0);
-    if (fd == -1)
-        return NULL;
-
+    struct apix *ctx = apix_new();
+    apix_enable_posix(ctx);
+    int fd = apix_open_unix_client(ctx, UNIX_ADDR);
     int rc = 0;
-    struct sockaddr_un addr = {0};
-    addr.sun_family = PF_UNIX;
-    strcpy(addr.sun_path, UNIX_ADDR);
-
-    rc = connect(fd, (struct sockaddr *)&addr, sizeof(addr));
-    if (rc == -1) {
-        close(fd);
-        return NULL;
-    }
 
     char buf[256] = {0};
 
@@ -79,13 +64,16 @@ static void *server_thread(void *args)
         8888, "/8888/online", "{}");
 
     rc = send(fd, pac_online->raw, pac_online->len, 0);
+    assert_true(rc != -1);
     memset(buf, 0, sizeof(buf));
     rc = recv(fd, buf, sizeof(buf), 0);
-    LOG_INFO("server recv online: %s", buf);
+    assert_true(rc != -1);
+    LOG_INFO("responser recv online: %s", buf);
     srrp_free(pac_online);
 
     rc = recv(fd, buf, sizeof(buf), 0);
-    LOG_INFO("server recv request: %s", buf);
+    assert_true(rc != -1);
+    LOG_INFO("responser recv request: %s", buf);
     struct srrp_packet *rxpac;
     rxpac = srrp_read_one_packet(buf);
     uint16_t crc = crc16(rxpac->header, rxpac->header_len);
@@ -95,11 +83,15 @@ static void *server_thread(void *args)
         rxpac->srcid, crc, rxpac->header,
         "{err:0,errmsg:'succ',data:{msg:'world'}}");
     rc = send(fd, txpac->raw, txpac->len, 0);
+    assert_true(rc != -1);
     srrp_free(rxpac);
     srrp_free(txpac);
 
-    close(fd);
-    server_finished = 1;
+    apix_close(ctx, fd);
+    apix_disable_posix(ctx);
+    apix_destroy(ctx);
+
+    responser_finished = 1;
     return NULL;
 }
 
@@ -109,16 +101,16 @@ static void test_api_request_response(void **status)
     apix_enable_posix(ctx);
     int fd = apix_open_unix_server(ctx, UNIX_ADDR);
 
-    pthread_t server_pid;
-    pthread_create(&server_pid, NULL, server_thread, NULL);
-    pthread_t client_pid;
-    pthread_create(&client_pid, NULL, client_thread, NULL);
+    pthread_t responser_pid;
+    pthread_create(&responser_pid, NULL, responser_thread, NULL);
+    pthread_t requester_pid;
+    pthread_create(&requester_pid, NULL, requester_thread, NULL);
 
-    while (client_finished == 0 || server_finished == 0)
+    while (requester_finished == 0 || responser_finished == 0)
         apix_poll(ctx);
 
-    pthread_join(client_pid, NULL);
-    pthread_join(server_pid, NULL);
+    pthread_join(requester_pid, NULL);
+    pthread_join(responser_pid, NULL);
 
     apix_close(ctx, fd);
     apix_disable_posix(ctx);
@@ -200,17 +192,17 @@ static void *subscribe_thread(void *args)
     srrp_free(pac_sub);
     memset(buf, 0, sizeof(buf));
     rc = recv(fd, buf, sizeof(buf), 0);
-    LOG_INFO("server recv sub: %s", buf);
+    LOG_INFO("responser recv sub: %s", buf);
 
     rc = recv(fd, buf, sizeof(buf), 0);
-    LOG_INFO("server recv pub: %s", buf);
+    LOG_INFO("responser recv pub: %s", buf);
 
     struct srrp_packet *pac_unsub = srrp_write_unsubscribe("/test-topic");
     rc = send(fd, pac_unsub->raw, pac_unsub->len, 0);
     srrp_free(pac_unsub);
     memset(buf, 0, sizeof(buf));
     rc = recv(fd, buf, sizeof(buf), 0);
-    LOG_INFO("server recv unsub: %s", buf);
+    LOG_INFO("responser recv unsub: %s", buf);
 
     close(fd);
     subscribe_finished = 1;

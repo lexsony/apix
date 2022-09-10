@@ -238,7 +238,7 @@ void apix_destroy(struct apix *ctx)
     {
         struct apisink *pos, *n;
         list_for_each_entry_safe(pos, n, &ctx->sinks, node) {
-            apix_del_sink(ctx, pos);
+            apix_del_sink(pos->ctx, pos);
             apisink_fini(pos);
         }
     }
@@ -454,8 +454,10 @@ void apisink_fini(struct apisink *sink)
     list_for_each_entry_safe(pos, n, &sink->sinkfds, node_sink)
         sinkfd_destroy(pos);
 
-    if (sink->ctx)
-        apix_del_sink(sink->ctx, sink);
+    // delete from apix outside
+    assert(sink->ctx == NULL);
+    //if (sink->ctx)
+    //    apix_del_sink(sink->ctx, sink);
 }
 
 int apix_add_sink(struct apix *ctx, struct apisink *sink)
