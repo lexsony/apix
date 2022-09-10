@@ -6,8 +6,8 @@ target_link_libraries(apix-client-3333 apix)
 add_executable(apix-client-8888 apix-client-8888.c opt.c)
 target_link_libraries(apix-client-8888 apix)
 
-add_executable(apix-client apix-client.c opt.c cli.c)
-target_link_libraries(apix-client apix readline)
-
 add_executable(apix-server apix-server.c opt.c)
 target_link_libraries(apix-server apix)
+
+add_executable(apix-debugger apix-debugger.c opt.c cli.c)
+target_link_libraries(apix-debugger apix readline)
