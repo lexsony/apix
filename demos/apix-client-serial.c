@@ -13,8 +13,6 @@
 #include "srrp.h"
 #include "log.h"
 
-#define SERIAL_ADDR "/dev/ttyUSB0"
-
 static int exit_flag;
 
 static void signal_handler(int sig)
@@ -22,11 +20,11 @@ static void signal_handler(int sig)
     exit_flag = 1;
 }
 
-static void demo()
+static void demo(const char *addr)
 {
     struct apix *ctx = apix_new();
     apix_enable_posix(ctx);
-    int fd = apix_open_serial(ctx, SERIAL_ADDR);
+    int fd = apix_open_serial(ctx, addr);
     assert(fd != -1);
 
     struct ioctl_serial_param sp = {
@@ -40,18 +38,22 @@ static void demo()
 
     while (exit_flag == 0) {
         int nr = 0;
-        char buf[256];
+        char buf[4096];
 
         struct srrp_packet *pac = srrp_write_request(
             3333, "/8888/echo", "{msg:'hello'}");
         nr = apix_send(ctx, fd, pac->raw, pac->len);
-        LOG_INFO("%d, %s", nr, pac->raw);
+        LOG_INFO("send: %d, %s", nr, pac->raw);
         srrp_free(pac);
 
         bzero(buf, sizeof(buf));
-        sleep(1);
+        usleep(1000 * 1000);
         nr = apix_recv(ctx, fd, buf, sizeof(buf));
-        LOG_INFO("%d, %s", nr, buf);
+        for (int i = 0; i < nr - 1; i++) {
+            if (buf[i] == 0)
+                buf[i] = ' ';
+        }
+        LOG_INFO("recv: %d, %s", nr, buf);
     }
 
     apix_close(ctx, fd);
@@ -59,11 +61,11 @@ static void demo()
     apix_destroy(ctx);
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
     log_set_level(LOG_LV_DEBUG);
     signal(SIGINT, signal_handler);
     signal(SIGQUIT, signal_handler);
-    demo();
+    demo(argv[1]);
     return 0;
 }
