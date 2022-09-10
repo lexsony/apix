@@ -18,6 +18,11 @@ extern "C" {
  *   <0,$,<len>,0001,<crc16>:/8888/echo?{err:0,errmsg:'succ',data:{msg:'world'}}\0<crc16>\0
  *   <1,$,<len>,0001,<crc16>:/8888/hello/y?{err:1,errmsg:'fail',data:{msg:'hell'}}\0<crc16>\0
  *
+ * Data type: j:json, b:byte, t:txt
+ *   >0,$,<len>,0001:/8888/echo?j:{name:'yon',age:18,equip:['hat','shoes']}\0<crc16>\0
+ *   >0,$,<len>,0001:/8888/echo?b:{\0\1\2\3\4\5}\0<crc16>\0
+ *   >0,$,<len>,0001:/8888/echo?t:hello world!\0<crc16>\0
+ *
  * Subscribe: #[0xseqno],[^|0|$],[0xlenth]:[topic]?{ctrl}\0<crc16>\0
  *   #0,$,0038:/motor/speed?{ack:0,cache:100}\0<crc16>\0
  * ctrl:
