@@ -208,8 +208,13 @@ static int unix_c_close(struct apisink *sink, int fd)
     struct sinkfd *sinkfd = find_sinkfd_in_apisink(sink, fd);
     if (sinkfd == NULL)
         return -1;
+
     close(sinkfd->fd);
     sinkfd_destroy(sinkfd);
+
+    struct posix_sink *unix_c_sink = container_of(sink, struct posix_sink, sink);
+    FD_CLR(fd, &unix_c_sink->fds);
+
     return 0;
 }
 
@@ -420,8 +425,13 @@ static int serial_close(struct apisink *sink, int fd)
     struct sinkfd *sinkfd = find_sinkfd_in_apisink(sink, fd);
     if (sinkfd == NULL)
         return -1;
+
     close(sinkfd->fd);
     sinkfd_destroy(sinkfd);
+
+    struct posix_sink *serial_sink = container_of(sink, struct posix_sink, sink);
+    FD_CLR(fd, &serial_sink->fds);
+
     return 0;
 }
 

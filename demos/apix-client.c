@@ -19,17 +19,10 @@
 #include "opt.h"
 #include "cli.h"
 
-#define FEND_UNIX 0
-#define FEND_TCP 1
-#define FEND_COM 2
-
 static int exit_flag;
-static int frontend;
-
 static struct apix *ctx;
-static int fd_unix;
-static int fd_tcp;
-static int fd_com;
+static int fds[1024];
+static int frontend;
 
 static void signal_handler(int sig)
 {
@@ -39,9 +32,10 @@ static void signal_handler(int sig)
 static struct opt opttab[] = {
     INIT_OPT_BOOL("-h", "help", false, "print this usage"),
     INIT_OPT_BOOL("-D", "debug", false, "debug mode [defaut: false]"),
-    INIT_OPT_STRING("-u:", "unix", "", "unix domain"),
+    INIT_OPT_STRING("-x:", "unix", "", "unix domain"),
     INIT_OPT_STRING("-t:", "tcp", "", "tcp socket"),
-    INIT_OPT_STRING("-s:", "serial", "", "serial dev file"),
+    //INIT_OPT_STRING("-u:", "udp", "", "udp socket"),
+    INIT_OPT_STRING("-s:", "com", "", "com dev file"),
     INIT_OPT_NONE(),
 };
 
@@ -59,7 +53,7 @@ static int client_pollin(int fd, const char *buf, size_t len)
         rl_redisplay();
     }
 
-    printf("%s", buf);
+    printf("%d> %s", fd, buf);
 
     if (need_hack) {
         rl_restore_prompt();
@@ -82,38 +76,47 @@ static void *apix_thread(void *arg)
     apix_enable_posix(ctx);
 
     if (strcmp(opt_string(ud), "") != 0) {
-        fd_unix = apix_open_unix_client(ctx, opt_string(ud));
-        if (fd_unix == -1) {
+        int fd = apix_open_unix_client(ctx, opt_string(ud));
+        if (fd == -1) {
             perror("open_unix");
             exit(1);
         }
-        apix_set_poll_callback(ctx, fd_unix, client_pollin, NULL);
+        apix_set_poll_callback(ctx, fd, client_pollin, NULL);
+        assert(fds[fd] == 0);
+        fds[fd] = 1;
+        frontend = fd;
     }
 
     if (strcmp(opt_string(tcp), "") != 0) {
-        fd_tcp = apix_open_tcp_client(ctx, opt_string(tcp));
-        if (fd_tcp == -1) {
+        int fd = apix_open_tcp_client(ctx, opt_string(tcp));
+        if (fd == -1) {
             perror("open_tcp");
             exit(1);
         }
-        apix_set_poll_callback(ctx, fd_tcp, client_pollin, NULL);
+        apix_set_poll_callback(ctx, fd, client_pollin, NULL);
+        assert(fds[fd] == 0);
+        fds[fd] = 1;
+        frontend = fd;
     }
 
     if (strcmp(opt_string(serial), "") != 0) {
-        fd_com = apix_open_serial(ctx, opt_string(serial));
-        if (fd_com == -1) {
+        int fd = apix_open_serial(ctx, opt_string(serial));
+        if (fd == -1) {
             perror("open_serial");
             exit(1);
         }
-        apix_set_poll_callback(ctx, fd_com, client_pollin, NULL);
+        apix_set_poll_callback(ctx, fd, client_pollin, NULL);
         struct ioctl_serial_param sp = {
             .baud = SERIAL_ARG_BAUD_115200,
             .bits = SERIAL_ARG_BITS_8,
             .parity = SERIAL_ARG_PARITY_N,
             .stop = SERIAL_ARG_STOP_1,
         };
-        int rc = apix_ioctl(ctx, fd_com, 0, (unsigned long)&sp);
+        int rc = apix_ioctl(ctx, fd, 0, (unsigned long)&sp);
         assert(rc != -1);
+        assert(fds[fd] == 0);
+        fds[fd] = 1;
+        frontend = fd;
     }
 
     while (exit_flag == 0) {
@@ -131,30 +134,100 @@ static void on_cmd_quit(const char *cmd)
     exit_flag = 1;
 }
 
+static void on_cmd_fds(const char *cmd)
+{
+    for (int i = 0; i < sizeof(fds) / sizeof(fds[0]); i++) {
+        if (fds[i] == 0)
+            continue;
+        printf("fd: %d\n", i);
+    }
+    printf("frontend: %d\n", frontend);
+}
+
+static void on_cmd_front(const char *cmd)
+{
+    int fd = 0;
+    int nr = sscanf(cmd, "front %d", &fd);
+    if (nr == 1) {
+        frontend = fd;
+    }
+}
+
+static void on_cmd_close(const char *cmd)
+{
+    int fd = 0;
+    int nr = sscanf(cmd, "close %d", &fd);
+    if (nr == 1) {
+        apix_close(ctx, fd);
+        fds[fd] = 0;
+        if (frontend == fd)
+            frontend = 0;
+    }
+}
+
 static void on_cmd_unix(const char *cmd)
 {
-    frontend = FEND_UNIX;
+    char addr[64] = {0};
+    int nr = sscanf(cmd, "unix %s", addr);
+    if (nr == 1) {
+        int fd = apix_open_unix_client(ctx, addr);
+        if (fd == -1) {
+            perror("open_unix");
+            return;
+        }
+        apix_set_poll_callback(ctx, fd, client_pollin, NULL);
+        assert(fds[fd] == 0);
+        fds[fd] = 1;
+        frontend = fd;
+    }
 }
 
 static void on_cmd_tcp(const char *cmd)
 {
-    frontend = FEND_TCP;
+    char addr[64] = {0};
+    int nr = sscanf(cmd, "tcp %s", addr);
+    if (nr == 1) {
+        int fd = apix_open_tcp_client(ctx, addr);
+        if (fd == -1) {
+            perror("open_tcp");
+            return;
+        }
+        apix_set_poll_callback(ctx, fd, client_pollin, NULL);
+        assert(fds[fd] == 0);
+        fds[fd] = 1;
+        frontend = fd;
+    }
 }
 
 static void on_cmd_com(const char *cmd)
 {
-    frontend = FEND_COM;
+    char addr[64] = {0};
+    int nr = sscanf(cmd, "com %s", addr);
+    if (nr == 1) {
+        int fd = apix_open_serial(ctx, addr);
+        if (fd == -1) {
+            perror("open_com");
+            return;
+        }
+        apix_set_poll_callback(ctx, fd, client_pollin, NULL);
+        struct ioctl_serial_param sp = {
+            .baud = SERIAL_ARG_BAUD_115200,
+            .bits = SERIAL_ARG_BITS_8,
+            .parity = SERIAL_ARG_PARITY_N,
+            .stop = SERIAL_ARG_STOP_1,
+        };
+        int rc = apix_ioctl(ctx, fd, 0, (unsigned long)&sp);
+        assert(rc != -1);
+        assert(fds[fd] == 0);
+        fds[fd] = 1;
+        frontend = fd;
+    }
 }
 
 static void on_cmd_default(const char *cmd)
 {
-    if (frontend == FEND_UNIX) {
-        apix_send(ctx, fd_unix, cmd, strlen(cmd));
-    } else if (frontend == FEND_TCP) {
-        apix_send(ctx, fd_tcp, cmd, strlen(cmd));
-    } else if (frontend == FEND_COM) {
-        apix_send(ctx, fd_com, cmd, strlen(cmd));
-    }
+    if (frontend != 0)
+        apix_send(ctx, frontend, cmd, strlen(cmd));
 }
 
 static const struct cli_cmd cli_cmds[] = {
@@ -162,6 +235,10 @@ static const struct cli_cmd cli_cmds[] = {
     { "history", on_cmd_history, "display history of commands" },
     { "!", on_cmd_history_exec, "!<num>" },
     { "quit", on_cmd_quit, "exit cli" },
+    { "ll", on_cmd_fds, "list fds" },
+    { "fds", on_cmd_fds, "list fds" },
+    { "front", on_cmd_front, "set frontend fd" },
+    { "close", on_cmd_close, "close fd" },
     { "unix", on_cmd_unix, "use unix as frontend" },
     { "tcp", on_cmd_tcp, "use tcp as frontend" },
     { "com", on_cmd_com, "use com as frontend"},
