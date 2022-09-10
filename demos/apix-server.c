@@ -26,8 +26,8 @@ static void signal_handler(int sig)
 static struct opt opttab[] = {
     INIT_OPT_BOOL("-h", "help", false, "print this usage"),
     INIT_OPT_BOOL("-D", "debug", false, "debug mode [defaut: false]"),
-    INIT_OPT_STRING("-u:", "unix", "./apix-unix-domain", "unix domain"),
-    INIT_OPT_STRING("-t:", "tcp", "0.0.0.0:12248", "tcp socket"),
+    INIT_OPT_STRING("-x:", "unix", "", "unix domain"),
+    INIT_OPT_STRING("-t:", "tcp", "", "tcp socket"),
     INIT_OPT_STRING("-s:", "serial", "", "serial dev file"),
     INIT_OPT_NONE(),
 };
