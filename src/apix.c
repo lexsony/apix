@@ -386,11 +386,11 @@ int apix_poll(struct apix *ctx)
     return 0;
 }
 
-int apix_open(struct apix *ctx, const char *name, const char *addr)
+int apix_open(struct apix *ctx, const char *id, const char *addr)
 {
     struct apisink *pos;
     list_for_each_entry(pos, &ctx->sinks, node) {
-        if (strcmp(pos->name, name) == 0) {
+        if (strcmp(pos->id, id) == 0) {
             assert(pos->ops.open);
             return pos->ops.open(pos, addr);
         }
@@ -440,10 +440,10 @@ int apix_recv(struct apix *ctx, int fd, void *buf, size_t size)
 
 void apisink_init(struct apisink *sink, const char *name, apisink_ops_t ops)
 {
-    assert(strlen(name) < APISINK_NAME_SIZE);
+    assert(strlen(name) < APISINK_ID_SIZE);
     INIT_LIST_HEAD(&sink->sinkfds);
     INIT_LIST_HEAD(&sink->node);
-    snprintf(sink->name, sizeof(sink->name), "%s", name);
+    snprintf(sink->id, sizeof(sink->id), "%s", name);
     sink->ops = ops;
     sink->ctx = NULL;
 }
@@ -462,7 +462,7 @@ int apix_add_sink(struct apix *ctx, struct apisink *sink)
 {
     struct apisink *pos;
     list_for_each_entry(pos, &ctx->sinks, node) {
-        if (strcmp(sink->name, pos->name) == 0)
+        if (strcmp(sink->id, pos->id) == 0)
             return -1;
     }
 

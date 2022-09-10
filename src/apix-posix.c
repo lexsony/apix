@@ -31,11 +31,11 @@ struct posix_sink {
     int nfds;
 };
 
-// unix domain socket
+// unix domain socket server
 
-static struct posix_sink __unix_sink;
+static struct posix_sink __unix_s_sink;
 
-static int unix_open(struct apisink *sink, const char *addr)
+static int unix_s_open(struct apisink *sink, const char *addr)
 {
     int fd = socket(PF_UNIX, SOCK_STREAM, 0);
     if (fd == -1)
@@ -67,14 +67,14 @@ static int unix_open(struct apisink *sink, const char *addr)
     list_add(&sinkfd->node_sink, &sink->sinkfds);
     list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
 
-    struct posix_sink *unix_sink = container_of(sink, struct posix_sink, sink);
-    FD_SET(fd, &unix_sink->fds);
-    unix_sink->nfds = fd + 1;
+    struct posix_sink *unix_s_sink = container_of(sink, struct posix_sink, sink);
+    FD_SET(fd, &unix_s_sink->fds);
+    unix_s_sink->nfds = fd + 1;
 
     return fd;
 }
 
-static int unix_close(struct apisink *sink, int fd)
+static int unix_s_close(struct apisink *sink, int fd)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apisink(sink, fd);
     if (sinkfd == NULL)
@@ -85,27 +85,27 @@ static int unix_close(struct apisink *sink, int fd)
     return 0;
 }
 
-static int unix_send(struct apisink *sink, int fd, const void *buf, size_t len)
+static int unix_s_send(struct apisink *sink, int fd, const void *buf, size_t len)
 {
     UNUSED(sink);
     return send(fd, buf, len, 0);
 }
 
-static int unix_recv(struct apisink *sink, int fd, void *buf, size_t size)
+static int unix_s_recv(struct apisink *sink, int fd, void *buf, size_t size)
 {
     UNUSED(sink);
     return recv(fd, buf, size, 0);
 }
 
-static int unix_poll(struct apisink *sink)
+static int unix_s_poll(struct apisink *sink)
 {
-    struct posix_sink *unix_sink = container_of(sink, struct posix_sink, sink);
+    struct posix_sink *unix_s_sink = container_of(sink, struct posix_sink, sink);
 
     struct timeval tv = { 0, 0 };
     fd_set recvfds;
-    memcpy(&recvfds, &unix_sink->fds, sizeof(recvfds));
+    memcpy(&recvfds, &unix_s_sink->fds, sizeof(recvfds));
 
-    int nr_recv_fds = select(unix_sink->nfds, &recvfds, NULL, NULL, &tv);
+    int nr_recv_fds = select(unix_s_sink->nfds, &recvfds, NULL, NULL, &tv);
     if (nr_recv_fds == -1) {
         if (errno == EINTR)
             return 0;
@@ -136,9 +136,9 @@ static int unix_poll(struct apisink *sink)
             list_add(&sinkfd->node_sink, &sink->sinkfds);
             list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
 
-            if (unix_sink->nfds < newfd + 1)
-                unix_sink->nfds = newfd + 1;
-            FD_SET(newfd, &unix_sink->fds);
+            if (unix_s_sink->nfds < newfd + 1)
+                unix_s_sink->nfds = newfd + 1;
+            FD_SET(newfd, &unix_s_sink->fds);
         } else /* recv */ {
             int nread = recv(pos->fd, atbuf_write_pos(pos->rxbuf),
                              atbuf_spare(pos->rxbuf), 0);
@@ -158,20 +158,20 @@ static int unix_poll(struct apisink *sink)
     return 0;
 }
 
-static apisink_ops_t unix_ops = {
-    .open = unix_open,
-    .close = unix_close,
+static apisink_ops_t unix_s_ops = {
+    .open = unix_s_open,
+    .close = unix_s_close,
     .ioctl = NULL,
-    .send = unix_send,
-    .recv = unix_recv,
-    .poll = unix_poll,
+    .send = unix_s_send,
+    .recv = unix_s_recv,
+    .poll = unix_s_poll,
 };
 
-// tcp
+// tcp server
 
-static struct posix_sink __tcp_sink;
+static struct posix_sink __tcp_s_sink;
 
-static int tcp_open(struct apisink *sink, const char *addr)
+static int tcp_s_open(struct apisink *sink, const char *addr)
 {
     int fd = socket(PF_INET, SOCK_STREAM, 0);
     if (fd == -1)
@@ -212,14 +212,14 @@ static int tcp_open(struct apisink *sink, const char *addr)
     list_add(&sinkfd->node_sink, &sink->sinkfds);
     list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
 
-    struct posix_sink *tcp_sink = container_of(sink, struct posix_sink, sink);
-    FD_SET(fd, &tcp_sink->fds);
-    tcp_sink->nfds = fd + 1;
+    struct posix_sink *tcp_s_sink = container_of(sink, struct posix_sink, sink);
+    FD_SET(fd, &tcp_s_sink->fds);
+    tcp_s_sink->nfds = fd + 1;
 
     return fd;
 }
 
-static int tcp_close(struct apisink *sink, int fd)
+static int tcp_s_close(struct apisink *sink, int fd)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apisink(sink, fd);
     if (sinkfd == NULL)
@@ -229,13 +229,13 @@ static int tcp_close(struct apisink *sink, int fd)
     return 0;
 }
 
-static apisink_ops_t tcp_ops = {
-    .open = tcp_open,
-    .close = tcp_close,
+static apisink_ops_t tcp_s_ops = {
+    .open = tcp_s_open,
+    .close = tcp_s_close,
     .ioctl = NULL,
-    .send = unix_send,
-    .recv = unix_recv,
-    .poll = unix_poll,
+    .send = unix_s_send,
+    .recv = unix_s_recv,
+    .poll = unix_s_poll,
 };
 
 // serial
@@ -396,11 +396,11 @@ static apisink_ops_t serial_ops = {
 
 int apix_enable_posix(struct apix *ctx)
 {
-    apisink_init(&__unix_sink.sink, APISINK_UNIX, unix_ops);
-    apix_add_sink(ctx, &__unix_sink.sink);
+    apisink_init(&__unix_s_sink.sink, APISINK_UNIX_S, unix_s_ops);
+    apix_add_sink(ctx, &__unix_s_sink.sink);
 
-    apisink_init(&__tcp_sink.sink, APISINK_TCP, tcp_ops);
-    apix_add_sink(ctx, &__tcp_sink.sink);
+    apisink_init(&__tcp_s_sink.sink, APISINK_TCP_S, tcp_s_ops);
+    apix_add_sink(ctx, &__tcp_s_sink.sink);
 
     apisink_init(&__serial_sink.sink, APISINK_SERIAL, serial_ops);
     apix_add_sink(ctx, &__serial_sink.sink);
@@ -410,11 +410,11 @@ int apix_enable_posix(struct apix *ctx)
 
 void apix_disable_posix(struct apix *ctx)
 {
-    apix_del_sink(ctx, &__unix_sink.sink);
-    apisink_fini(&__unix_sink.sink);
+    apix_del_sink(ctx, &__unix_s_sink.sink);
+    apisink_fini(&__unix_s_sink.sink);
 
-    apix_del_sink(ctx, &__tcp_sink.sink);
-    apisink_fini(&__tcp_sink.sink);
+    apix_del_sink(ctx, &__tcp_s_sink.sink);
+    apisink_fini(&__tcp_s_sink.sink);
 
     apix_del_sink(ctx, &__serial_sink.sink);
     apisink_fini(&__serial_sink.sink);

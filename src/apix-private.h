@@ -8,7 +8,7 @@
 #include "atbuf.h"
 #include "srrp.h"
 
-#define APISINK_NAME_SIZE 64
+#define APISINK_ID_SIZE 64
 #define SINKFD_ADDR_SIZE 64
 #define API_HEADER_SIZE 256
 #define API_TOPIC_SUBSCRIBE_MAX 32
@@ -41,14 +41,14 @@ typedef struct apisink_ops {
 } apisink_ops_t;
 
 struct apisink {
-    char name[APISINK_NAME_SIZE]; // identify
+    char id[APISINK_ID_SIZE]; // identify
     apisink_ops_t ops;
     struct apix *ctx;
     struct list_head sinkfds;
     struct list_head node;
 };
 
-void apisink_init(struct apisink *sink, const char *name, apisink_ops_t ops);
+void apisink_init(struct apisink *sink, const char *id, apisink_ops_t ops);
 void apisink_fini(struct apisink *sink);
 
 int apix_add_sink(struct apix *ctx, struct apisink *sink);
