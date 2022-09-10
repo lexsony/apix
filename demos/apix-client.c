@@ -21,7 +21,13 @@
 
 static int exit_flag;
 static struct apix *ctx;
-static int fds[1024];
+
+struct fd_struct {
+    int fd;
+    char addr[64];
+};
+
+static struct fd_struct fds[1024];
 static int frontend;
 
 static void signal_handler(int sig)
@@ -53,7 +59,7 @@ static int client_pollin(int fd, const char *buf, size_t len)
         rl_redisplay();
     }
 
-    printf("%d> %s", fd, buf);
+    printf("%d> %s\n", fd, buf);
 
     if (need_hack) {
         rl_restore_prompt();
@@ -70,7 +76,7 @@ static void *apix_thread(void *arg)
 {
     struct opt *ud = find_opt("unix", opttab);
     struct opt *tcp = find_opt("tcp", opttab);
-    struct opt *serial = find_opt("serial", opttab);
+    struct opt *com = find_opt("com", opttab);
 
     ctx = apix_new();
     apix_enable_posix(ctx);
@@ -82,8 +88,9 @@ static void *apix_thread(void *arg)
             exit(1);
         }
         apix_set_poll_callback(ctx, fd, client_pollin, NULL);
-        assert(fds[fd] == 0);
-        fds[fd] = 1;
+        assert(fds[fd].fd == 0);
+        fds[fd].fd = fd;
+        snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", opt_string(ud));
         frontend = fd;
     }
 
@@ -94,15 +101,16 @@ static void *apix_thread(void *arg)
             exit(1);
         }
         apix_set_poll_callback(ctx, fd, client_pollin, NULL);
-        assert(fds[fd] == 0);
-        fds[fd] = 1;
+        assert(fds[fd].fd == 0);
+        fds[fd].fd = fd;
+        snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", opt_string(tcp));
         frontend = fd;
     }
 
-    if (strcmp(opt_string(serial), "") != 0) {
-        int fd = apix_open_serial(ctx, opt_string(serial));
+    if (strcmp(opt_string(com), "") != 0) {
+        int fd = apix_open_serial(ctx, opt_string(com));
         if (fd == -1) {
-            perror("open_serial");
+            perror("open_com");
             exit(1);
         }
         apix_set_poll_callback(ctx, fd, client_pollin, NULL);
@@ -114,8 +122,9 @@ static void *apix_thread(void *arg)
         };
         int rc = apix_ioctl(ctx, fd, 0, (unsigned long)&sp);
         assert(rc != -1);
-        assert(fds[fd] == 0);
-        fds[fd] = 1;
+        assert(fds[fd].fd == 0);
+        fds[fd].fd = fd;
+        snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", opt_string(com));
         frontend = fd;
     }
 
@@ -137,9 +146,9 @@ static void on_cmd_quit(const char *cmd)
 static void on_cmd_fds(const char *cmd)
 {
     for (int i = 0; i < sizeof(fds) / sizeof(fds[0]); i++) {
-        if (fds[i] == 0)
+        if (fds[i].fd == 0)
             continue;
-        printf("fd: %d\n", i);
+        printf("fd: %d, addr: %s\n", fds[i].fd, fds[i].addr);
     }
     printf("frontend: %d\n", frontend);
 }
@@ -159,7 +168,7 @@ static void on_cmd_close(const char *cmd)
     int nr = sscanf(cmd, "close %d", &fd);
     if (nr == 1) {
         apix_close(ctx, fd);
-        fds[fd] = 0;
+        fds[fd].fd = 0;
         if (frontend == fd)
             frontend = 0;
     }
@@ -176,8 +185,9 @@ static void on_cmd_unix(const char *cmd)
             return;
         }
         apix_set_poll_callback(ctx, fd, client_pollin, NULL);
-        assert(fds[fd] == 0);
-        fds[fd] = 1;
+        assert(fds[fd].fd == 0);
+        fds[fd].fd = fd;
+        snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         frontend = fd;
     }
 }
@@ -193,8 +203,9 @@ static void on_cmd_tcp(const char *cmd)
             return;
         }
         apix_set_poll_callback(ctx, fd, client_pollin, NULL);
-        assert(fds[fd] == 0);
-        fds[fd] = 1;
+        assert(fds[fd].fd == 0);
+        fds[fd].fd = fd;
+        snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         frontend = fd;
     }
 }
@@ -218,8 +229,9 @@ static void on_cmd_com(const char *cmd)
         };
         int rc = apix_ioctl(ctx, fd, 0, (unsigned long)&sp);
         assert(rc != -1);
-        assert(fds[fd] == 0);
-        fds[fd] = 1;
+        assert(fds[fd].fd == 0);
+        fds[fd].fd = fd;
+        snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         frontend = fd;
     }
 }
