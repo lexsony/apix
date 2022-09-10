@@ -1,10 +1,13 @@
 #include <assert.h>
+#include <ctype.h>
 #include <stddef.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <signal.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <sys/time.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <netinet/in.h>
@@ -15,7 +18,6 @@
 #include "svcx.h"
 #include "crc16.h"
 #include "opt.h"
-#include "log.h"
 
 static int exit_flag;
 
@@ -32,6 +34,26 @@ static struct opt opttab[] = {
     INIT_OPT_STRING("-s:", "serial", "", "serial dev file"),
     INIT_OPT_NONE(),
 };
+
+static void log_hex_string(const char *buf, size_t len)
+{
+    struct timeval tmnow;
+    char tmp[32] = {0}, usec_tmp[16] = {0};
+    gettimeofday(&tmnow, NULL);
+    strftime(tmp, 30, "%Y-%m-%d %H:%M:%S", localtime(&tmnow.tv_sec));
+    sprintf(usec_tmp, ".%04d", (int)tmnow.tv_usec / 100);
+    strcat(tmp, usec_tmp);
+
+    printf("[%s] - ", tmp);
+    printf("%d, ", (int)len);
+    for (int i = 0; i < len; i++) {
+        if (isprint(buf[i]))
+            printf("%c", buf[i]);
+        else
+            printf("_0x%.2x", buf[i]);
+    }
+    printf("\n");
+}
 
 static int on_echo(struct srrp_packet *req, struct srrp_packet **resp)
 {
@@ -78,11 +100,14 @@ static void demo()
         nr = apix_recv(ctx, fd, buf, sizeof(buf));
         if (nr <= 0) continue;
 
-        LOG_INFO("recv: %d, %s", nr, buf);
+        log_hex_string(buf, nr);
 
         uint32_t offset = srrp_next_packet_offset(buf, nr);
         struct srrp_packet *req = srrp_read_one_packet(buf + offset);
-        if (req == NULL) continue;
+        if (req == NULL) {
+            apix_send(ctx, fd, "\0", 1);
+            continue;
+        }
 
         struct srrp_packet *resp = NULL;
         if (svchub_deal(hub, req, &resp) == 0) {
@@ -105,7 +130,6 @@ static void demo()
 
 int main(int argc, char *argv[])
 {
-    log_set_level(LOG_LV_DEBUG);
     opt_init_from_arg(opttab, argc, argv);
     signal(SIGINT, signal_handler);
     signal(SIGQUIT, signal_handler);
