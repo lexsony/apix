@@ -68,6 +68,9 @@ struct sinkfd {
     struct apisink *sink;
     struct list_head node_sink;
     struct list_head node_ctx;
+
+    pollin_func_t pollin;
+    pollout_func_t pollout;
 };
 
 struct sinkfd *sinkfd_new();

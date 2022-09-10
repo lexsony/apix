@@ -246,6 +246,69 @@ void apix_destroy(struct apix *ctx)
     free(ctx);
 }
 
+int apix_open(struct apix *ctx, const char *id, const char *addr)
+{
+    struct apisink *pos;
+    list_for_each_entry(pos, &ctx->sinks, node) {
+        if (strcmp(pos->id, id) == 0) {
+            assert(pos->ops.open);
+            return pos->ops.open(pos, addr);
+        }
+    }
+    return -1;
+}
+
+int apix_close(struct apix *ctx, int fd)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    if (sinkfd->sink && sinkfd->sink->ops.close)
+        sinkfd->sink->ops.close(sinkfd->sink, fd);
+    return 0;
+}
+
+int apix_ioctl(struct apix *ctx, int fd, unsigned int cmd, unsigned long arg)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    if (sinkfd->sink == NULL || sinkfd->sink->ops.ioctl == NULL)
+        return -1;
+    return sinkfd->sink->ops.ioctl(sinkfd->sink, fd, cmd, arg);
+}
+
+int apix_send(struct apix *ctx, int fd, const void *buf, size_t len)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    if (sinkfd->sink == NULL || sinkfd->sink->ops.send == NULL)
+        return -1;
+    return sinkfd->sink->ops.send(sinkfd->sink, fd, buf, len);
+}
+
+int apix_recv(struct apix *ctx, int fd, void *buf, size_t size)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    if (sinkfd->sink == NULL || sinkfd->sink->ops.recv == NULL)
+        return -1;
+    return sinkfd->sink->ops.recv(sinkfd->sink, fd, buf, size);
+}
+
+int apix_set_poll_callback(struct apix *ctx, int fd, pollin_func_t pollin,
+                           pollout_func_t pollout)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    sinkfd->pollin = pollin;
+    sinkfd->pollout = pollout;
+    return 0;
+}
+
 static void handle_request(struct apix *ctx)
 {
     struct api_request *pos, *n;
@@ -356,9 +419,22 @@ int apix_poll(struct apix *ctx)
     // parse each sinkfds
     struct sinkfd *pos_fd;
     list_for_each_entry(pos_fd, &ctx->sinkfds, node_ctx) {
-        if (timercmp(&ctx->poll_ts, &pos_fd->ts_poll_recv, <))
+        if (timercmp(&ctx->poll_ts, &pos_fd->ts_poll_recv, <)) {
             ctx->poll_cnt++;
-        if (atbuf_used(pos_fd->rxbuf)) {
+
+            // poll callback
+            if (pos_fd->pollin) {
+                int nr = pos_fd->pollin(pos_fd->fd, atbuf_read_pos(pos_fd->rxbuf),
+                                        atbuf_used(pos_fd->rxbuf));
+                if (nr > 0) {
+                    if (nr > atbuf_used(pos_fd->rxbuf))
+                        nr = atbuf_used(pos_fd->rxbuf);
+                    atbuf_read_advance(pos_fd->rxbuf, nr);
+                    continue;
+                }
+            }
+
+            assert(atbuf_used(pos_fd->rxbuf));
             parse_packet(ctx, pos_fd);
         }
     }
@@ -384,58 +460,6 @@ int apix_poll(struct apix *ctx)
     clear_unalive_station(ctx);
 
     return 0;
-}
-
-int apix_open(struct apix *ctx, const char *id, const char *addr)
-{
-    struct apisink *pos;
-    list_for_each_entry(pos, &ctx->sinks, node) {
-        if (strcmp(pos->id, id) == 0) {
-            assert(pos->ops.open);
-            return pos->ops.open(pos, addr);
-        }
-    }
-    return -1;
-}
-
-int apix_close(struct apix *ctx, int fd)
-{
-    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
-    if (sinkfd == NULL)
-        return -1;
-    if (sinkfd->sink && sinkfd->sink->ops.close)
-        sinkfd->sink->ops.close(sinkfd->sink, fd);
-    return 0;
-}
-
-int apix_ioctl(struct apix *ctx, int fd, unsigned int cmd, unsigned long arg)
-{
-    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
-    if (sinkfd == NULL)
-        return -1;
-    if (sinkfd->sink == NULL || sinkfd->sink->ops.ioctl == NULL)
-        return -1;
-    return sinkfd->sink->ops.ioctl(sinkfd->sink, fd, cmd, arg);
-}
-
-int apix_send(struct apix *ctx, int fd, const void *buf, size_t len)
-{
-    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
-    if (sinkfd == NULL)
-        return -1;
-    if (sinkfd->sink == NULL || sinkfd->sink->ops.send == NULL)
-        return -1;
-    return sinkfd->sink->ops.send(sinkfd->sink, fd, buf, len);
-}
-
-int apix_recv(struct apix *ctx, int fd, void *buf, size_t size)
-{
-    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
-    if (sinkfd == NULL)
-        return -1;
-    if (sinkfd->sink == NULL || sinkfd->sink->ops.recv == NULL)
-        return -1;
-    return sinkfd->sink->ops.recv(sinkfd->sink, fd, buf, size);
 }
 
 void apisink_init(struct apisink *sink, const char *name, apisink_ops_t ops)
@@ -491,6 +515,8 @@ struct sinkfd *sinkfd_new()
     sinkfd->sink = NULL;
     INIT_LIST_HEAD(&sinkfd->node_sink);
     INIT_LIST_HEAD(&sinkfd->node_ctx);
+    sinkfd->pollin = NULL;
+    sinkfd->pollout = NULL;
     return sinkfd;
 }
 

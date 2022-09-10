@@ -20,8 +20,16 @@
 #define UNIX_ADDR "test_apisink_unix"
 #define TCP_ADDR "127.0.0.1:1224"
 
+static int requester_pollined = 0;
 static int requester_finished = 0;
 static int responser_finished = 0;
+
+static int requester_pollin(int fd, const char *buf, size_t len)
+{
+    requester_pollined = 1;
+    LOG_INFO("requester recv response: %s", buf);
+    return len;
+}
 
 static void *requester_thread(void *args)
 {
@@ -38,10 +46,10 @@ static void *requester_thread(void *args)
     assert_true(rc != -1);
     srrp_free(pac);
 
-    char buf[256] = {0};
-    rc = recv(fd, buf, sizeof(buf), 0);
-    assert_true(rc != -1);
-    LOG_INFO("requester recv response: %s", buf);
+    apix_set_poll_callback(ctx, fd, requester_pollin, NULL);
+
+    while (requester_pollined == 0)
+        apix_poll(ctx);
 
     apix_close(ctx, fd);
     apix_disable_posix(ctx);
