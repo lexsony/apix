@@ -1,13 +1,10 @@
 cmake_minimum_required(VERSION 3.12)
 
-add_executable(apix-client-serial-3333 apix-client-serial-3333.c)
-target_link_libraries(apix-client-serial-3333 apix)
+add_executable(apix-client-3333 apix-client-3333.c opt.c)
+target_link_libraries(apix-client-3333 apix)
 
-add_executable(apix-client-tcp-3333 apix-client-tcp-3333.c)
-target_link_libraries(apix-client-tcp-3333 apix)
-
-add_executable(apix-client-tcp-8888 apix-client-tcp-8888.c)
-target_link_libraries(apix-client-tcp-8888 apix)
+add_executable(apix-client-8888 apix-client-8888.c opt.c)
+target_link_libraries(apix-client-8888 apix)
 
 add_executable(apix-client apix-client.c opt.c cli.c)
 target_link_libraries(apix-client apix readline)

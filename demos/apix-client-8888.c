@@ -14,6 +14,7 @@
 #include "srrp.h"
 #include "svcx.h"
 #include "crc16.h"
+#include "opt.h"
 #include "log.h"
 
 static int exit_flag;
@@ -23,6 +24,15 @@ static void signal_handler(int sig)
     exit_flag = 1;
 }
 
+static struct opt opttab[] = {
+    INIT_OPT_BOOL("-h", "help", false, "print this usage"),
+    INIT_OPT_BOOL("-D", "debug", false, "debug mode [defaut: false]"),
+    INIT_OPT_STRING("-x:", "unix", "", "unix domain"),
+    INIT_OPT_STRING("-t:", "tcp", "", "tcp socket"),
+    INIT_OPT_STRING("-s:", "serial", "", "serial dev file"),
+    INIT_OPT_NONE(),
+};
+
 static int on_echo(struct srrp_packet *req, struct srrp_packet **resp)
 {
     uint16_t crc = crc16(req->header, req->header_len);
@@ -31,14 +41,28 @@ static int on_echo(struct srrp_packet *req, struct srrp_packet **resp)
     return 0;
 }
 
-static void demo(const char *addr)
+static void demo()
 {
     struct svchub *hub = svchub_new();
     svchub_add_service(hub, "/8888/echo", on_echo);
 
     struct apix *ctx = apix_new();
     apix_enable_posix(ctx);
-    int fd = apix_open_tcp_client(ctx, addr);
+    int fd = 0;
+
+    struct opt *ud = find_opt("unix", opttab);
+    struct opt *tcp = find_opt("tcp", opttab);
+    struct opt *serial = find_opt("serial", opttab);
+    if (strcmp(opt_string(ud), "") != 0) {
+        fd = apix_open_unix_client(ctx, opt_string(ud));
+    } else if (strcmp(opt_string(tcp), "") != 0) {
+        fd = apix_open_tcp_client(ctx, opt_string(tcp));
+    } else if (strcmp(opt_string(serial), "") != 0) {
+        fd = apix_open_serial(ctx, opt_string(serial));
+    } else {
+        exit(-1);
+    }
+
     assert(fd != -1);
 
     struct srrp_packet *pac = srrp_write_request(
@@ -53,6 +77,8 @@ static void demo(const char *addr)
         bzero(buf, sizeof(buf));
         nr = apix_recv(ctx, fd, buf, sizeof(buf));
         if (nr <= 0) continue;
+
+        LOG_INFO("recv: %d, %s", nr, buf);
 
         uint32_t offset = srrp_next_packet_offset(buf, nr);
         struct srrp_packet *req = srrp_read_one_packet(buf + offset);
@@ -80,8 +106,10 @@ static void demo(const char *addr)
 int main(int argc, char *argv[])
 {
     log_set_level(LOG_LV_DEBUG);
+    opt_init_from_arg(opttab, argc, argv);
     signal(SIGINT, signal_handler);
     signal(SIGQUIT, signal_handler);
-    demo(argv[1]);
+
+    demo();
     return 0;
 }

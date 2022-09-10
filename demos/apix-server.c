@@ -44,15 +44,20 @@ static void run_apix()
     int fd = 0;
     int rc = 0;
 
-    fd = apix_open_unix_server(ctx, opt_string(ud));
-    if (fd == -1) {
-        perror("open_unix");
-        exit(1);
+    if (strcmp(opt_string(ud), "") != 0) {
+        fd = apix_open_unix_server(ctx, opt_string(ud));
+        if (fd == -1) {
+            perror("open_unix");
+            exit(1);
+        }
     }
-    fd = apix_open_tcp_server(ctx, opt_string(tcp));
-    if (fd == -1) {
-        perror("open_tcp");
-        exit(1);
+
+    if (strcmp(opt_string(tcp), "") != 0) {
+        fd = apix_open_tcp_server(ctx, opt_string(tcp));
+        if (fd == -1) {
+            perror("open_tcp");
+            exit(1);
+        }
     }
 
     if (strcmp(opt_string(serial), "") != 0) {
