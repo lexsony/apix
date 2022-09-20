@@ -10,8 +10,10 @@
 extern "C" {
 #endif
 
-#define APISINK_STM32_TCP    "apisink_stm32_tcp"
-#define APISINK_STM32_UDP    "apisink_stm32_udp"
+#define APISINK_STM32_TCP_S  "apisink_stm32_tcp_s"
+#define APISINK_STM32_TCP_C  "apisink_stm32_tcp_c"
+#define APISINK_STM32_UDP_S  "apisink_stm32_udp_s"
+#define APISINK_STM32_UDP_C  "apisink_stm32_udp_c"
 #define APISINK_STM32_SERIAL "apisink_stm32_serial"
 #define APISINK_STM32_CAN    "apisink_stm32_can"
 #define APISINK_STM32_SPI    "apisink_stm32_spi"
@@ -34,8 +36,10 @@ struct ioctl_serial_param {
     char stop;
 };
 
-#define apix_open_stm32_tcp(ctx, addr) \
-    apix_open(ctx, APISINK_STM32_TCP, addr)
+#define apix_open_stm32_tcp_server(ctx, addr) \
+    apix_open(ctx, APISINK_STM32_TCP_S, addr)
+#define apix_open_stm32_tcp_client(ctx, addr) \
+    apix_open(ctx, APISINK_STM32_TCP_C, addr)
 #define apix_open_stm32_serial(ctx, addr) \
     apix_open(ctx, APISINK_STM32_SERIAL, addr)
 

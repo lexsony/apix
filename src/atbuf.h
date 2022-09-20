@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-#define ATBUF_DEFAULT_SIZE 4096
+#define ATBUF_DEFAULT_SIZE 1024
 
 typedef struct atbuf atbuf_t;
 
