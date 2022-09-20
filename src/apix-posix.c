@@ -145,10 +145,10 @@ static int unix_s_poll(struct apisink *sink)
                              atbuf_spare(pos->rxbuf), 0);
             if (nread == -1) {
                 LOG_DEBUG("[recv] (%d) %s", errno, strerror(errno));
-                sinkfd_destroy(pos);
+                sink->ops.close(sink, pos->fd);
             } else if (nread == 0) {
                 LOG_DEBUG("[recv] (%d) finished");
-                sinkfd_destroy(pos);
+                sink->ops.close(sink, pos->fd);
             } else {
                 atbuf_write_advance(pos->rxbuf, nread);
                 gettimeofday(&pos->ts_poll_recv, NULL);
@@ -259,10 +259,10 @@ static int unix_c_poll(struct apisink *sink)
                             atbuf_spare(pos->rxbuf), 0);
         if (nread == -1) {
             LOG_DEBUG("[recv] (%d) %s", errno, strerror(errno));
-            sinkfd_destroy(pos);
+            sink->ops.close(sink, pos->fd);
         } else if (nread == 0) {
             LOG_DEBUG("[recv] (%d) finished");
-            sinkfd_destroy(pos);
+            sink->ops.close(sink, pos->fd);
         } else {
             atbuf_write_advance(pos->rxbuf, nread);
             gettimeofday(&pos->ts_poll_recv, NULL);
@@ -536,10 +536,10 @@ static int serial_poll(struct apisink *sink)
                          atbuf_spare(pos->rxbuf));
         if (nread == -1) {
             LOG_DEBUG("[read] (%d) %s", errno, strerror(errno));
-            sinkfd_destroy(pos);
+            sink->ops.close(sink, pos->fd);
         } else if (nread == 0) {
             LOG_DEBUG("[read] (%d) finished");
-            sinkfd_destroy(pos);
+            sink->ops.close(sink, pos->fd);
         } else {
             atbuf_write_advance(pos->rxbuf, nread);
             gettimeofday(&pos->ts_poll_recv, NULL);

@@ -62,13 +62,14 @@ struct sinkfd {
     int fd;
     int listen;
     char addr[SINKFD_ADDR_SIZE];
-    atbuf_t *txbuf;
+    //atbuf_t *txbuf;
     atbuf_t *rxbuf;
     struct timeval ts_poll_recv;
     struct apisink *sink;
     struct list_head node_sink;
     struct list_head node_ctx;
 
+    close_func_t close;
     pollin_func_t pollin;
     pollout_func_t pollout;
 };
