@@ -110,7 +110,7 @@ static int unix_s_poll(struct apisink *sink)
     if (nr_recv_fds == -1) {
         if (errno == EINTR)
             return 0;
-        LOG_ERROR("[select] (%d) %s", errno, strerror(errno));
+        LOG_ERROR("[select] %s", strerror(errno));
         return -1;
     }
 
@@ -127,9 +127,10 @@ static int unix_s_poll(struct apisink *sink)
         if (pos->listen == 1) {
             int newfd = accept(pos->fd, NULL, NULL);
             if (newfd == -1) {
-                LOG_ERROR("[accept] (%d) %s", errno, strerror(errno));
+                LOG_ERROR("[accept] fd:%d, %s", pos->fd, strerror(errno));
                 continue;
             }
+            LOG_DEBUG("[accept] fd:%d, newfd:%d", pos->fd, newfd);
 
             struct sinkfd *sinkfd = sinkfd_new();
             sinkfd->fd = newfd;
@@ -147,10 +148,12 @@ static int unix_s_poll(struct apisink *sink)
             int nread = recv(pos->fd, atbuf_write_pos(pos->rxbuf),
                              atbuf_spare(pos->rxbuf), 0);
             if (nread == -1) {
-                LOG_DEBUG("[recv] (%d) %s", errno, strerror(errno));
+                LOG_DEBUG("[recv] fd:%d, %s", pos->fd, strerror(errno));
+                FD_CLR(pos->fd, &unix_s_sink->fds);
                 sink->ops.close(sink, pos->fd);
             } else if (nread == 0) {
-                LOG_DEBUG("[recv] (%d) finished");
+                LOG_DEBUG("[recv] fd:%d, finished", pos->fd);
+                FD_CLR(pos->fd, &unix_s_sink->fds);
                 sink->ops.close(sink, pos->fd);
             } else {
                 atbuf_write_advance(pos->rxbuf, nread);
@@ -245,7 +248,7 @@ static int unix_c_poll(struct apisink *sink)
     if (nr_recv_fds == -1) {
         if (errno == EINTR)
             return 0;
-        LOG_ERROR("[select] (%d) %s", errno, strerror(errno));
+        LOG_ERROR("[select] %s", strerror(errno));
         return -1;
     }
 
@@ -261,10 +264,12 @@ static int unix_c_poll(struct apisink *sink)
         int nread = recv(pos->fd, atbuf_write_pos(pos->rxbuf),
                             atbuf_spare(pos->rxbuf), 0);
         if (nread == -1) {
-            LOG_DEBUG("[recv] (%d) %s", errno, strerror(errno));
+            LOG_DEBUG("[recv] fd:%d, %s", pos->fd, strerror(errno));
+            FD_CLR(pos->fd, &unix_c_sink->fds);
             sink->ops.close(sink, pos->fd);
         } else if (nread == 0) {
-            LOG_DEBUG("[recv] (%d) finished");
+            LOG_DEBUG("[recv] fd:%d, finished", pos->fd);
+            FD_CLR(pos->fd, &unix_c_sink->fds);
             sink->ops.close(sink, pos->fd);
         } else {
             atbuf_write_advance(pos->rxbuf, nread);
