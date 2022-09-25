@@ -165,7 +165,7 @@ static int tcp_s_poll(struct apisink *sink)
     return 0;
 }
 
-static apisink_ops_t tcp_s_ops = {
+static const struct apisink_operations tcp_s_ops = {
     .open = tcp_s_open,
     .close = tcp_s_close,
     .ioctl = NULL,
@@ -290,7 +290,7 @@ static int tcp_c_poll(struct apisink *sink)
     return 0;
 }
 
-static apisink_ops_t tcp_c_ops = {
+static const struct apisink_operations tcp_c_ops = {
     .open = tcp_c_open,
     .close = tcp_c_close,
     .ioctl = NULL,
@@ -361,7 +361,7 @@ static int serial_poll(struct apisink *sink)
     return 0;
 }
 
-static apisink_ops_t serial_ops = {
+static const struct apisink_operations serial_ops = {
     .open = serial_open,
     .close = serial_close,
     .ioctl = serial_ioctl,
@@ -374,17 +374,17 @@ int apix_enable_stm32(struct apix *ctx)
 {
     // tcp_s
     struct posix_sink *tcp_s_sink = calloc(1, sizeof(struct posix_sink));
-    apisink_init(&tcp_s_sink->sink, APISINK_STM32_TCP_S, tcp_s_ops);
+    apisink_init(&tcp_s_sink->sink, APISINK_STM32_TCP_S, &tcp_s_ops);
     apix_add_sink(ctx, &tcp_s_sink->sink);
 
     // tcp_c
     struct posix_sink *tcp_c_sink = calloc(1, sizeof(struct posix_sink));
-    apisink_init(&tcp_c_sink->sink, APISINK_STM32_TCP_C, tcp_c_ops);
+    apisink_init(&tcp_c_sink->sink, APISINK_STM32_TCP_C, &tcp_c_ops);
     apix_add_sink(ctx, &tcp_c_sink->sink);
 
     // serial
     struct posix_sink *serial_sink = calloc(1, sizeof(struct posix_sink));
-    apisink_init(&serial_sink->sink, APISINK_STM32_SERIAL, serial_ops);
+    apisink_init(&serial_sink->sink, APISINK_STM32_SERIAL, &serial_ops);
     apix_add_sink(ctx, &serial_sink->sink);
 
     return 0;

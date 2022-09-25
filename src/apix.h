@@ -24,14 +24,14 @@ int apix_recv(struct apix *ctx, int fd, void *buf, size_t size);
  *   return n(>0): handled, and skip n bytes
  */
 
-typedef int (*close_func_t)(int fd);
-typedef int (*pollin_func_t)(int fd, const char *buf, size_t len);
-typedef int (*pollout_func_t)(int fd, const char *buf, size_t len);
+struct apix_events {
+    int (*on_close)(int fd);
+    int (*on_accept)(int fd, int newfd);
+    int (*on_pollin)(int fd, const char *buf, size_t len);
+    //int (*on_pollout)(int fd, const char *buf, size_t len);
+};
 
-int apix_set_callback(struct apix *ctx, int fd,
-                      close_func_t close,
-                      pollin_func_t pollin,
-                      /*not available yet*/pollout_func_t pollout);
+int apix_set_events(struct apix *ctx, int fd, const struct apix_events *events);
 int apix_poll(struct apix *ctx);
 
 #ifdef __cplusplus

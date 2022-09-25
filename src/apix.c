@@ -265,6 +265,8 @@ int apix_close(struct apix *ctx, int fd)
         return -1;
     if (sinkfd->sink && sinkfd->sink->ops.close)
         sinkfd->sink->ops.close(sinkfd->sink, fd);
+    if (sinkfd->events.on_close)
+        sinkfd->events.on_close(fd);
     return 0;
 }
 
@@ -298,17 +300,12 @@ int apix_recv(struct apix *ctx, int fd, void *buf, size_t size)
     return sinkfd->sink->ops.recv(sinkfd->sink, fd, buf, size);
 }
 
-int apix_set_callback(struct apix *ctx, int fd,
-                      close_func_t close,
-                      pollin_func_t pollin,
-                      pollout_func_t pollout)
+int apix_set_events(struct apix *ctx, int fd, const struct apix_events *events)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
         return -1;
-    sinkfd->close = close;
-    sinkfd->pollin = pollin;
-    sinkfd->pollout = pollout;
+    sinkfd->events = *events;
     return 0;
 }
 
@@ -426,9 +423,10 @@ int apix_poll(struct apix *ctx)
             ctx->poll_cnt++;
 
             // poll callback
-            if (pos_fd->pollin) {
-                int nr = pos_fd->pollin(pos_fd->fd, atbuf_read_pos(pos_fd->rxbuf),
-                                        atbuf_used(pos_fd->rxbuf));
+            if (pos_fd->events.on_pollin) {
+                int nr = pos_fd->events.on_pollin(
+                    pos_fd->fd, atbuf_read_pos(pos_fd->rxbuf),
+                    atbuf_used(pos_fd->rxbuf));
                 if (nr > 0) {
                     if (nr > atbuf_used(pos_fd->rxbuf))
                         nr = atbuf_used(pos_fd->rxbuf);
@@ -465,13 +463,14 @@ int apix_poll(struct apix *ctx)
     return 0;
 }
 
-void apisink_init(struct apisink *sink, const char *name, apisink_ops_t ops)
+void apisink_init(struct apisink *sink, const char *name,
+                  const struct apisink_operations *ops)
 {
     assert(strlen(name) < APISINK_ID_SIZE);
     INIT_LIST_HEAD(&sink->sinkfds);
     INIT_LIST_HEAD(&sink->node);
     snprintf(sink->id, sizeof(sink->id), "%s", name);
-    sink->ops = ops;
+    sink->ops = *ops;
     sink->ctx = NULL;
 }
 
@@ -518,8 +517,6 @@ struct sinkfd *sinkfd_new()
     sinkfd->sink = NULL;
     INIT_LIST_HEAD(&sinkfd->node_sink);
     INIT_LIST_HEAD(&sinkfd->node_ctx);
-    sinkfd->pollin = NULL;
-    sinkfd->pollout = NULL;
     return sinkfd;
 }
 
@@ -530,8 +527,8 @@ void sinkfd_destroy(struct sinkfd *sinkfd)
     sinkfd->sink = NULL;
     list_del_init(&sinkfd->node_sink);
     list_del_init(&sinkfd->node_ctx);
-    if (sinkfd->close)
-        sinkfd->close(sinkfd->fd);
+    if (sinkfd->events.on_close)
+        sinkfd->events.on_close(sinkfd->fd);
     free(sinkfd);
 }
 

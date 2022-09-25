@@ -85,7 +85,7 @@ static void demo()
         log_hex_string(pac->raw, nr);
         srrp_free(pac);
 
-        usleep(1000 * 1000);
+        usleep(100 * 1000);
         bzero(buf, sizeof(buf));
         nr = apix_recv(ctx, fd, buf, sizeof(buf));
         if (nr <= 0) continue;

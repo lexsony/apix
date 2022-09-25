@@ -31,24 +31,25 @@ extern "C" {
 
 struct apisink;
 
-typedef struct apisink_ops {
+struct apisink_operations {
     int (*open)(struct apisink *sink, const char *addr);
     int (*close)(struct apisink *sink, int fd);
     int (*ioctl)(struct apisink *sink, int fd, unsigned int cmd, unsigned long arg);
     int (*send)(struct apisink *sink, int fd, const void *buf, size_t len);
     int (*recv)(struct apisink *sink, int fd, void *buf, size_t size);
     int (*poll)(struct apisink *sink);
-} apisink_ops_t;
+};
 
 struct apisink {
     char id[APISINK_ID_SIZE]; // identify
-    apisink_ops_t ops;
+    struct apisink_operations ops;
     struct apix *ctx;
     struct list_head sinkfds;
     struct list_head node;
 };
 
-void apisink_init(struct apisink *sink, const char *id, apisink_ops_t ops);
+void apisink_init(struct apisink *sink, const char *id,
+                  const struct apisink_operations *ops);
 void apisink_fini(struct apisink *sink);
 
 int apix_add_sink(struct apix *ctx, struct apisink *sink);
@@ -66,12 +67,9 @@ struct sinkfd {
     atbuf_t *rxbuf;
     struct timeval ts_poll_recv;
     struct apisink *sink;
+    struct apix_events events;
     struct list_head node_sink;
     struct list_head node_ctx;
-
-    close_func_t close;
-    pollin_func_t pollin;
-    pollout_func_t pollout;
 };
 
 struct sinkfd *sinkfd_new();

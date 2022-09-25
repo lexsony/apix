@@ -140,6 +140,9 @@ static int unix_s_poll(struct apisink *sink)
             if (unix_s_sink->nfds < newfd + 1)
                 unix_s_sink->nfds = newfd + 1;
             FD_SET(newfd, &unix_s_sink->fds);
+
+            if (pos->events.on_accept)
+                pos->events.on_accept(pos->fd, newfd);
         } else /* recv */ {
             int nread = recv(pos->fd, atbuf_write_pos(pos->rxbuf),
                              atbuf_spare(pos->rxbuf), 0);
@@ -159,7 +162,7 @@ static int unix_s_poll(struct apisink *sink)
     return 0;
 }
 
-static apisink_ops_t unix_s_ops = {
+static struct apisink_operations unix_s_ops = {
     .open = unix_s_open,
     .close = unix_s_close,
     .ioctl = NULL,
@@ -272,7 +275,7 @@ static int unix_c_poll(struct apisink *sink)
     return 0;
 }
 
-static apisink_ops_t unix_c_ops = {
+static struct apisink_operations unix_c_ops = {
     .open = unix_c_open,
     .close = unix_c_close,
     .ioctl = NULL,
@@ -333,7 +336,7 @@ static int tcp_s_open(struct apisink *sink, const char *addr)
     return fd;
 }
 
-static apisink_ops_t tcp_s_ops = {
+static struct apisink_operations tcp_s_ops = {
     .open = tcp_s_open,
     .close = unix_s_close,
     .ioctl = NULL,
@@ -388,7 +391,7 @@ static int tcp_c_open(struct apisink *sink, const char *addr)
     return fd;
 }
 
-static apisink_ops_t tcp_c_ops = {
+static struct apisink_operations tcp_c_ops = {
     .open = tcp_c_open,
     .close = unix_c_close,
     .ioctl = NULL,
@@ -549,7 +552,7 @@ static int serial_poll(struct apisink *sink)
     return 0;
 }
 
-static apisink_ops_t serial_ops = {
+static struct apisink_operations serial_ops = {
     .open = serial_open,
     .close = serial_close,
     .ioctl = serial_ioctl,
@@ -562,27 +565,27 @@ int apix_enable_posix(struct apix *ctx)
 {
     // unix_s
     struct posix_sink *unix_s_sink = calloc(1, sizeof(struct posix_sink));
-    apisink_init(&unix_s_sink->sink, APISINK_UNIX_S, unix_s_ops);
+    apisink_init(&unix_s_sink->sink, APISINK_UNIX_S, &unix_s_ops);
     apix_add_sink(ctx, &unix_s_sink->sink);
 
     // unix_c
     struct posix_sink *unix_c_sink = calloc(1, sizeof(struct posix_sink));
-    apisink_init(&unix_c_sink->sink, APISINK_UNIX_C, unix_c_ops);
+    apisink_init(&unix_c_sink->sink, APISINK_UNIX_C, &unix_c_ops);
     apix_add_sink(ctx, &unix_c_sink->sink);
 
     // tcp_s
     struct posix_sink *tcp_s_sink = calloc(1, sizeof(struct posix_sink));
-    apisink_init(&tcp_s_sink->sink, APISINK_TCP_S, tcp_s_ops);
+    apisink_init(&tcp_s_sink->sink, APISINK_TCP_S, &tcp_s_ops);
     apix_add_sink(ctx, &tcp_s_sink->sink);
 
     // tcp_c
     struct posix_sink *tcp_c_sink = calloc(1, sizeof(struct posix_sink));
-    apisink_init(&tcp_c_sink->sink, APISINK_TCP_C, tcp_c_ops);
+    apisink_init(&tcp_c_sink->sink, APISINK_TCP_C, &tcp_c_ops);
     apix_add_sink(ctx, &tcp_c_sink->sink);
 
     // serial
     struct posix_sink *serial_sink = calloc(1, sizeof(struct posix_sink));
-    apisink_init(&serial_sink->sink, APISINK_SERIAL, serial_ops);
+    apisink_init(&serial_sink->sink, APISINK_SERIAL, &serial_ops);
     apix_add_sink(ctx, &serial_sink->sink);
 
     return 0;

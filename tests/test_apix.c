@@ -46,7 +46,8 @@ static void *requester_thread(void *args)
     assert_true(rc != -1);
     srrp_free(pac);
 
-    apix_set_poll_callback(ctx, fd, requester_pollin, NULL);
+    struct apix_events events = { .on_pollin = requester_pollin };
+    apix_set_events(ctx, fd, &events);
 
     while (requester_pollined == 0)
         apix_poll(ctx);
