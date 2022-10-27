@@ -418,7 +418,14 @@ int apix_poll(struct apix *ctx)
                 int nr = pos_fd->events.on_pollin(
                     pos_fd->fd, atbuf_read_pos(pos_fd->rxbuf),
                     atbuf_used(pos_fd->rxbuf));
-                if (nr > 0) {
+
+                /*
+                 * nr <= -1: unhandled
+                 * nr >= 0: handled, skip nr bytes
+                 */
+                if (nr == 0) {
+                    continue;
+                } else if (nr > 0) {
                     if (nr > atbuf_used(pos_fd->rxbuf))
                         nr = atbuf_used(pos_fd->rxbuf);
                     atbuf_read_advance(pos_fd->rxbuf, nr);
@@ -489,7 +496,7 @@ int apix_on_fd_pollout(struct apix *ctx, int fd, fd_pollout_func_t func)
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
         return -EBADF;
-    assert(sinkfd->events.on_pollin == NULL);
+    assert(sinkfd->events.on_pollout == NULL);
     sinkfd->events.on_pollout = func;
     return 0;
 }
