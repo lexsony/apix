@@ -300,15 +300,6 @@ int apix_recv(struct apix *ctx, int fd, void *buf, size_t size)
     return sinkfd->sink->ops.recv(sinkfd->sink, fd, buf, size);
 }
 
-int apix_set_events(struct apix *ctx, int fd, const struct apix_events *events)
-{
-    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
-    if (sinkfd == NULL)
-        return -1;
-    sinkfd->events = *events;
-    return 0;
-}
-
 static void handle_request(struct apix *ctx)
 {
     struct api_request *pos, *n;
@@ -460,6 +451,42 @@ int apix_poll(struct apix *ctx)
     // clear station which is not alive
     clear_unalive_station(ctx);
 
+    return 0;
+}
+
+int apix_on_fd_close(struct apix *ctx, int fd, fd_close_func_t func)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    sinkfd->events.on_close = func;
+    return 0;
+}
+
+int apix_on_fd_accept(struct apix *ctx, int fd, fd_accept_func_t func)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    sinkfd->events.on_accept = func;
+    return 0;
+}
+
+int apix_on_fd_pollin(struct apix *ctx, int fd, fd_pollin_func_t func)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    sinkfd->events.on_pollin = func;
+    return 0;
+}
+
+int apix_on_fd_pollout(struct apix *ctx, int fd, fd_pollout_func_t func)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    sinkfd->events.on_pollout = func;
     return 0;
 }
 

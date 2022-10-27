@@ -74,7 +74,7 @@ size_t atbuf_read_advance(atbuf_t *self, size_t len)
 
 size_t atbuf_write_advance(atbuf_t *self, size_t len)
 {
-    assert(self->offset_in + len < self->size);
+    assert(self->offset_in + len <= self->size);
     self->offset_in += len;
     atbuf_tidy(self);
     return atbuf_spare(self);

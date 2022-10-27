@@ -25,8 +25,26 @@
 extern "C" {
 #endif
 
-/*
+/**
+ * apix
+ */
+
+struct apix {
+    struct list_head requests;
+    struct list_head responses;
+    struct list_head stations;
+    struct list_head topic_msgs;
+    struct list_head topics;
+    struct list_head sinkfds;
+    struct list_head sinks;
+    struct timeval poll_ts;
+    int poll_cnt;
+    uint64_t idle_usec;
+};
+
+/**
  * apisink
+ * - apix low level implement, maybe unix domain, bsd socket, uart, can ...
  */
 
 struct apisink;
@@ -55,8 +73,10 @@ void apisink_fini(struct apisink *sink);
 int apix_add_sink(struct apix *ctx, struct apisink *sink);
 void apix_del_sink(struct apix *ctx, struct apisink *sink);
 
-/*
+/**
  * sinkfd
+ * - treat it as unix fd in most situations
+ * - each apisink holds several sinkfds
  */
 
 struct sinkfd {
@@ -67,7 +87,12 @@ struct sinkfd {
     atbuf_t *rxbuf;
     struct timeval ts_poll_recv;
     struct apisink *sink;
-    struct apix_events events;
+    struct apix_events {
+        fd_close_func_t on_close;
+        fd_accept_func_t on_accept;
+        fd_pollin_func_t on_pollin;
+        fd_pollout_func_t on_pollout;
+    } events;
     struct list_head node_sink;
     struct list_head node_ctx;
 };
@@ -78,7 +103,7 @@ void sinkfd_destroy();
 struct sinkfd *find_sinkfd_in_apix(struct apix *ctx, int fd);
 struct sinkfd *find_sinkfd_in_apisink(struct apisink *sink, int fd);
 
-/*
+/**
  * api_request
  * api_response
  * api_station
@@ -141,23 +166,6 @@ struct api_topic {
     srrp_free(tmsg->pac); \
     free(tmsg); \
 }
-
-/*
- * apix
- */
-
-struct apix {
-    struct list_head requests;
-    struct list_head responses;
-    struct list_head stations;
-    struct list_head topic_msgs;
-    struct list_head topics;
-    struct list_head sinkfds;
-    struct list_head sinks;
-    struct timeval poll_ts;
-    int poll_cnt;
-    uint64_t idle_usec;
-};
 
 #ifdef __cplusplus
 }

@@ -59,7 +59,7 @@ static int client_pollin(int fd, const char *buf, size_t len)
         rl_redisplay();
     }
 
-    printf("%d> %s\n", fd, buf);
+    printf("%s", buf);
 
     if (need_hack) {
         rl_restore_prompt();
@@ -87,8 +87,7 @@ static void *apix_thread(void *arg)
             perror("open_unix");
             exit(1);
         }
-        struct apix_events events = { .on_pollin = client_pollin };
-        apix_set_events(ctx, fd, &events);
+        apix_on_fd_pollin(ctx, fd, client_pollin);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", opt_string(ud));
@@ -101,8 +100,7 @@ static void *apix_thread(void *arg)
             perror("open_tcp");
             exit(1);
         }
-        struct apix_events events = { .on_pollin = client_pollin };
-        apix_set_events(ctx, fd, &events);
+        apix_on_fd_pollin(ctx, fd, client_pollin);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", opt_string(tcp));
@@ -115,8 +113,7 @@ static void *apix_thread(void *arg)
             perror("open_com");
             exit(1);
         }
-        struct apix_events events = { .on_pollin = client_pollin };
-        apix_set_events(ctx, fd, &events);
+        apix_on_fd_pollin(ctx, fd, client_pollin);
         struct ioctl_serial_param sp = {
             .baud = SERIAL_ARG_BAUD_115200,
             .bits = SERIAL_ARG_BITS_8,
@@ -187,8 +184,7 @@ static void on_cmd_unix(const char *cmd)
             perror("open_unix");
             return;
         }
-        struct apix_events events = { .on_pollin = client_pollin };
-        apix_set_events(ctx, fd, &events);
+        apix_on_fd_pollin(ctx, fd, client_pollin);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
@@ -206,8 +202,7 @@ static void on_cmd_tcp(const char *cmd)
             perror("open_tcp");
             return;
         }
-        struct apix_events events = { .on_pollin = client_pollin };
-        apix_set_events(ctx, fd, &events);
+        apix_on_fd_pollin(ctx, fd, client_pollin);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
@@ -225,8 +220,7 @@ static void on_cmd_com(const char *cmd)
             perror("open_com");
             return;
         }
-        struct apix_events events = { .on_pollin = client_pollin };
-        apix_set_events(ctx, fd, &events);
+        apix_on_fd_pollin(ctx, fd, client_pollin);
         struct ioctl_serial_param sp = {
             .baud = SERIAL_ARG_BAUD_115200,
             .bits = SERIAL_ARG_BITS_8,
@@ -269,7 +263,7 @@ static const struct cli_cmd cli_cmd_default = {
 
 static void *cli_thread(void *arg)
 {
-    cli_init("apix-debugger> ", cli_cmds, &cli_cmd_default);
+    cli_init("", cli_cmds, &cli_cmd_default);
 
     while (exit_flag == 0) {
         cli_run();
