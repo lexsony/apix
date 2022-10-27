@@ -380,17 +380,17 @@ int apix_enable_stm32(struct apix *ctx)
     // tcp_s
     struct posix_sink *tcp_s_sink = calloc(1, sizeof(struct posix_sink));
     apisink_init(&tcp_s_sink->sink, APISINK_STM32_TCP_S, &tcp_s_ops);
-    apix_add_sink(ctx, &tcp_s_sink->sink);
+    apix_sink_register(ctx, &tcp_s_sink->sink);
 
     // tcp_c
     struct posix_sink *tcp_c_sink = calloc(1, sizeof(struct posix_sink));
     apisink_init(&tcp_c_sink->sink, APISINK_STM32_TCP_C, &tcp_c_ops);
-    apix_add_sink(ctx, &tcp_c_sink->sink);
+    apix_sink_register(ctx, &tcp_c_sink->sink);
 
     // serial
     struct posix_sink *serial_sink = calloc(1, sizeof(struct posix_sink));
     apisink_init(&serial_sink->sink, APISINK_STM32_SERIAL, &serial_ops);
-    apix_add_sink(ctx, &serial_sink->sink);
+    apix_sink_register(ctx, &serial_sink->sink);
 
     return 0;
 }
@@ -403,7 +403,7 @@ void apix_disable_stm32(struct apix *ctx)
         if (strcmp(pos->id, APISINK_STM32_TCP_S) == 0) {
             struct posix_sink *tcp_s_sink =
                 container_of(pos, struct posix_sink, sink);
-            apix_del_sink(ctx, &tcp_s_sink->sink);
+            apix_sink_unregister(ctx, &tcp_s_sink->sink);
             apisink_fini(&tcp_s_sink->sink);
             free(tcp_s_sink);
         }
@@ -412,7 +412,7 @@ void apix_disable_stm32(struct apix *ctx)
         if (strcmp(pos->id, APISINK_STM32_TCP_C) == 0) {
             struct posix_sink *tcp_c_sink =
                 container_of(pos, struct posix_sink, sink);
-            apix_del_sink(ctx, &tcp_c_sink->sink);
+            apix_sink_unregister(ctx, &tcp_c_sink->sink);
             apisink_fini(&tcp_c_sink->sink);
             free(tcp_c_sink);
         }
@@ -421,7 +421,7 @@ void apix_disable_stm32(struct apix *ctx)
         if (strcmp(pos->id, APISINK_STM32_SERIAL) == 0) {
             struct posix_sink *serial_sink =
                 container_of(pos, struct posix_sink, sink);
-            apix_del_sink(ctx, &serial_sink->sink);
+            apix_sink_unregister(ctx, &serial_sink->sink);
             apisink_fini(&serial_sink->sink);
             free(serial_sink);
         }

@@ -70,8 +70,8 @@ void apisink_init(struct apisink *sink, const char *id,
                   const struct apisink_operations *ops);
 void apisink_fini(struct apisink *sink);
 
-int apix_add_sink(struct apix *ctx, struct apisink *sink);
-void apix_del_sink(struct apix *ctx, struct apisink *sink);
+int apix_sink_register(struct apix *ctx, struct apisink *sink);
+void apix_sink_unregister(struct apix *ctx, struct apisink *sink);
 
 /**
  * sinkfd

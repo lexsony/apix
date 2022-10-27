@@ -42,16 +42,11 @@ struct ioctl_serial_param {
     char stop;
 };
 
-#define apix_open_unix_server(ctx, addr) \
-    apix_open(ctx, APISINK_UNIX_S, addr)
-#define apix_open_unix_client(ctx, addr) \
-    apix_open(ctx, APISINK_UNIX_C, addr)
-#define apix_open_tcp_server(ctx, addr) \
-    apix_open(ctx, APISINK_TCP_S, addr)
-#define apix_open_tcp_client(ctx, addr) \
-    apix_open(ctx, APISINK_TCP_C, addr)
-#define apix_open_serial(ctx, addr) \
-    apix_open(ctx, APISINK_SERIAL, addr)
+#define apix_open_unix_server(ctx, addr) apix_open(ctx, APISINK_UNIX_S, addr)
+#define apix_open_unix_client(ctx, addr) apix_open(ctx, APISINK_UNIX_C, addr)
+#define apix_open_tcp_server(ctx, addr) apix_open(ctx, APISINK_TCP_S, addr)
+#define apix_open_tcp_client(ctx, addr) apix_open(ctx, APISINK_TCP_C, addr)
+#define apix_open_serial(ctx, addr) apix_open(ctx, APISINK_SERIAL, addr)
 
 int apix_enable_posix(struct apix *ctx);
 void apix_disable_posix(struct apix *ctx);

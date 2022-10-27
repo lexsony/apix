@@ -238,7 +238,7 @@ void apix_destroy(struct apix *ctx)
     {
         struct apisink *pos, *n;
         list_for_each_entry_safe(pos, n, &ctx->sinks, node) {
-            apix_del_sink(pos->ctx, pos);
+            apix_sink_unregister(pos->ctx, pos);
             apisink_fini(pos);
         }
     }
@@ -510,10 +510,10 @@ void apisink_fini(struct apisink *sink)
     // delete from apix outside
     assert(sink->ctx == NULL);
     //if (sink->ctx)
-    //    apix_del_sink(sink->ctx, sink);
+    //    apix_sink_unregister(sink->ctx, sink);
 }
 
-int apix_add_sink(struct apix *ctx, struct apisink *sink)
+int apix_sink_register(struct apix *ctx, struct apisink *sink)
 {
     struct apisink *pos;
     list_for_each_entry(pos, &ctx->sinks, node) {
@@ -526,7 +526,7 @@ int apix_add_sink(struct apix *ctx, struct apisink *sink)
     return 0;
 }
 
-void apix_del_sink(struct apix *ctx, struct apisink *sink)
+void apix_sink_unregister(struct apix *ctx, struct apisink *sink)
 {
     UNUSED(ctx);
     list_del_init(&sink->node);
