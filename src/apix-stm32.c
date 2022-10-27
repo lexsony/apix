@@ -27,7 +27,7 @@ struct posix_sink {
     int nfds;
 };
 
-/*
+/**
  * tcp server
  */
 
@@ -177,7 +177,7 @@ static const struct apisink_operations tcp_s_ops = {
     .poll = tcp_s_poll,
 };
 
-/*
+/**
  * tcp client
  */
 
@@ -304,7 +304,9 @@ static const struct apisink_operations tcp_c_ops = {
     .poll = tcp_c_poll,
 };
 
-// serial
+/**
+ * serial
+ */
 
 static int serial_open(struct apisink *sink, const char *addr)
 {

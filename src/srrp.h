@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-/*
+/**
  * Request: >[0xseqno],[^|0|$],[0xlenth],[0xsrcid]:[/dstid/header]?{data}\0<crc16>\0
  *   >0,$,<len>,0001:/8888/echo?{name:'yon',age:18,equip:['hat','shoes']}\0<crc16>\0
  *   >1,^,<len>,0001:/8888/he\0<crc16>\0
@@ -69,23 +69,45 @@ struct srrp_packet {
 
 void srrp_free(struct srrp_packet *pac);
 
-// the retval imply that the caller should free it
-
+/**
+ * srrp_read_one_packet
+ * - the retval imply that the caller should free it
+ */
 struct srrp_packet *
 srrp_read_one_packet(const char *buf);
 
+/**
+ * srrp_write_request
+ * - the retval imply that the caller should free it
+ */
 struct srrp_packet *
 srrp_write_request(uint16_t sttid, const char *header, const char *data);
 
+/**
+ * srrp_write_response
+ * - the retval imply that the caller should free it
+ */
 struct srrp_packet *
 srrp_write_response(uint16_t sttid, uint16_t reqcrc16, const char *header, const char *data);
 
+/**
+ * srrp_write_subscribe
+ * - the retval imply that the caller should free it
+ */
 struct srrp_packet *
 srrp_write_subscribe(const char *header, const char *ctrl);
 
+/**
+ * srrp_write_unsubscribe
+ * - the retval imply that the caller should free it
+ */
 struct srrp_packet *
 srrp_write_unsubscribe(const char *header);
 
+/**
+ * srrp_write_publish
+ * - the retval imply that the caller should free it
+ */
 struct srrp_packet *
 srrp_write_publish(const char *header, const char *data);
 

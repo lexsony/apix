@@ -127,7 +127,7 @@ static void topic_sub_handler(struct apix *ctx, struct api_topic_msg *tmsg)
     struct api_topic *topic = NULL;
     struct api_topic *pos;
     list_for_each_entry(pos, &ctx->topics, node) {
-        if (memcmp(topic->header, tmsg->pac->header, strlen(topic->header)) == 0) {
+        if (memcmp(pos->header, tmsg->pac->header, strlen(pos->header)) == 0) {
             topic = pos;
             break;
         }

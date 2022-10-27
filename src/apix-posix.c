@@ -31,7 +31,7 @@ struct posix_sink {
     int nfds;
 };
 
-/*
+/**
  * unix domain socket server
  */
 
@@ -174,7 +174,7 @@ static struct apisink_operations unix_s_ops = {
     .poll = unix_s_poll,
 };
 
-/*
+/**
  * unix domain socket client
  */
 
@@ -289,7 +289,7 @@ static struct apisink_operations unix_c_ops = {
     .poll = unix_c_poll,
 };
 
-/*
+/**
  * tcp server
  */
 
@@ -350,7 +350,7 @@ static struct apisink_operations tcp_s_ops = {
     .poll = unix_s_poll,
 };
 
-/*
+/**
  * tcp client
  */
 
@@ -405,7 +405,7 @@ static struct apisink_operations tcp_c_ops = {
     .poll = unix_c_poll,
 };
 
-/*
+/**
  * serial
  */
 
