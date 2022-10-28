@@ -58,13 +58,22 @@ struct srrp_packet {
     char seat;
     uint16_t seqno;
     uint16_t len;
-    uint16_t srcid; // request from srcid, response to srcid
-    uint16_t reqcrc16; // reqcrc16 when leader is '<'
-    const char header[SRRP_HEADER_LEN]; // include dstid
+
+    // request from srcid, response to srcid
+    uint16_t srcid;
+
+    // reqcrc16 when leader is '<'
+    uint16_t reqcrc16;
+
+    // include dstid
+    const char header[SRRP_HEADER_LEN];
     uint32_t header_len;
+
     const char *data;
     uint32_t data_len;
-    char raw[0]; // alloc length = sizeof(struct srrp_packet) + strlen(raw)
+
+    // alloc length = sizeof(struct srrp_packet) + strlen(raw)
+    char raw[0];
 };
 
 void srrp_free(struct srrp_packet *pac);
