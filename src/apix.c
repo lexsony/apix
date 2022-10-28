@@ -426,7 +426,7 @@ int apix_poll(struct apix *ctx)
                 if (nr == 0) {
                     continue;
                 } else if (nr > 0) {
-                    if (nr > atbuf_used(pos_fd->rxbuf))
+                    if ((size_t)nr > atbuf_used(pos_fd->rxbuf))
                         nr = atbuf_used(pos_fd->rxbuf);
                     atbuf_read_advance(pos_fd->rxbuf, nr);
                     continue;

@@ -2,6 +2,7 @@
 #define __APIX_PRIVATE_H
 
 #include <stdint.h>
+#include <time.h>
 #include <sys/time.h>
 #include "apix.h"
 #include "list.h"
@@ -113,8 +114,8 @@ struct sinkfd *find_sinkfd_in_apisink(struct apisink *sink, int fd);
 struct api_request {
     struct srrp_packet *pac;
     int state;
-    uint64_t ts_create;
-    uint64_t ts_send;
+    time_t ts_create;
+    time_t ts_send;
     int fd;
     uint16_t crc16;
     struct list_head node;
@@ -128,7 +129,7 @@ struct api_response {
 
 struct api_station {
     uint16_t sttid;
-    uint64_t ts_alive;
+    time_t ts_alive;
     int fd;
     struct list_head node;
 };

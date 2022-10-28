@@ -169,7 +169,7 @@ srrp_write_request(uint16_t srcid, const char *header, const char *data)
 
     int nr = snprintf(pac->raw, len, ">0,$,%.4"PRIx32",%.4"PRIx16":%s?%s",
                       len, srcid, header, data);
-    assert(nr + 1 == len);
+    assert(nr >= 0 && (size_t)nr + 1 == len);
 
     pac->leader = SRRP_REQUEST_LEADER;
     pac->seat = '$';
@@ -194,7 +194,7 @@ srrp_write_response(uint16_t srcid, uint16_t reqcrc16, const char *header, const
 
     int nr = snprintf(pac->raw, len, "<0,$,%.4"PRIx32",%.4"PRIx16",%.4"PRIx16":%s?%s",
                       len, srcid, reqcrc16, header, data);
-    assert(nr + 1 == len);
+    assert(nr >= 0 && (size_t)nr + 1 == len);
 
     pac->leader = SRRP_RESPONSE_LEADER;
     pac->seat = '$';
@@ -219,7 +219,7 @@ srrp_write_subscribe(const char *header, const char *ctrl)
     assert(pac);
 
     int nr = snprintf(pac->raw, len, "#0,$,%.4"PRIx32":%s?%s", len, header, ctrl);
-    assert(nr + 1 == len);
+    assert(nr >= 0 && (size_t)nr + 1 == len);
 
     pac->leader = SRRP_SUBSCRIBE_LEADER;
     pac->seat = '$';
@@ -242,7 +242,7 @@ srrp_write_unsubscribe(const char *header)
     assert(pac);
 
     int nr = snprintf(pac->raw, len, "%%0,$,%.4"PRIx32":%s?{}", len, header);
-    assert(nr + 1 == len);
+    assert(nr >= 0 && (size_t)nr + 1 == len);
 
     pac->leader = SRRP_UNSUBSCRIBE_LEADER;
     pac->seat = '$';
@@ -265,7 +265,7 @@ srrp_write_publish(const char *header, const char *data)
     assert(pac);
 
     int nr = snprintf(pac->raw, len, "@0,$,%.4"PRIx32":%s?%s", len, header, data);
-    assert(nr + 1 == len);
+    assert(nr >= 0 && (size_t)nr + 1 == len);
 
     pac->leader = SRRP_PUBLISH_LEADER;
     pac->seat = '$';
@@ -280,7 +280,7 @@ srrp_write_publish(const char *header, const char *data)
 
 uint32_t srrp_next_packet_offset(const char *buf, uint32_t size)
 {
-    for (int i = 0; i < size; i++) {
+    for (size_t i = 0; i < size; i++) {
         if (isdigit((uint8_t)buf[i + 1])) {
             if (buf[i] == SRRP_REQUEST_LEADER)
                 return i;

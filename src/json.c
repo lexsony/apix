@@ -39,7 +39,7 @@ static int json_walk(struct json_object *jo, const char *str, const char *path)
         const char *key = path + 1;
         int brace_cnt = 0;
 
-        for (int i = 0; i < strlen(str); i++) {
+        for (size_t i = 0; i < strlen(str); i++) {
                 if (str[i] == '{') {
                     brace_cnt++;
                     continue;
@@ -65,7 +65,7 @@ static int json_walk(struct json_object *jo, const char *str, const char *path)
         int find_key = 0;
         int brace_cnt = 0;
 
-        for (int i = 0; i < strlen(str); i++) {
+        for (size_t i = 0; i < strlen(str); i++) {
             if (find_key == 0) {
                 if (str[i] == '{') {
                     brace_cnt++;
@@ -107,7 +107,7 @@ static int __json_get_string(struct json_object *jo, char *value, size_t size)
     assert(value != NULL);
     const char *str = jo->raw;
 
-    for (int i = jo->walk_idx - jo->raw; i < strlen(jo->raw); i++) {
+    for (size_t i = jo->walk_idx - jo->raw; i < strlen(jo->raw); i++) {
         if (str[i] == ' ' || str[i] == ':')
             continue;
         if (!isprint((uint8_t)str[i])) {
@@ -115,7 +115,7 @@ static int __json_get_string(struct json_object *jo, char *value, size_t size)
             return -1;
         }
         char *value_end = NULL;
-        int j = i;
+        size_t j = i;
         for (; j < strlen(str); j++) {
             if (value_end == NULL
                 && isprint((uint8_t)str[j])
@@ -169,7 +169,7 @@ static int __json_get_int(struct json_object *jo, int *value)
     assert(value != NULL);
     const char *str = jo->raw;
 
-    for (int i = jo->walk_idx - jo->raw; i < strlen(jo->raw); i++) {
+    for (size_t i = jo->walk_idx - jo->raw; i < strlen(jo->raw); i++) {
         if (str[i] == ' ' || str[i] == ':')
             continue;
         if (!isdigit((uint8_t)str[i])) {
@@ -177,7 +177,7 @@ static int __json_get_int(struct json_object *jo, int *value)
             return -1;
         }
         char *value_end = NULL;
-        int j = i;
+        size_t j = i;
         for (; j < strlen(str); j++) {
             if (value_end == NULL && isdigit((uint8_t)str[j]))
                 continue;
