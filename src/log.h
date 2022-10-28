@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-enum log_level {
+enum {
     LOG_LV_NONE = 0,
     LOG_LV_DEBUG,
     LOG_LV_INFO, /* default */
