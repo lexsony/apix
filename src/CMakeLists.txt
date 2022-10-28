@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 
 file(GLOB SRC *.c)
-file(GLOB INC apix.h apix-posix.h srrp.h svcx.h)
+file(GLOB INC apix.h apix-posix.h srrp.h svcx.h log.h atbuf.h ringbuf.h)
 
 if (BUILD_STATIC)
     add_library(apix-static STATIC ${SRC} ${SRC_POSIX})
@@ -21,7 +21,7 @@ install(TARGETS ${TARGET_STATIC} ${TARGET_SHARED}
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
-    PUBLIC_HEADER DESTINATION include
+    PUBLIC_HEADER DESTINATION include/apix
 )
 
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/ext" # source directory
