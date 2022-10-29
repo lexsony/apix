@@ -14,9 +14,7 @@ static void test_srrp_request_reponse(void **status)
 {
     struct srrp_packet *txpac = NULL;
     struct srrp_packet *rxpac = NULL;
-
-    int buf_len = 1024;
-    char *buf = calloc(1, buf_len);
+    char buf[1024] = {0};
 
     // 1
     txpac = srrp_new_request(
@@ -68,8 +66,6 @@ static void test_srrp_request_reponse(void **status)
     assert_true(rxpac->reqcrc16 == crc);
     assert_true(memcmp(rxpac->header, "/hello/x", rxpac->header_len) == 0);
     srrp_free(rxpac);
-
-    free(buf);
 }
 
 static void test_srrp_subscribe_publish(void **status)

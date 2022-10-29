@@ -70,7 +70,6 @@ static void *responser_thread(void *args)
 
     struct srrp_packet *pac_online = srrp_new_request(
         8888, "/8888/online", "{}");
-
     rc = send(fd, pac_online->raw, pac_online->len, 0);
     assert_true(rc != -1);
     memset(buf, 0, sizeof(buf));
@@ -82,12 +81,10 @@ static void *responser_thread(void *args)
     rc = recv(fd, buf, sizeof(buf), 0);
     assert_true(rc != -1);
     LOG_INFO("responser recv request: %s", buf);
-    struct srrp_packet *rxpac;
-    rxpac = srrp_parse(buf);
+    struct srrp_packet *rxpac = srrp_parse(buf);
     uint16_t crc = crc16(rxpac->header, rxpac->header_len);
     crc = crc16_crc(crc, rxpac->data, rxpac->data_len);
-    struct srrp_packet *txpac;
-    txpac = srrp_new_response(
+    struct srrp_packet *txpac = srrp_new_response(
         rxpac->srcid, crc, rxpac->header,
         "{err:0,errmsg:'succ',data:{msg:'world'}}");
     rc = send(fd, txpac->raw, txpac->len, 0);

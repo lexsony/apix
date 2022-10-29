@@ -22,12 +22,12 @@ static void test_svc(void **status)
     struct svchub *hub = svchub_new();
     svchub_add_service(hub, "/0007/echo", on_echo);
 
-    struct srrp_packet *req, *resp;
+    struct srrp_packet *req, *resp = NULL;
     req = srrp_new_request(0x8888, "/0007/echo", "{msg:'hello'}");
     svchub_deal(hub, req, &resp);
     assert_true(strcmp(resp->data, "{msg:'world'}") == 0);
     srrp_free(req);
-    srrp_free(resp);
+    if (resp) srrp_free(resp);
 
     svchub_del_service(hub, "/0007/echo");
     svchub_destroy(hub);
