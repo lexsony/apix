@@ -13,7 +13,7 @@ int on_echo(struct srrp_packet *req, struct srrp_packet **resp)
 {
     uint16_t crc = crc16(req->header, req->header_len);
     crc = crc16_crc(crc, req->data, req->data_len);
-    *resp = srrp_write_response(req->srcid, crc, req->header, "{msg:'world'}");
+    *resp = srrp_new_response(req->srcid, crc, req->header, "{msg:'world'}");
     return 0;
 }
 
@@ -23,7 +23,7 @@ static void test_svc(void **status)
     svchub_add_service(hub, "/0007/echo", on_echo);
 
     struct srrp_packet *req, *resp;
-    req = srrp_write_request(0x8888, "/0007/echo", "{msg:'hello'}");
+    req = srrp_new_request(0x8888, "/0007/echo", "{msg:'hello'}");
     svchub_deal(hub, req, &resp);
     assert_true(strcmp(resp->data, "{msg:'world'}") == 0);
     srrp_free(req);

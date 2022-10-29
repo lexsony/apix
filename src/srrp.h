@@ -72,53 +72,56 @@ struct srrp_packet {
     const char *data;
     uint32_t data_len;
 
-    // alloc length = sizeof(struct srrp_packet) + strlen(raw)
+    // where to store the payload
     char raw[0];
 };
 
+/**
+ * srrp_free
+ * - free packet created by srrp_parse & srrp_new_*
+ */
 void srrp_free(struct srrp_packet *pac);
 
 /**
- * srrp_read_one_packet
- * - the retval imply that the caller should free it
+ * srrp_parse
+ * - read one packet from buffer
  */
-struct srrp_packet *
-srrp_read_one_packet(const char *buf);
+struct srrp_packet *srrp_parse(const char *buf);
 
 /**
- * srrp_write_request
- * - the retval imply that the caller should free it
+ * srrp_new_request
+ * - create new request packet
  */
 struct srrp_packet *
-srrp_write_request(uint16_t sttid, const char *header, const char *data);
+srrp_new_request(uint16_t sttid, const char *header, const char *data);
 
 /**
- * srrp_write_response
- * - the retval imply that the caller should free it
+ * srrp_new_response
+ * - create new response packet
  */
 struct srrp_packet *
-srrp_write_response(uint16_t sttid, uint16_t reqcrc16, const char *header, const char *data);
+srrp_new_response(uint16_t sttid, uint16_t reqcrc16, const char *header, const char *data);
 
 /**
- * srrp_write_subscribe
- * - the retval imply that the caller should free it
+ * srrp_new_subscribe
+ * - create new subscribe packet
  */
 struct srrp_packet *
-srrp_write_subscribe(const char *header, const char *ctrl);
+srrp_new_subscribe(const char *header, const char *ctrl);
 
 /**
- * srrp_write_unsubscribe
- * - the retval imply that the caller should free it
+ * srrp_new_unsubscribe
+ * - create new unsubscribe packet
  */
 struct srrp_packet *
-srrp_write_unsubscribe(const char *header);
+srrp_new_unsubscribe(const char *header);
 
 /**
- * srrp_write_publish
- * - the retval imply that the caller should free it
+ * srrp_new_publish
+ * - create new publish packet
  */
 struct srrp_packet *
-srrp_write_publish(const char *header, const char *data);
+srrp_new_publish(const char *header, const char *data);
 
 uint32_t srrp_next_packet_offset(const char *buf, uint32_t size);
 

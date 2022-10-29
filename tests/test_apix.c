@@ -40,7 +40,7 @@ static void *requester_thread(void *args)
 
     sleep(1);
 
-    struct srrp_packet *pac = srrp_write_request(
+    struct srrp_packet *pac = srrp_new_request(
         3333, "/8888/hello", "{name:'yon',age:'18',equip:['hat','shoes']}");
     rc = send(fd, pac->raw, pac->len, 0);
     assert_true(rc != -1);
@@ -68,7 +68,7 @@ static void *responser_thread(void *args)
 
     char buf[256] = {0};
 
-    struct srrp_packet *pac_online = srrp_write_request(
+    struct srrp_packet *pac_online = srrp_new_request(
         8888, "/8888/online", "{}");
 
     rc = send(fd, pac_online->raw, pac_online->len, 0);
@@ -83,11 +83,11 @@ static void *responser_thread(void *args)
     assert_true(rc != -1);
     LOG_INFO("responser recv request: %s", buf);
     struct srrp_packet *rxpac;
-    rxpac = srrp_read_one_packet(buf);
+    rxpac = srrp_parse(buf);
     uint16_t crc = crc16(rxpac->header, rxpac->header_len);
     crc = crc16_crc(crc, rxpac->data, rxpac->data_len);
     struct srrp_packet *txpac;
-    txpac = srrp_write_response(
+    txpac = srrp_new_response(
         rxpac->srcid, crc, rxpac->header,
         "{err:0,errmsg:'succ',data:{msg:'world'}}");
     rc = send(fd, txpac->raw, txpac->len, 0);
@@ -157,7 +157,7 @@ static void *publish_thread(void *args)
 
     sleep(1);
 
-    struct srrp_packet *pac = srrp_write_publish("/test-topic", "{msg:'ahaa'}");
+    struct srrp_packet *pac = srrp_new_publish("/test-topic", "{msg:'ahaa'}");
     rc = send(fd, pac->raw, pac->len, 0);
     srrp_free(pac);
 
@@ -195,7 +195,7 @@ static void *subscribe_thread(void *args)
 
     char buf[256] = {0};
 
-    struct srrp_packet *pac_sub = srrp_write_subscribe("/test-topic", "{}");
+    struct srrp_packet *pac_sub = srrp_new_subscribe("/test-topic", "{}");
     rc = send(fd, pac_sub->raw, pac_sub->len, 0);
     srrp_free(pac_sub);
     memset(buf, 0, sizeof(buf));
@@ -205,7 +205,7 @@ static void *subscribe_thread(void *args)
     rc = recv(fd, buf, sizeof(buf), 0);
     LOG_INFO("responser recv pub: %s", buf);
 
-    struct srrp_packet *pac_unsub = srrp_write_unsubscribe("/test-topic");
+    struct srrp_packet *pac_unsub = srrp_new_unsubscribe("/test-topic");
     rc = send(fd, pac_unsub->raw, pac_unsub->len, 0);
     srrp_free(pac_unsub);
     memset(buf, 0, sizeof(buf));

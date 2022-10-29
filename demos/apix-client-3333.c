@@ -79,7 +79,7 @@ static void demo()
     int nr = 0;
     char buf[4096];
     while (exit_flag == 0) {
-        struct srrp_packet *pac = srrp_write_request(
+        struct srrp_packet *pac = srrp_new_request(
             3333, "/8888/echo", "{msg:'hello'}");
         nr = send(fd, pac->raw, pac->len, 0);
         log_hex_string(pac->raw, nr);

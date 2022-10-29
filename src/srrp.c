@@ -19,7 +19,7 @@ void srrp_free(struct srrp_packet *pac)
 }
 
 static struct srrp_packet *
-__srrp_read_one_request(const char *buf)
+__srrp_parse_one_request(const char *buf)
 {
     assert(buf[0] == SRRP_REQUEST_LEADER);
 
@@ -60,7 +60,7 @@ __srrp_read_one_request(const char *buf)
 }
 
 static struct srrp_packet *
-__srrp_read_one_response(const char *buf)
+__srrp_parse_one_response(const char *buf)
 {
     assert(buf[0] == SRRP_RESPONSE_LEADER);
 
@@ -102,7 +102,7 @@ __srrp_read_one_response(const char *buf)
 }
 
 static struct srrp_packet *
-__srrp_read_one_subpub(const char *buf)
+__srrp_parse_one_subpub(const char *buf)
 {
     assert(buf[0] == SRRP_SUBSCRIBE_LEADER ||
            buf[0] == SRRP_UNSUBSCRIBE_LEADER ||
@@ -141,25 +141,24 @@ __srrp_read_one_subpub(const char *buf)
     return pac;
 }
 
-struct srrp_packet *
-srrp_read_one_packet(const char *buf)
+struct srrp_packet *srrp_parse(const char *buf)
 {
     const char *leader = buf;
 
     if (*leader == SRRP_REQUEST_LEADER)
-        return __srrp_read_one_request(buf);
+        return __srrp_parse_one_request(buf);
     else if (*leader == SRRP_RESPONSE_LEADER)
-        return __srrp_read_one_response(buf);
+        return __srrp_parse_one_response(buf);
     else if (*leader == SRRP_SUBSCRIBE_LEADER ||
              *leader == SRRP_UNSUBSCRIBE_LEADER ||
              *leader == SRRP_PUBLISH_LEADER)
-        return __srrp_read_one_subpub(buf);
+        return __srrp_parse_one_subpub(buf);
 
     return NULL;
 }
 
 struct srrp_packet *
-srrp_write_request(uint16_t srcid, const char *header, const char *data)
+srrp_new_request(uint16_t srcid, const char *header, const char *data)
 {
     uint32_t len = 15 + strlen(header) + 1 + strlen(data) + 1/*stop*/;
     assert(len < SRRP_LENGTH_MAX - 4/*crc16*/);
@@ -184,7 +183,7 @@ srrp_write_request(uint16_t srcid, const char *header, const char *data)
 }
 
 struct srrp_packet *
-srrp_write_response(uint16_t srcid, uint16_t reqcrc16, const char *header, const char *data)
+srrp_new_response(uint16_t srcid, uint16_t reqcrc16, const char *header, const char *data)
 {
     uint32_t len = 15 + 5/*crc16*/ + strlen(header) + 1 + strlen(data) + 1/*stop*/;
     assert(len < SRRP_LENGTH_MAX - 4/*crc16*/);
@@ -210,7 +209,7 @@ srrp_write_response(uint16_t srcid, uint16_t reqcrc16, const char *header, const
 }
 
 struct srrp_packet *
-srrp_write_subscribe(const char *header, const char *ctrl)
+srrp_new_subscribe(const char *header, const char *ctrl)
 {
     uint32_t len = 10 + strlen(header) + 1 + strlen(ctrl) + 1/*stop*/;
     assert(len < SRRP_LENGTH_MAX - 4/*crc16*/);
@@ -233,7 +232,7 @@ srrp_write_subscribe(const char *header, const char *ctrl)
 }
 
 struct srrp_packet *
-srrp_write_unsubscribe(const char *header)
+srrp_new_unsubscribe(const char *header)
 {
     uint32_t len = 10 + strlen(header) + 1 + 2/*data*/ + 1/*stop*/;
     assert(len < SRRP_LENGTH_MAX - 4/*crc16*/);
@@ -256,7 +255,7 @@ srrp_write_unsubscribe(const char *header)
 }
 
 struct srrp_packet *
-srrp_write_publish(const char *header, const char *data)
+srrp_new_publish(const char *header, const char *data)
 {
     uint32_t len = 10 + strlen(header) + 1 + strlen(data) + 1/*stop*/;
     assert(len < SRRP_LENGTH_MAX - 4/*crc16*/);

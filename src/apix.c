@@ -28,7 +28,7 @@ static void parse_packet(struct apix *ctx, struct sinkfd *sinkfd)
         if (atbuf_used(sinkfd->rxbuf) == 0)
             break;
 
-        struct srrp_packet *pac = srrp_read_one_packet(atbuf_read_pos(sinkfd->rxbuf));
+        struct srrp_packet *pac = srrp_parse(atbuf_read_pos(sinkfd->rxbuf));
         if (pac == NULL) {
             if (time(0) < sinkfd->ts_poll_recv.tv_sec + PARSE_PACKET_TIMEOUT / 1000)
                 break;

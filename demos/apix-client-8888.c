@@ -59,7 +59,7 @@ static int on_echo(struct srrp_packet *req, struct srrp_packet **resp)
 {
     uint16_t crc = crc16(req->header, req->header_len);
     crc = crc16_crc(crc, req->data, req->data_len);
-    *resp = srrp_write_response(req->srcid, crc, req->header, "{msg:'world'}");
+    *resp = srrp_new_response(req->srcid, crc, req->header, "{msg:'world'}");
     return 0;
 }
 
@@ -87,7 +87,7 @@ static void demo()
 
     assert(fd != -1);
 
-    struct srrp_packet *pac = srrp_write_request(
+    struct srrp_packet *pac = srrp_new_request(
         8888, "/8888/alive", "{}");
     apix_send(ctx, fd, (uint8_t *)pac->raw, pac->len);
     srrp_free(pac);
@@ -103,7 +103,7 @@ static void demo()
         log_hex_string(buf, nr);
 
         uint32_t offset = srrp_next_packet_offset(buf, nr);
-        struct srrp_packet *req = srrp_read_one_packet(buf + offset);
+        struct srrp_packet *req = srrp_parse(buf + offset);
         if (req == NULL) {
             apix_send(ctx, fd, "\0", 1);
             continue;
