@@ -2,13 +2,13 @@
 
 [![Build status](https://ci.appveyor.com/api/projects/status/h64eyf709gbp8xi0?svg=true)](https://ci.appveyor.com/project/yonzkon/apibus)
 
-Apix is an application layer apibus that use simple request response protocol(srrp).
+Apix is an api server that use simple request response protocol(srrp).
 
 ## Supported platforms
 
-- Windows
-- MacOS
 - Linux
+- MacOS
+- MinGW
 - arm-none-eabi-gcc with newlib
 
 ## Build
@@ -23,4 +23,9 @@ make && make install
 mkdir build && cd build
 cmake .. -DBUILD_DEBUG=on -DBUILD_TESTS=on -DBUILD_DEMOS=on
 make && make test
+```
+
+## Build apix-sys for rust
+```
+cargo build --release
 ```
