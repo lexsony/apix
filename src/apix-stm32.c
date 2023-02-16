@@ -66,7 +66,7 @@ static int tcp_s_open(struct apisink *sink, const char *addr)
 
     struct sinkfd *sinkfd = sinkfd_new();
     sinkfd->fd = fd;
-    sinkfd->listen = 1;
+    sinkfd->type = 'l';
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
     sinkfd->sink = sink;
     list_add(&sinkfd->node_sink, &sink->sinkfds);
@@ -210,7 +210,7 @@ static int tcp_c_open(struct apisink *sink, const char *addr)
 
     struct sinkfd *sinkfd = sinkfd_new();
     sinkfd->fd = fd;
-    sinkfd->listen = 1;
+    sinkfd->type = 'l';
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
     sinkfd->sink = sink;
     list_add(&sinkfd->node_sink, &sink->sinkfds);

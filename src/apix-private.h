@@ -82,7 +82,7 @@ void apix_sink_unregister(struct apix *ctx, struct apisink *sink);
 
 struct sinkfd {
     int fd;
-    int listen;
+    char type; /* c: connect, l: listen, a: accept */
     char addr[SINKFD_ADDR_SIZE];
     //atbuf_t *txbuf;
     atbuf_t *rxbuf;

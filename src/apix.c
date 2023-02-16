@@ -285,7 +285,8 @@ int apix_send(struct apix *ctx, int fd, const void *buf, size_t len)
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
         return -1;
-    if (sinkfd->sink == NULL || sinkfd->sink->ops.send == NULL)
+    if (sinkfd->type == 'l' || sinkfd->sink == NULL ||
+        sinkfd->sink->ops.send == NULL)
         return -1;
     return sinkfd->sink->ops.send(sinkfd->sink, fd, buf, len);
 }
@@ -549,7 +550,7 @@ struct sinkfd *sinkfd_new()
     struct sinkfd *sinkfd = malloc(sizeof(struct sinkfd));
     memset(sinkfd, 0, sizeof(*sinkfd));
     sinkfd->fd = 0;
-    sinkfd->listen = 0;
+    sinkfd->type = 0;
     //sinkfd->txbuf = atbuf_new(0);
     sinkfd->rxbuf = atbuf_new(0);
     sinkfd->sink = NULL;

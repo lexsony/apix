@@ -61,7 +61,7 @@ static int unix_s_open(struct apisink *sink, const char *addr)
 
     struct sinkfd *sinkfd = sinkfd_new();
     sinkfd->fd = fd;
-    sinkfd->listen = 1;
+    sinkfd->type = 'l';
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
     sinkfd->sink = sink;
     list_add(&sinkfd->node_sink, &sink->sinkfds);
@@ -124,7 +124,7 @@ static int unix_s_poll(struct apisink *sink)
         nr_recv_fds--;
 
         // accept
-        if (pos->listen == 1) {
+        if (pos->type == 'l') {
             int newfd = accept(pos->fd, NULL, NULL);
             if (newfd == -1) {
                 LOG_ERROR("[accept] fd:%d, %s", pos->fd, strerror(errno));
@@ -134,6 +134,7 @@ static int unix_s_poll(struct apisink *sink)
 
             struct sinkfd *sinkfd = sinkfd_new();
             sinkfd->fd = newfd;
+            sinkfd->type = 'a';
             sinkfd->sink = sink;
             list_add(&sinkfd->node_sink, &sink->sinkfds);
             list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
@@ -328,7 +329,7 @@ static int tcp_s_open(struct apisink *sink, const char *addr)
 
     struct sinkfd *sinkfd = sinkfd_new();
     sinkfd->fd = fd;
-    sinkfd->listen = 1;
+    sinkfd->type = 'l';
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
     sinkfd->sink = sink;
     list_add(&sinkfd->node_sink, &sink->sinkfds);
@@ -383,7 +384,7 @@ static int tcp_c_open(struct apisink *sink, const char *addr)
 
     struct sinkfd *sinkfd = sinkfd_new();
     sinkfd->fd = fd;
-    sinkfd->listen = 1;
+    sinkfd->type = 'c';
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
     sinkfd->sink = sink;
     list_add(&sinkfd->node_sink, &sink->sinkfds);
