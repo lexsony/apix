@@ -21,6 +21,8 @@
 #include "cli.h"
 
 #define KBYTES 1024 * 1024
+#define FD_SIZE 4096
+#define FD_MAX (FD_SIZE - 1)
 
 static int exit_flag;
 static struct apix *ctx;
@@ -30,9 +32,10 @@ struct fd_struct {
     char addr[64];
     const char *mode;
     atbuf_t *msg;
+    char type; /* c: connect, l: listen, a: accept */
 };
 
-static struct fd_struct fds[1024];
+static struct fd_struct fds[FD_SIZE];
 static const char *cur_mode = "#";
 static int cur_fd = -1;
 static int print_all = 0;
@@ -60,6 +63,21 @@ static int client_pollin(int fd, const char *buf, size_t len)
     return len;
 }
 
+static int server_accept(int _fd, int newfd)
+{
+    if (_fd > FD_MAX || newfd > FD_MAX) {
+        perror("fd is too big");
+        exit(-1);
+    }
+
+    apix_on_fd_pollin(ctx, newfd, client_pollin);
+    assert(fds[newfd].fd == 0);
+    fds[newfd].fd = newfd;
+    strcpy(fds[newfd].addr, fds[_fd].addr);
+    fds[newfd].type = 'a';
+    return 0;
+}
+
 static void print_cur_msg(void)
 {
     int need_hack = (rl_readline_state & RL_STATE_READCMD) > 0;
@@ -75,7 +93,7 @@ static void print_cur_msg(void)
     }
 
     if (cur_fd != -1 && fds[cur_fd].msg && atbuf_used(fds[cur_fd].msg)) {
-        printf("[From %s]:\n", fds[cur_fd].addr);
+        printf("[%s(%c)]:\n", fds[cur_fd].addr, fds[cur_fd].type);
         char msg[256] = {0};
         size_t len = 0;
         while (1) {
@@ -113,7 +131,7 @@ static void print_all_msg(void)
 
     for (int i = 0; i < sizeof(fds) / sizeof(fds[0]); i++) {
         if (fds[i].msg && atbuf_used(fds[i].msg)) {
-            printf("[From %s]:\n", fds[i].addr);
+            printf("[%s(%c)]:\n", fds[i].addr, fds[i].type);
             char msg[256] = {0};
             size_t len = 0;
             while (1) {
@@ -187,7 +205,8 @@ static void on_cmd_fds(const char *cmd)
     for (int i = 0; i < sizeof(fds) / sizeof(fds[0]); i++) {
         if (fds[i].fd == 0)
             continue;
-        printf("fd: %d, addr: %s\n", fds[i].fd, fds[i].addr);
+        printf("fd: %d, type: %c, addr: %s\n",
+               fds[i].fd, fds[i].type, fds[i].addr);
     }
 }
 
@@ -226,6 +245,59 @@ static void on_cmd_com(const char *cmd)
     }
 }
 
+static void on_cmd_unix_listen(const char *cmd)
+{
+    if (strcmp(cur_mode, "unix") != 0)
+        return;
+
+    char addr[64] = {0};
+    int nr = sscanf(cmd, "listen %s", addr);
+    if (nr == 1) {
+        int fd = apix_open_unix_server(ctx, addr);
+        if (fd == -1) {
+            perror("listen_unix");
+            return;
+        }
+        apix_on_fd_accept(ctx, fd, server_accept);
+        assert(fds[fd].fd == 0);
+        fds[fd].fd = fd;
+        snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
+        fds[fd].type = 'l';
+        cur_fd = fd;
+    }
+}
+
+static void on_cmd_tcp_listen(const char *cmd)
+{
+    if (strcmp(cur_mode, "tcp") != 0)
+        return;
+
+    char addr[64] = {0};
+    int nr = sscanf(cmd, "listen %s", addr);
+    if (nr == 1) {
+        int fd = apix_open_tcp_server(ctx, addr);
+        if (fd == -1) {
+            perror("listen_tcp");
+            return;
+        }
+        apix_on_fd_accept(ctx, fd, server_accept);
+        assert(fds[fd].fd == 0);
+        fds[fd].fd = fd;
+        snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
+        fds[fd].type = 'l';
+        cur_fd = fd;
+    }
+}
+
+static void on_cmd_listen(const char *cmd)
+{
+    if (strcmp(cur_mode, "unix") == 0) {
+        on_cmd_unix_listen(cmd);
+    } else if (strcmp(cur_mode, "tcp") == 0) {
+        on_cmd_tcp_listen(cmd);
+    }
+}
+
 static void on_cmd_unix_open(const char *cmd)
 {
     if (strcmp(cur_mode, "unix") != 0)
@@ -243,6 +315,7 @@ static void on_cmd_unix_open(const char *cmd)
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
+        fds[fd].type = 'c';
         cur_fd = fd;
     }
 }
@@ -264,6 +337,7 @@ static void on_cmd_tcp_open(const char *cmd)
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
+        fds[fd].type = 'c';
         cur_fd = fd;
     }
 }
@@ -293,6 +367,7 @@ static void on_cmd_com_open(const char *cmd)
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
+        fds[fd].type = 'c';
         cur_fd = fd;
     }
 }
@@ -357,6 +432,7 @@ static const struct cli_cmd cli_cmds[] = {
     { "unix", on_cmd_unix, "enter unix mode" },
     { "tcp", on_cmd_tcp, "enter tcp mode, ip:port" },
     { "com", on_cmd_com, "enter com mode" },
+    { "listen", on_cmd_listen, "listen fd" },
     { "open", on_cmd_open, "open fd" },
     { "close", on_cmd_close, "close fd" },
     { "send", on_cmd_send, "send msg" },
@@ -373,10 +449,12 @@ static void *cli_thread(void *arg)
     cli_init(cli_cmds, &cli_cmd_default);
 
     while (exit_flag == 0) {
-        if (cur_fd != -1)
-            snprintf(prompt, sizeof(prompt), "%s>%s> ", cur_mode, fds[cur_fd].addr);
-        else
+        if (cur_fd == -1) {
             snprintf(prompt, sizeof(prompt), "%s> ", cur_mode);
+        } else {
+            snprintf(prompt, sizeof(prompt), "%s>%s(%c)> ",
+                     cur_mode, fds[cur_fd].addr, fds[cur_fd].type);
+        }
         cli_run(prompt);
     }
 
