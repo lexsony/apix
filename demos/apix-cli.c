@@ -51,7 +51,22 @@ static struct opt opttab[] = {
     INIT_OPT_NONE(),
 };
 
-static int client_pollin(int fd, const char *buf, size_t len)
+static void close_fd(int fd)
+{
+    if (fd >= 0 && fd < sizeof(fds) / sizeof(fds[0])) {
+        printf("close %d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
+        if (cur_fd == fd)
+            cur_fd = -1;
+        apix_close(ctx, fd);
+        fds[fd].fd = 0;
+        if (fds[fd].msg) {
+            atbuf_delete(fds[fd].msg);
+            fds[fd].msg = NULL;
+        }
+    }
+}
+
+static int on_fd_pollin(int fd, const char *buf, size_t len)
 {
     if (fds[fd].msg == NULL) {
         fds[fd].msg = atbuf_new(KBYTES);
@@ -63,14 +78,21 @@ static int client_pollin(int fd, const char *buf, size_t len)
     return len;
 }
 
-static int server_accept(int _fd, int newfd)
+static int on_fd_close(int fd)
+{
+    close_fd(fd);
+    return 0;
+}
+
+static int on_fd_accept(int _fd, int newfd)
 {
     if (_fd > FD_MAX || newfd > FD_MAX) {
         perror("fd is too big");
         exit(-1);
     }
 
-    apix_on_fd_pollin(ctx, newfd, client_pollin);
+    apix_on_fd_pollin(ctx, newfd, on_fd_pollin);
+    apix_on_fd_close(ctx, newfd, on_fd_close);
     assert(fds[newfd].fd == 0);
     fds[newfd].fd = newfd;
     strcpy(fds[newfd].addr, fds[_fd].addr);
@@ -258,7 +280,7 @@ static void on_cmd_unix_listen(const char *cmd)
             perror("listen_unix");
             return;
         }
-        apix_on_fd_accept(ctx, fd, server_accept);
+        apix_on_fd_accept(ctx, fd, on_fd_accept);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
@@ -280,7 +302,7 @@ static void on_cmd_tcp_listen(const char *cmd)
             perror("listen_tcp");
             return;
         }
-        apix_on_fd_accept(ctx, fd, server_accept);
+        apix_on_fd_accept(ctx, fd, on_fd_accept);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
@@ -311,7 +333,7 @@ static void on_cmd_unix_open(const char *cmd)
             perror("open_unix");
             return;
         }
-        apix_on_fd_pollin(ctx, fd, client_pollin);
+        apix_on_fd_pollin(ctx, fd, on_fd_pollin);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
@@ -333,7 +355,7 @@ static void on_cmd_tcp_open(const char *cmd)
             perror("open_tcp");
             return;
         }
-        apix_on_fd_pollin(ctx, fd, client_pollin);
+        apix_on_fd_pollin(ctx, fd, on_fd_pollin);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
@@ -355,7 +377,7 @@ static void on_cmd_com_open(const char *cmd)
             perror("open_com");
             return;
         }
-        apix_on_fd_pollin(ctx, fd, client_pollin);
+        apix_on_fd_pollin(ctx, fd, on_fd_pollin);
         struct ioctl_serial_param sp = {
             .baud = SERIAL_ARG_BAUD_9600,
             .bits = SERIAL_ARG_BITS_8,
@@ -388,16 +410,9 @@ static void on_cmd_close(const char *cmd)
     int fd = 0;
     int nr = sscanf(cmd, "close %d", &fd);
     if (nr == 1) {
-        if (fd >= 0 && fd < sizeof(fds) / sizeof(fds[0])) {
-            if (cur_fd == fd)
-                cur_fd = -1;
-            apix_close(ctx, fd);
-            fds[fd].fd = 0;
-            if (fds[fd].msg) {
-                atbuf_delete(fds[fd].msg);
-                fds[fd].msg = NULL;
-            }
-        }
+        close_fd(fd);
+    } else if (strcmp(cmd, "close") == 0) {
+        close_fd(cur_fd);
     }
 }
 
