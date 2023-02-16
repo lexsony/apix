@@ -7,9 +7,6 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
-#define PROMPT_SIZE 4096
-
-static char __prompt[PROMPT_SIZE];
 static const struct cli_cmd *cmdtab;
 static const struct cli_cmd *cmddef;
 
@@ -89,9 +86,8 @@ void on_cmd_history_exec(const char *cmd)
     process_command(real_cmd);
 }
 
-int cli_init(const char *prompt, const struct cli_cmd cmds[], const struct cli_cmd *def)
+int cli_init(const struct cli_cmd cmds[], const struct cli_cmd *def)
 {
-    snprintf(__prompt, PROMPT_SIZE, "%s", prompt);
     cmdtab = cmds;
     cmddef = def;
 
@@ -104,9 +100,9 @@ int cli_close(void)
     return 0;
 }
 
-int cli_run(void)
+int cli_run(const char *prompt)
 {
-    char *line = readline(__prompt);
+    char *line = readline(prompt);
 
     // skip EOF or empty line
     if (line && *line) {
