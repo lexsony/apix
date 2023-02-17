@@ -263,10 +263,10 @@ static const struct cli_cmd cli_cmd_default = {
 
 static void *cli_thread(void *arg)
 {
-    cli_init("", cli_cmds, &cli_cmd_default);
+    cli_init(cli_cmds, &cli_cmd_default);
 
     while (exit_flag == 0) {
-        cli_run();
+        cli_run("apix> ");
     }
 
     cli_close();

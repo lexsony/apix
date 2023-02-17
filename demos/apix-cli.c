@@ -23,6 +23,7 @@
 #define KBYTES 1024 * 1024
 #define FD_SIZE 4096
 #define FD_MAX (FD_SIZE - 1)
+#define CUR_MODE_NONE "#"
 
 static int exit_flag;
 static struct apix *ctx;
@@ -36,7 +37,7 @@ struct fd_struct {
 };
 
 static struct fd_struct fds[FD_SIZE];
-static const char *cur_mode = "#";
+static const char *cur_mode = CUR_MODE_NONE;
 static int cur_fd = -1;
 static int print_all = 0;
 
@@ -54,7 +55,7 @@ static struct opt opttab[] = {
 static void close_fd(int fd)
 {
     if (fd >= 0 && fd < sizeof(fds) / sizeof(fds[0])) {
-        printf("close %d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
+        printf("close #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
         if (cur_fd == fd)
             cur_fd = -1;
         apix_close(ctx, fd);
@@ -97,6 +98,7 @@ static int on_fd_accept(int _fd, int newfd)
     fds[newfd].fd = newfd;
     strcpy(fds[newfd].addr, fds[_fd].addr);
     fds[newfd].type = 'a';
+    printf("accept #%d, %s(%c)\n", newfd, fds[newfd].addr, fds[newfd].type);
     return 0;
 }
 
@@ -202,10 +204,10 @@ static void on_cmd_quit(const char *cmd)
 
 static void on_cmd_exit(const char *cmd)
 {
-    if (strcmp(cur_mode, "#") == 0) {
+    if (strcmp(cur_mode, CUR_MODE_NONE) == 0) {
         on_cmd_quit(cmd);
     } else {
-        cur_mode = "#";
+        cur_mode = CUR_MODE_NONE;
         cur_fd = -1;
     }
 }
@@ -234,6 +236,9 @@ static void on_cmd_fds(const char *cmd)
 
 static void on_cmd_use(const char *cmd)
 {
+    if (strcmp(cur_mode, CUR_MODE_NONE) == 0)
+        return;
+
     int fd = 0;
     int nr = sscanf(cmd, "use %d", &fd);
     if (nr == 1) {
@@ -286,6 +291,7 @@ static void on_cmd_unix_listen(const char *cmd)
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'l';
         cur_fd = fd;
+        printf("listen #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
     }
 }
 
@@ -308,6 +314,7 @@ static void on_cmd_tcp_listen(const char *cmd)
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'l';
         cur_fd = fd;
+        printf("listen #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
     }
 }
 
@@ -339,6 +346,7 @@ static void on_cmd_unix_open(const char *cmd)
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'c';
         cur_fd = fd;
+        printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
     }
 }
 
@@ -361,6 +369,7 @@ static void on_cmd_tcp_open(const char *cmd)
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'c';
         cur_fd = fd;
+        printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
     }
 }
 
@@ -391,6 +400,7 @@ static void on_cmd_com_open(const char *cmd)
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'c';
         cur_fd = fd;
+        printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
     }
 }
 

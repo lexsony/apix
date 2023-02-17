@@ -1,4 +1,4 @@
-#if defined __arm__
+#if defined __arm__ && !defined __linux__
 
 #include <assert.h>
 #include <errno.h>
