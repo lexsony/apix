@@ -16,6 +16,10 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <termios.h>
+#include <linux/can.h>
+#include <linux/can/raw.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
 
 #include "apix-private.h"
 #include "apix-posix.h"
@@ -30,6 +34,21 @@ struct posix_sink {
     fd_set fds;
     int nfds;
 };
+
+static int __fd_close(struct apisink *sink, int fd)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apisink(sink, fd);
+    if (sinkfd == NULL)
+        return -1;
+
+    close(sinkfd->fd);
+    sinkfd_destroy(sinkfd);
+
+    struct posix_sink *unix_c_sink = container_of(sink, struct posix_sink, sink);
+    FD_CLR(fd, &unix_c_sink->fds);
+
+    return 0;
+}
 
 /**
  * unix domain socket server
@@ -67,9 +86,9 @@ static int unix_s_open(struct apisink *sink, const char *addr)
     list_add(&sinkfd->node_sink, &sink->sinkfds);
     list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
 
-    struct posix_sink *unix_s_sink = container_of(sink, struct posix_sink, sink);
-    FD_SET(fd, &unix_s_sink->fds);
-    unix_s_sink->nfds = fd + 1;
+    struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
+    FD_SET(fd, &ps->fds);
+    ps->nfds = fd + 1;
 
     return fd;
 }
@@ -79,10 +98,11 @@ static int unix_s_close(struct apisink *sink, int fd)
     struct sinkfd *sinkfd = find_sinkfd_in_apisink(sink, fd);
     if (sinkfd == NULL)
         return -1;
-    close(sinkfd->fd);
+
     if (strcmp(sink->id, APISINK_UNIX_S) == 0)
         unlink(sinkfd->addr);
-    sinkfd_destroy(sinkfd);
+
+    __fd_close(sink, fd);
     return 0;
 }
 
@@ -100,13 +120,13 @@ static int unix_s_recv(struct apisink *sink, int fd, void *buf, size_t size)
 
 static int unix_s_poll(struct apisink *sink)
 {
-    struct posix_sink *unix_s_sink = container_of(sink, struct posix_sink, sink);
+    struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
 
     struct timeval tv = { 0, 0 };
     fd_set recvfds;
-    memcpy(&recvfds, &unix_s_sink->fds, sizeof(recvfds));
+    memcpy(&recvfds, &ps->fds, sizeof(recvfds));
 
-    int nr_recv_fds = select(unix_s_sink->nfds, &recvfds, NULL, NULL, &tv);
+    int nr_recv_fds = select(ps->nfds, &recvfds, NULL, NULL, &tv);
     if (nr_recv_fds == -1) {
         if (errno == EINTR)
             return 0;
@@ -139,9 +159,9 @@ static int unix_s_poll(struct apisink *sink)
             list_add(&sinkfd->node_sink, &sink->sinkfds);
             list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
 
-            if (unix_s_sink->nfds < newfd + 1)
-                unix_s_sink->nfds = newfd + 1;
-            FD_SET(newfd, &unix_s_sink->fds);
+            if (ps->nfds < newfd + 1)
+                ps->nfds = newfd + 1;
+            FD_SET(newfd, &ps->fds);
 
             if (pos->events.on_accept)
                 pos->events.on_accept(pos->fd, newfd);
@@ -150,11 +170,11 @@ static int unix_s_poll(struct apisink *sink)
                              atbuf_spare(pos->rxbuf), 0);
             if (nread == -1) {
                 LOG_DEBUG("[recv] fd:%d, %s", pos->fd, strerror(errno));
-                FD_CLR(pos->fd, &unix_s_sink->fds);
+                FD_CLR(pos->fd, &ps->fds);
                 sink->ops.close(sink, pos->fd);
             } else if (nread == 0) {
                 LOG_DEBUG("[recv] fd:%d, finished", pos->fd);
-                FD_CLR(pos->fd, &unix_s_sink->fds);
+                FD_CLR(pos->fd, &ps->fds);
                 sink->ops.close(sink, pos->fd);
             } else {
                 atbuf_write_advance(pos->rxbuf, nread);
@@ -203,26 +223,11 @@ static int unix_c_open(struct apisink *sink, const char *addr)
     list_add(&sinkfd->node_sink, &sink->sinkfds);
     list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
 
-    struct posix_sink *unix_c_sink = container_of(sink, struct posix_sink, sink);
-    FD_SET(fd, &unix_c_sink->fds);
-    unix_c_sink->nfds = fd + 1;
+    struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
+    FD_SET(fd, &ps->fds);
+    ps->nfds = fd + 1;
 
     return fd;
-}
-
-static int unix_c_close(struct apisink *sink, int fd)
-{
-    struct sinkfd *sinkfd = find_sinkfd_in_apisink(sink, fd);
-    if (sinkfd == NULL)
-        return -1;
-
-    close(sinkfd->fd);
-    sinkfd_destroy(sinkfd);
-
-    struct posix_sink *unix_c_sink = container_of(sink, struct posix_sink, sink);
-    FD_CLR(fd, &unix_c_sink->fds);
-
-    return 0;
 }
 
 static int unix_c_send(struct apisink *sink, int fd, const void *buf, size_t len)
@@ -239,13 +244,13 @@ static int unix_c_recv(struct apisink *sink, int fd, void *buf, size_t size)
 
 static int unix_c_poll(struct apisink *sink)
 {
-    struct posix_sink *unix_c_sink = container_of(sink, struct posix_sink, sink);
+    struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
 
     struct timeval tv = { 0, 0 };
     fd_set recvfds;
-    memcpy(&recvfds, &unix_c_sink->fds, sizeof(recvfds));
+    memcpy(&recvfds, &ps->fds, sizeof(recvfds));
 
-    int nr_recv_fds = select(unix_c_sink->nfds, &recvfds, NULL, NULL, &tv);
+    int nr_recv_fds = select(ps->nfds, &recvfds, NULL, NULL, &tv);
     if (nr_recv_fds == -1) {
         if (errno == EINTR)
             return 0;
@@ -266,11 +271,11 @@ static int unix_c_poll(struct apisink *sink)
                             atbuf_spare(pos->rxbuf), 0);
         if (nread == -1) {
             LOG_DEBUG("[recv] fd:%d, %s", pos->fd, strerror(errno));
-            FD_CLR(pos->fd, &unix_c_sink->fds);
+            FD_CLR(pos->fd, &ps->fds);
             sink->ops.close(sink, pos->fd);
         } else if (nread == 0) {
             LOG_DEBUG("[recv] fd:%d, finished", pos->fd);
-            FD_CLR(pos->fd, &unix_c_sink->fds);
+            FD_CLR(pos->fd, &ps->fds);
             sink->ops.close(sink, pos->fd);
         } else {
             atbuf_write_advance(pos->rxbuf, nread);
@@ -283,7 +288,7 @@ static int unix_c_poll(struct apisink *sink)
 
 static struct apisink_operations unix_c_ops = {
     .open = unix_c_open,
-    .close = unix_c_close,
+    .close = __fd_close,
     .ioctl = NULL,
     .send = unix_c_send,
     .recv = unix_c_recv,
@@ -344,7 +349,7 @@ static int tcp_s_open(struct apisink *sink, const char *addr)
 
 static struct apisink_operations tcp_s_ops = {
     .open = tcp_s_open,
-    .close = unix_s_close,
+    .close = __fd_close,
     .ioctl = NULL,
     .send = unix_s_send,
     .recv = unix_s_recv,
@@ -399,7 +404,7 @@ static int tcp_c_open(struct apisink *sink, const char *addr)
 
 static struct apisink_operations tcp_c_ops = {
     .open = tcp_c_open,
-    .close = unix_c_close,
+    .close = __fd_close,
     .ioctl = NULL,
     .send = unix_c_send,
     .recv = unix_c_recv,
@@ -427,21 +432,6 @@ static int serial_open(struct apisink *sink, const char *addr)
     serial_sink->nfds = fd + 1;
 
     return fd;
-}
-
-static int serial_close(struct apisink *sink, int fd)
-{
-    struct sinkfd *sinkfd = find_sinkfd_in_apisink(sink, fd);
-    if (sinkfd == NULL)
-        return -1;
-
-    close(sinkfd->fd);
-    sinkfd_destroy(sinkfd);
-
-    struct posix_sink *serial_sink = container_of(sink, struct posix_sink, sink);
-    FD_CLR(fd, &serial_sink->fds);
-
-    return 0;
 }
 
 static int
@@ -518,13 +508,13 @@ static int serial_recv(struct apisink *sink, int fd, void *buf, size_t size)
 
 static int serial_poll(struct apisink *sink)
 {
-    struct posix_sink *unix_sink = container_of(sink, struct posix_sink, sink);
+    struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
 
     struct timeval tv = { 0, 0 };
     fd_set recvfds;
-    memcpy(&recvfds, &unix_sink->fds, sizeof(recvfds));
+    memcpy(&recvfds, &ps->fds, sizeof(recvfds));
 
-    int nr_recv_fds = select(unix_sink->nfds, &recvfds, NULL, NULL, &tv);
+    int nr_recv_fds = select(ps->nfds, &recvfds, NULL, NULL, &tv);
     if (nr_recv_fds == -1) {
         if (errno == EINTR)
             return 0;
@@ -560,12 +550,118 @@ static int serial_poll(struct apisink *sink)
 
 static struct apisink_operations serial_ops = {
     .open = serial_open,
-    .close = serial_close,
+    .close = __fd_close,
     .ioctl = serial_ioctl,
     .send = serial_send,
     .recv = serial_recv,
     .poll = serial_poll,
 };
+
+/**
+ * can
+ */
+
+static int can_open(struct apisink *sink, const char *addr)
+{
+    int fd = socket(PF_CAN, SOCK_RAW, CAN_RAW);
+    if (fd == -1)
+        return -1;
+
+    int rc = 0;
+    struct ifreq ifr;
+    struct sockaddr_can sockaddr = {0};
+    strcpy(ifr.ifr_name, addr);
+    ioctl(fd, SIOCGIFINDEX, &ifr);
+    sockaddr.can_family = AF_CAN;
+    sockaddr.can_ifindex = ifr.ifr_ifindex;
+
+    rc = bind(fd, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
+    if (rc == -1) {
+        close(fd);
+        return -1;
+    }
+
+    struct sinkfd *sinkfd = sinkfd_new();
+    sinkfd->fd = fd;
+    sinkfd->type = 'c';
+    snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
+    sinkfd->sink = sink;
+    list_add(&sinkfd->node_sink, &sink->sinkfds);
+    list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
+
+    struct posix_sink *tcp_c_sink = container_of(sink, struct posix_sink, sink);
+    FD_SET(fd, &tcp_c_sink->fds);
+    tcp_c_sink->nfds = fd + 1;
+
+    return fd;
+}
+
+static int can_send(struct apisink *sink, int fd, const void *buf, size_t len)
+{
+    UNUSED(sink);
+    return write(fd, buf, len);
+}
+
+static int can_recv(struct apisink *sink, int fd, void *buf, size_t size)
+{
+    UNUSED(sink);
+    return read(fd, buf, size);
+}
+
+static int can_poll(struct apisink *sink)
+{
+    struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
+
+    struct timeval tv = { 0, 0 };
+    fd_set recvfds;
+    memcpy(&recvfds, &ps->fds, sizeof(recvfds));
+
+    int nr_recv_fds = select(ps->nfds, &recvfds, NULL, NULL, &tv);
+    if (nr_recv_fds == -1) {
+        if (errno == EINTR)
+            return 0;
+        LOG_ERROR("[select] (%d) %s", errno, strerror(errno));
+        return -1;
+    }
+
+    struct sinkfd *pos, *n;
+    list_for_each_entry_safe(pos, n, &sink->sinkfds, node_sink) {
+        if (nr_recv_fds == 0) break;
+
+        if (!FD_ISSET(pos->fd, &recvfds))
+            continue;
+
+        nr_recv_fds--;
+
+        int nread = read(pos->fd, atbuf_write_pos(pos->rxbuf),
+                         sizeof(struct can_frame));
+        if (nread == -1) {
+            LOG_DEBUG("[read] (%d) %s", errno, strerror(errno));
+            sink->ops.close(sink, pos->fd);
+        } else if (nread == 0) {
+            LOG_DEBUG("[read] (%d) finished");
+            sink->ops.close(sink, pos->fd);
+        } else {
+            atbuf_write_advance(pos->rxbuf, nread);
+            gettimeofday(&pos->ts_poll_recv, NULL);
+        }
+    }
+
+    return 0;
+}
+
+static struct apisink_operations can_ops = {
+    .open = can_open,
+    .close = __fd_close,
+    .ioctl = NULL,
+    .send = can_send,
+    .recv = can_recv,
+    .poll = can_poll,
+};
+
+/**
+ * posix_sink
+ */
 
 int apix_enable_posix(struct apix *ctx)
 {
@@ -593,6 +689,11 @@ int apix_enable_posix(struct apix *ctx)
     struct posix_sink *serial_sink = calloc(1, sizeof(struct posix_sink));
     apisink_init(&serial_sink->sink, APISINK_SERIAL, &serial_ops);
     apix_sink_register(ctx, &serial_sink->sink);
+
+    // can
+    struct posix_sink *can_sink = calloc(1, sizeof(struct posix_sink));
+    apisink_init(&can_sink->sink, APISINK_CAN, &can_ops);
+    apix_sink_register(ctx, &can_sink->sink);
 
     return 0;
 }
@@ -644,6 +745,15 @@ void apix_disable_posix(struct apix *ctx)
             apix_sink_unregister(ctx, &serial_sink->sink);
             apisink_fini(&serial_sink->sink);
             free(serial_sink);
+        }
+
+        // can
+        if (strcmp(pos->id, APISINK_CAN) == 0) {
+            struct posix_sink *can_sink =
+                container_of(pos, struct posix_sink, sink);
+            apix_sink_unregister(ctx, &can_sink->sink);
+            apisink_fini(&can_sink->sink);
+            free(can_sink);
         }
     }
 }

@@ -10,6 +10,7 @@
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <linux/can.h>
 #include <readline/readline.h>
 
 #include <apix.h>
@@ -100,6 +101,33 @@ static int on_fd_accept(int _fd, int newfd)
     fds[newfd].type = 'a';
     printf("accept #%d, %s(%c)\n", newfd, fds[newfd].addr, fds[newfd].type);
     return 0;
+}
+
+static int on_can_pollin(int fd, const char *buf, size_t len)
+{
+    struct can_frame *frame = (struct can_frame *)buf;
+
+    if (frame->can_id & CAN_ERR_FLAG) {
+        printf("Error frame\n");
+        return sizeof(struct can_frame);
+    }
+
+    if (frame->can_id & CAN_EFF_FLAG)
+        printf("extended <0x%08x> ", frame->can_id & CAN_EFF_MASK);
+    else
+        printf("standard <0x%03x> ", frame->can_id & CAN_SFF_MASK);
+
+    if (frame->can_id & CAN_RTR_FLAG) {
+        printf("remote request\n");
+        return sizeof(struct can_frame);
+    }
+
+    printf("[%d] ", frame->can_dlc);
+    for (int i = 0; i < frame->can_dlc; i++)
+        printf("%c", frame->data[i]);
+    printf("\n");
+
+    return sizeof(struct can_frame);
 }
 
 static void print_cur_msg(void)
@@ -272,6 +300,14 @@ static void on_cmd_com(const char *cmd)
     }
 }
 
+static void on_cmd_can(const char *cmd)
+{
+    if (strcmp(cur_mode, "can") != 0) {
+        cur_mode = "can";
+        cur_fd = -1;
+    }
+}
+
 static void on_cmd_unix_listen(const char *cmd)
 {
     if (strcmp(cur_mode, "unix") != 0)
@@ -413,6 +449,29 @@ static void on_cmd_com_open(const char *cmd)
     }
 }
 
+static void on_cmd_can_open(const char *cmd)
+{
+    if (strcmp(cur_mode, "can") != 0)
+        return;
+
+    char addr[64] = {0};
+    int nr = sscanf(cmd, "open %s", addr);
+    if (nr == 1) {
+        int fd = apix_open_can(ctx, addr);
+        if (fd == -1) {
+            perror("open_can");
+            return;
+        }
+        apix_on_fd_pollin(ctx, fd, on_can_pollin);
+        assert(fds[fd].fd == 0);
+        fds[fd].fd = fd;
+        snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
+        fds[fd].type = 'c';
+        cur_fd = fd;
+        printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
+    }
+}
+
 static void on_cmd_open(const char *cmd)
 {
     if (strcmp(cur_mode, "unix") == 0) {
@@ -421,6 +480,8 @@ static void on_cmd_open(const char *cmd)
         on_cmd_tcp_open(cmd);
     } else if (strcmp(cur_mode, "com") == 0) {
         on_cmd_com_open(cmd);
+    } else if (strcmp(cur_mode, "can") == 0) {
+        on_cmd_can_open(cmd);
     }
 }
 
@@ -435,10 +496,31 @@ static void on_cmd_close(const char *cmd)
     }
 }
 
+static void on_cmd_can_send(const char *cmd)
+{
+    int id = 0;
+    char msg[4096] = {0};
+    int nr = sscanf(cmd, "send %x %s", &id, msg);
+    if (nr != 2) {
+        printf("param error\n");
+        return;
+    }
+
+    struct can_frame frame = {0};
+    memcpy(frame.data, msg, strlen(msg));
+    frame.can_dlc = strlen(msg);
+    frame.can_id = id | CAN_EFF_FLAG;
+
+    apix_send(ctx, cur_fd, &frame, sizeof(frame));
+}
+
 static void on_cmd_send(const char *cmd)
 {
     if (cur_fd == 0)
         return;
+
+    if (strcmp(cur_mode, "can") == 0)
+        return on_cmd_can_send(cmd);
 
     char msg[4096] = {0};
     int nr = sscanf(cmd, "send %s", msg);
@@ -463,9 +545,10 @@ static const struct cli_cmd cli_cmds[] = {
     { "ll", on_cmd_fds, "list fds" },
     { "fds", on_cmd_fds, "list fds" },
     { "use", on_cmd_use, "set frontend fd" },
-    { "unix", on_cmd_unix, "enter unix mode" },
+    { "unix", on_cmd_unix, "enter unix mode, path" },
     { "tcp", on_cmd_tcp, "enter tcp mode, ip:port" },
-    { "com", on_cmd_com, "enter com mode, addr,baud,data_bits,parity,stop_bits" },
+    { "com", on_cmd_com, "enter com mode, path,baud,data_bits,parity,stop_bits" },
+    { "can", on_cmd_can, "enter can mode, device" },
     { "listen", on_cmd_listen, "listen fd" },
     { "open", on_cmd_open, "open fd" },
     { "close", on_cmd_close, "close fd" },
