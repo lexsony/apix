@@ -55,6 +55,31 @@ static struct opt opttab[] = {
     INIT_OPT_NONE(),
 };
 
+static size_t transfer_hex_msg(char *buf, size_t len)
+{
+    int idx = 0;
+    char tmp[3] = {0};
+    int hex;
+
+    for (int i = 0; i < len;) {
+        if (len - i >= 4 && buf[i] == '0' && buf[i+1] == 'x') {
+            tmp[0] = buf[i+2];
+            tmp[1] = buf[i+3];
+            sscanf(tmp, "%x", &hex);
+            buf[idx] = (char)hex;
+            idx++;
+            i += 4;
+        } else {
+            buf[idx] = buf[i];
+            idx++;
+            i++;
+        }
+    }
+
+    buf[idx] = 0;
+    return idx; // new len
+}
+
 static void close_fd(int fd)
 {
     if (fd >= 0 && fd < sizeof(fds) / sizeof(fds[0])) {
@@ -531,7 +556,8 @@ static void on_cmd_can_send(const char *cmd)
     }
 
     struct can_frame frame = {0};
-    memcpy(frame.data, msg, strlen(msg));
+    int len = transfer_hex_msg(msg, strlen(msg));
+    memcpy(frame.data, msg, len);
     frame.can_dlc = strlen(msg);
     frame.can_id = fds[cur_fd].can_id | CAN_EFF_FLAG;
 
@@ -553,7 +579,8 @@ static void on_cmd_send(const char *cmd)
         return;
     }
 
-    apix_send(ctx, cur_fd, msg, strlen(msg));
+    int len = transfer_hex_msg(msg, strlen(msg));
+    apix_send(ctx, cur_fd, msg, len);
 }
 
 static void on_cmd_default(const char *cmd)
