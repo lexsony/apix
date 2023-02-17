@@ -379,22 +379,31 @@ static void on_cmd_com_open(const char *cmd)
         return;
 
     char addr[64] = {0};
-    int nr = sscanf(cmd, "open %s", addr);
+    int baud = 115200;
+    int data_bits = 8;
+    char parity = 'N';
+    int stop_bits = 1;
+    int nr = sscanf(cmd, "open %s,%d,%d,%c,%d",
+                    addr, &baud, &data_bits, &parity, &stop_bits);
     if (nr == 1) {
         int fd = apix_open_serial(ctx, addr);
         if (fd == -1) {
             perror("open_com");
             return;
         }
-        apix_on_fd_pollin(ctx, fd, on_fd_pollin);
         struct ioctl_serial_param sp = {
-            .baud = SERIAL_ARG_BAUD_9600,
-            .bits = SERIAL_ARG_BITS_8,
-            .parity = SERIAL_ARG_PARITY_E,
-            .stop = SERIAL_ARG_STOP_1,
+            .baud = baud,
+            .bits = data_bits,
+            .parity = parity,
+            .stop = stop_bits,
         };
         int rc = apix_ioctl(ctx, fd, 0, (unsigned long)&sp);
-        assert(rc != -1);
+        if (rc == -1) {
+            apix_close(ctx, fd);
+            perror("ioctl_com");
+            return;
+        }
+        apix_on_fd_pollin(ctx, fd, on_fd_pollin);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
@@ -456,7 +465,7 @@ static const struct cli_cmd cli_cmds[] = {
     { "use", on_cmd_use, "set frontend fd" },
     { "unix", on_cmd_unix, "enter unix mode" },
     { "tcp", on_cmd_tcp, "enter tcp mode, ip:port" },
-    { "com", on_cmd_com, "enter com mode" },
+    { "com", on_cmd_com, "enter com mode, addr,baud,data_bits,parity,stop_bits" },
     { "listen", on_cmd_listen, "listen fd" },
     { "open", on_cmd_open, "open fd" },
     { "close", on_cmd_close, "close fd" },
