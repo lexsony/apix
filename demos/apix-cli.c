@@ -35,6 +35,8 @@ struct fd_struct {
     const char *mode;
     atbuf_t *msg;
     char type; /* c: connect, l: listen, a: accept */
+
+    int can_id;
 };
 
 static struct fd_struct fds[FD_SIZE];
@@ -257,8 +259,13 @@ static void on_cmd_fds(const char *cmd)
     for (int i = 0; i < sizeof(fds) / sizeof(fds[0]); i++) {
         if (fds[i].fd == 0)
             continue;
-        printf("fd: %d, type: %c, addr: %s\n",
-               fds[i].fd, fds[i].type, fds[i].addr);
+        if (strcmp(fds[i].mode, "can") == 0) {
+            printf("fd: %d, type: %c, addr: %s, can_id: 0x%08x\n",
+                   fds[i].fd, fds[i].type, fds[i].addr, fds[i].can_id);
+        } else {
+            printf("fd: %d, type: %c, addr: %s\n",
+                   fds[i].fd, fds[i].type, fds[i].addr);
+        }
     }
 }
 
@@ -326,6 +333,7 @@ static void on_cmd_unix_listen(const char *cmd)
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'l';
+        fds[fd].mode = "unix";
         cur_fd = fd;
         printf("listen #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
     }
@@ -349,6 +357,7 @@ static void on_cmd_tcp_listen(const char *cmd)
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'l';
+        fds[fd].mode = "tcp";
         cur_fd = fd;
         printf("listen #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
     }
@@ -381,6 +390,7 @@ static void on_cmd_unix_open(const char *cmd)
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'c';
+        fds[fd].mode = "unix";
         cur_fd = fd;
         printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
     }
@@ -404,6 +414,7 @@ static void on_cmd_tcp_open(const char *cmd)
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'c';
+        fds[fd].mode = "tcp";
         cur_fd = fd;
         printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
     }
@@ -444,6 +455,7 @@ static void on_cmd_com_open(const char *cmd)
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'c';
+        fds[fd].mode = "com";
         cur_fd = fd;
         printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
     }
@@ -467,6 +479,7 @@ static void on_cmd_can_open(const char *cmd)
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'c';
+        fds[fd].mode = "can";
         cur_fd = fd;
         printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
     }
@@ -496,12 +509,23 @@ static void on_cmd_close(const char *cmd)
     }
 }
 
-static void on_cmd_can_send(const char *cmd)
+static void on_cmd_can_setid(const char *cmd)
 {
     int id = 0;
+    int nr = sscanf(cmd, "setid %x", &id);
+    if (nr != 1) {
+        printf("param error\n");
+        return;
+    }
+
+    fds[cur_fd].can_id = id;
+}
+
+static void on_cmd_can_send(const char *cmd)
+{
     char msg[4096] = {0};
-    int nr = sscanf(cmd, "send %x %s", &id, msg);
-    if (nr != 2) {
+    int nr = sscanf(cmd, "send %s", msg);
+    if (nr != 1) {
         printf("param error\n");
         return;
     }
@@ -509,7 +533,7 @@ static void on_cmd_can_send(const char *cmd)
     struct can_frame frame = {0};
     memcpy(frame.data, msg, strlen(msg));
     frame.can_dlc = strlen(msg);
-    frame.can_id = id | CAN_EFF_FLAG;
+    frame.can_id = fds[cur_fd].can_id | CAN_EFF_FLAG;
 
     apix_send(ctx, cur_fd, &frame, sizeof(frame));
 }
@@ -524,8 +548,12 @@ static void on_cmd_send(const char *cmd)
 
     char msg[4096] = {0};
     int nr = sscanf(cmd, "send %s", msg);
-    if (nr == 1)
-        apix_send(ctx, cur_fd, msg, strlen(msg));
+    if (nr != 1) {
+        printf("param error\n");
+        return;
+    }
+
+    apix_send(ctx, cur_fd, msg, strlen(msg));
 }
 
 static void on_cmd_default(const char *cmd)
@@ -553,6 +581,7 @@ static const struct cli_cmd cli_cmds[] = {
     { "open", on_cmd_open, "open fd" },
     { "close", on_cmd_close, "close fd" },
     { "send", on_cmd_send, "send msg" },
+    { "setid", on_cmd_can_setid, "set can id" },
     { NULL, NULL }
 };
 
