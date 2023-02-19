@@ -13,16 +13,15 @@
 #include <linux/can.h>
 #include <readline/readline.h>
 
-#include <apix.h>
-#include <apix-posix.h>
-#include <srrp.h>
-#include <log.h>
-#include <atbuf.h>
-#include "list.h"
+#include <apix/apix.h>
+#include <apix/apix-posix.h>
+#include <apix/srrp.h>
+#include <apix/log.h>
+#include <apix/atbuf.h>
+#include <apix/svcx.h>
+#include <apix/list.h>
 #include "opt.h"
 #include "cli.h"
-#include "svcx.h"
-#include "crc16.h"
 
 #define KBYTES 1024 * 1024
 #define FD_SIZE 4096
