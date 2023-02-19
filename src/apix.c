@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -16,13 +17,26 @@
 #include "srrp.h"
 #include "json.h"
 
+static void log_hex_string(const char *buf, size_t len)
+{
+    printf("%d, ", (int)len);
+    for (int i = 0; i < (int)len; i++) {
+        if (isprint(buf[i]))
+            printf("%c", buf[i]);
+        else
+            printf("_0x%.2x", buf[i]);
+    }
+    printf("\n");
+}
+
 static void parse_packet(struct apix *ctx, struct sinkfd *sinkfd)
 {
     while (atbuf_used(sinkfd->rxbuf)) {
         uint32_t offset = srrp_next_packet_offset(
             atbuf_read_pos(sinkfd->rxbuf), atbuf_used(sinkfd->rxbuf));
         if (offset != 0) {
-            LOG_WARN("broken packet: %s", atbuf_read_pos(sinkfd->rxbuf));
+            LOG_WARN("broken packet:");
+            log_hex_string(atbuf_read_pos(sinkfd->rxbuf), offset);
             atbuf_read_advance(sinkfd->rxbuf, offset);
         }
         if (atbuf_used(sinkfd->rxbuf) == 0)
@@ -308,7 +322,7 @@ static void handle_request(struct apix *ctx)
         if (pos->state == API_REQUEST_ST_WAIT_RESPONSE) {
             if (time(0) < pos->ts_send + API_REQUEST_TIMEOUT / 1000)
                 continue;
-            apix_send(ctx, pos->fd, "request timeout", 15);
+            //apix_send(ctx, pos->fd, "request timeout", 15);
             LOG_DEBUG("request timeout: %s", pos->pac->raw);
             api_request_delete(pos);
             continue;

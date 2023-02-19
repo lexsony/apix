@@ -52,8 +52,9 @@ static struct fd_struct fds[FD_SIZE];
 static const char *cur_mode = CUR_MODE_NONE;
 static int cur_fd = -1;
 static int print_all = 0;
-static unsigned int node_id;
+static unsigned int node_id = 0;
 static struct list_head services = LIST_HEAD_INIT(services);
+static int broker_mode = 0;
 
 static void signal_handler(int sig)
 {
@@ -62,7 +63,10 @@ static void signal_handler(int sig)
 
 static struct opt opttab[] = {
     INIT_OPT_BOOL("-h", "help", false, "print this usage"),
-    INIT_OPT_BOOL("-D", "debug", false, "debug mode [defaut: false]"),
+    INIT_OPT_BOOL("-D", "debug", false, "enable debug [defaut: false]"),
+    INIT_OPT_STRING("-m:", "mode", CUR_MODE_NONE, "current mode"),
+    INIT_OPT_BOOL("-p", "print_all", false, "enable print all"),
+    INIT_OPT_BOOL("-b", "broker_mode", false, "enable broker mode"),
     INIT_OPT_NONE(),
 };
 
@@ -106,8 +110,25 @@ static void close_fd(int fd)
     }
 }
 
+static int on_srrp(struct srrp_packet *req, struct srrp_packet **resp)
+{
+    struct service *pos;
+    list_for_each_entry(pos, &services, node) {
+        if (strncmp(pos->header, req->header, strlen(pos->header)) == 0) {
+            *resp = srrp_new_response(req->srcid, srrp_crc(req), req->header, pos->msg);
+            return 0;
+        }
+    }
+
+    *resp = srrp_new_response(req->srcid, srrp_crc(req), req->header, "{msg:'...'}");
+    return 0;
+}
+
 static int on_fd_pollin(int fd, const char *buf, size_t len)
 {
+    if (broker_mode)
+        return -1;
+
     if (fds[fd].msg == NULL) {
         fds[fd].msg = atbuf_new(KBYTES);
     }
@@ -115,20 +136,19 @@ static int on_fd_pollin(int fd, const char *buf, size_t len)
         atbuf_clear(fds[fd].msg);
     atbuf_write(fds[fd].msg, buf, len);
 
-
     uint32_t offset = srrp_next_packet_offset(buf, len);
     struct srrp_packet *req = srrp_parse(buf + offset);
     if (req == NULL) {
-        apix_send(ctx, fd, "\0", 1);
-    } else {
+        apix_send(ctx, fd, "broken packet", 13);
+    } else if (req->leader == SRRP_REQUEST_LEADER) {
         struct srrp_packet *resp = NULL;
-        if (svchub_deal(svc, req, &resp) == 0) {
-            assert(resp);
-            int nr = apix_send(ctx, fd, (uint8_t *)resp->raw, resp->len);
-            assert(nr != -1);
-            assert(nr != 0);
-            srrp_free(resp);
-        }
+        if (svchub_deal(svc, req, &resp) == -1)
+            resp = srrp_new_response(req->srcid, srrp_crc(req), req->header, "{}");
+        assert(resp);
+        int nr = apix_send(ctx, fd, (uint8_t *)resp->raw, resp->len);
+        assert(nr != -1);
+        assert(nr != 0);
+        srrp_free(resp);
         srrp_free(req);
     }
 
@@ -307,12 +327,25 @@ static void on_cmd_print(const char *cmd)
     }
 }
 
+static void on_cmd_broker(const char *cmd)
+{
+    char param[64] = {0};
+    int nr = sscanf(cmd, "broker %s", param);
+    if (nr == 1) {
+        if (strcmp(param, "on") == 0)
+            broker_mode = 1;
+        else if (strcmp(param, "off") == 0)
+            broker_mode = 0;
+    }
+}
+
 static void on_cmd_env(const char *cmd)
 {
     printf("node_id: %d\n", node_id);
     printf("cur_mode: %s\n", cur_mode);
     printf("cur_fd: %d\n", cur_fd);
     printf("print: %s\n", print_all ? "all" : "cur");
+    printf("broker: %s\n", broker_mode ? "on" : "off");
 }
 
 static void on_cmd_fds(const char *cmd)
@@ -630,20 +663,6 @@ static void on_cmd_srrpget(const char *cmd)
     srrp_free(pac);
 }
 
-static int on_srrp(struct srrp_packet *req, struct srrp_packet **resp)
-{
-    struct service *pos;
-    list_for_each_entry(pos, &services, node) {
-        if (strncmp(pos->header, req->header, strlen(pos->header)) == 0) {
-            *resp = srrp_new_response(req->srcid, srrp_crc(req), req->header, pos->msg);
-            return 0;
-        }
-    }
-
-    *resp = srrp_new_response(req->srcid, srrp_crc(req), req->header, "{msg:'...'}");
-    return 0;
-}
-
 static void on_cmd_srrpadd(const char *cmd)
 {
     if (cur_fd == 0)
@@ -699,6 +718,13 @@ static void on_cmd_srrpinfo(const char *cmd)
     }
 }
 
+static void on_cmd_srrpalive(const char *cmd)
+{
+    char newcmd[256] = {0};
+    sprintf(newcmd, "srrpget /%d/alive {}", node_id);
+    on_cmd_srrpget(newcmd);
+}
+
 static void on_cmd_default(const char *cmd)
 {
     printf("unknown command: %s\n", cmd);
@@ -713,6 +739,7 @@ static const struct cli_cmd cli_cmds[] = {
     { "quit", on_cmd_quit, "quit cli" },
     { "exit", on_cmd_exit, "exit cur_mode or quit cli" },
     { "print", on_cmd_print, "print all|cur" },
+    { "broker", on_cmd_broker, "broker on|off" },
     { "env", on_cmd_env, "display environments" },
     { "ll", on_cmd_fds, "list fds" },
     { "fds", on_cmd_fds, "list fds" },
@@ -730,6 +757,7 @@ static const struct cli_cmd cli_cmds[] = {
     { "srrpadd", on_cmd_srrpadd, "srrpadd hdr msg" },
     { "srrpdel", on_cmd_srrpdel, "srrpdel hdr" },
     { "srrpinfo", on_cmd_srrpinfo, "srrpinfo" },
+    { "srrpalive", on_cmd_srrpalive, "srrpalive" },
     { NULL, NULL }
 };
 
@@ -763,9 +791,23 @@ int main(int argc, char *argv[])
     signal(SIGINT, signal_handler);
     signal(SIGQUIT, signal_handler);
 
+    struct opt *opt;
+    //opt = find_opt("debug", opttab);
+    //if (opt_bool(opt))
+    //    log_set_level(LOG_LV_DEBUG);
+    opt = find_opt("mode", opttab);
+    cur_mode = opt_string(opt);
+    opt = find_opt("print_all", opttab);
+    if (opt_bool(opt))
+        print_all = 1;;
+    opt = find_opt("broker_mode", opttab);
+    if (opt_bool(opt))
+        broker_mode = 1;;
+
     srand(time(0));
     node_id = rand() % 65536;
     svc = svchub_new();
+    on_cmd_env("");
 
     pthread_t apix_pid;
     pthread_create(&apix_pid, NULL, apix_thread, NULL);
