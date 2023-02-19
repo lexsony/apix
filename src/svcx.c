@@ -5,7 +5,7 @@
 #include <string.h>
 #include "list.h"
 
-#define SERVICE_HEADER_LEN 64
+#define SERVICE_HEADER_LEN 256
 
 struct service {
     char header[SERVICE_HEADER_LEN];
@@ -37,12 +37,12 @@ void svchub_destroy(struct svchub *hub)
 
 int svchub_add_service(struct svchub *hub, const char *header, svc_handle_func_t func)
 {
-    struct service *svc = calloc(1, sizeof(*svc));
-    assert(svc);
-    snprintf(svc->header, sizeof(svc->header), "%s", header);
-    svc->func = func;
-    INIT_LIST_HEAD(&svc->node);
-    list_add(&svc->node, &hub->services);
+    struct service *serv = calloc(1, sizeof(*serv));
+    assert(serv);
+    snprintf(serv->header, sizeof(serv->header), "%s", header);
+    serv->func = func;
+    INIT_LIST_HEAD(&serv->node);
+    list_add(&serv->node, &hub->services);
     return 0;
 }
 

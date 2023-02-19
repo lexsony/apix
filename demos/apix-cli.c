@@ -18,6 +18,7 @@
 #include <srrp.h>
 #include <log.h>
 #include <atbuf.h>
+#include "list.h"
 #include "opt.h"
 #include "cli.h"
 #include "svcx.h"
@@ -28,10 +29,6 @@
 #define FD_MAX (FD_SIZE - 1)
 #define CUR_MODE_NONE "#"
 
-static int exit_flag;
-static struct apix *ctx;
-static struct svchub *svc;
-
 struct fd_struct {
     int fd;
     char addr[64];
@@ -41,11 +38,22 @@ struct fd_struct {
     int can_id;
 };
 
-static unsigned int node_id;
+struct service {
+    struct list_head node;
+    char header[256];
+    char msg[1024];
+};
+
+static int exit_flag;
+static struct apix *ctx;
+static struct svchub *svc;
+
 static struct fd_struct fds[FD_SIZE];
 static const char *cur_mode = CUR_MODE_NONE;
 static int cur_fd = -1;
 static int print_all = 0;
+static unsigned int node_id;
+static struct list_head services = LIST_HEAD_INIT(services);
 
 static void signal_handler(int sig)
 {
@@ -624,6 +632,14 @@ static void on_cmd_srrpget(const char *cmd)
 
 static int on_srrp(struct srrp_packet *req, struct srrp_packet **resp)
 {
+    struct service *pos;
+    list_for_each_entry(pos, &services, node) {
+        if (strncmp(pos->header, req->header, strlen(pos->header)) == 0) {
+            *resp = srrp_new_response(req->srcid, srrp_crc(req), req->header, pos->msg);
+            return 0;
+        }
+    }
+
     *resp = srrp_new_response(req->srcid, srrp_crc(req), req->header, "{msg:'...'}");
     return 0;
 }
@@ -634,7 +650,7 @@ static void on_cmd_srrpadd(const char *cmd)
         return;
 
     char hdr[256] = {0};
-    char msg[4096] = {0};
+    char msg[1024] = {0};
     sprintf(hdr, "/%d", node_id);
     int nr = sscanf(cmd, "srrpadd %s %s", hdr + strlen(hdr), msg);
     if (nr != 2) {
@@ -643,6 +659,13 @@ static void on_cmd_srrpadd(const char *cmd)
     }
 
     svchub_add_service(svc, hdr, on_srrp);
+
+    struct service *serv = calloc(1, sizeof(*serv));
+    assert(serv);
+    snprintf(serv->header, sizeof(serv->header), "%s", hdr);
+    snprintf(serv->msg, sizeof(serv->msg), "%s", msg);
+    INIT_LIST_HEAD(&serv->node);
+    list_add(&serv->node, &services);
 }
 
 static void on_cmd_srrpdel(const char *cmd)
@@ -658,6 +681,22 @@ static void on_cmd_srrpdel(const char *cmd)
     }
 
     svchub_del_service(svc, hdr);
+
+    struct service *pos;
+    list_for_each_entry(pos, &services, node) {
+        if (strncmp(pos->header, hdr, strlen(pos->header)) == 0) {
+            list_del(&pos->node);
+            free(pos);
+        }
+    }
+}
+
+static void on_cmd_srrpinfo(const char *cmd)
+{
+    struct service *pos;
+    list_for_each_entry(pos, &services, node) {
+        printf("hdr: %s, msg: %s\n", pos->header, pos->msg);
+    }
 }
 
 static void on_cmd_default(const char *cmd)
@@ -690,6 +729,7 @@ static const struct cli_cmd cli_cmds[] = {
     { "srrpget", on_cmd_srrpget, "srrpget hdr msg" },
     { "srrpadd", on_cmd_srrpadd, "srrpadd hdr msg" },
     { "srrpdel", on_cmd_srrpdel, "srrpdel hdr" },
+    { "srrpinfo", on_cmd_srrpinfo, "srrpinfo" },
     { NULL, NULL }
 };
 
