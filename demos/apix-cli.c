@@ -624,9 +624,7 @@ static void on_cmd_srrpget(const char *cmd)
 
 static int on_srrp(struct srrp_packet *req, struct srrp_packet **resp)
 {
-    uint16_t crc = crc16(req->header, req->header_len);
-    crc = crc16_crc(crc, req->data, req->data_len);
-    *resp = srrp_new_response(req->srcid, crc, req->header, "{msg:'...'}");
+    *resp = srrp_new_response(req->srcid, srrp_crc(req), req->header, "{msg:'...'}");
     return 0;
 }
 

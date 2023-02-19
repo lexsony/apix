@@ -157,6 +157,13 @@ struct srrp_packet *srrp_parse(const char *buf)
     return NULL;
 }
 
+uint16_t srrp_crc(struct srrp_packet *pac)
+{
+    uint16_t crc = crc16(pac->header, pac->header_len);
+    crc = crc16_crc(crc, pac->data, pac->data_len);
+    return crc;
+}
+
 struct srrp_packet *
 srrp_new_request(uint16_t srcid, const char *header, const char *data)
 {
