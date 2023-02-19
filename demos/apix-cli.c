@@ -138,11 +138,14 @@ static int on_fd_pollin(int fd, const char *buf, size_t len)
     uint32_t offset = srrp_next_packet_offset(buf, len);
     struct srrp_packet *req = srrp_parse(buf + offset);
     if (req == NULL) {
-        apix_send(ctx, fd, "broken packet", 13);
+        // do nothing ...
     } else if (req->leader == SRRP_REQUEST_LEADER) {
         struct srrp_packet *resp = NULL;
-        if (svchub_deal(svc, req, &resp) == -1)
-            resp = srrp_new_response(req->srcid, srrp_crc(req), req->header, "{}");
+        if (svchub_deal(svc, req, &resp) == -1) {
+            resp = srrp_new_response(
+                req->srcid, srrp_crc(req), req->header,
+                "{errcode:1, errmsg:'service not found.'}");
+        }
         assert(resp);
         int nr = apix_send(ctx, fd, (uint8_t *)resp->raw, resp->len);
         assert(nr != -1);

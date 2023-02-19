@@ -315,6 +315,15 @@ int apix_recv(struct apix *ctx, int fd, void *buf, size_t size)
     return sinkfd->sink->ops.recv(sinkfd->sink, fd, buf, size);
 }
 
+static int apix_response(struct apix *ctx, int fd, struct srrp_packet *req, const char *data)
+{
+    struct srrp_packet *resp = srrp_new_response(
+        req->srcid, srrp_crc(req), req->header, data);
+    int rc = apix_send(ctx, fd, resp->raw, resp->len);
+    srrp_free(resp);
+    return rc;
+}
+
 static void handle_request(struct apix *ctx)
 {
     struct api_request *pos, *n;
@@ -322,13 +331,13 @@ static void handle_request(struct apix *ctx)
         if (pos->state == API_REQUEST_ST_WAIT_RESPONSE) {
             if (time(0) < pos->ts_send + API_REQUEST_TIMEOUT / 1000)
                 continue;
-            //apix_send(ctx, pos->fd, "request timeout", 15);
+            apix_response(ctx, pos->fd, pos->pac, "REQUEST TIMEOUT");
             LOG_DEBUG("request timeout: %s", pos->pac->raw);
             api_request_delete(pos);
             continue;
         }
 
-        LOG_INFO("poll >: %.4x:%s?%s", pos->pac->srcid, pos->pac->header, pos->pac->data);
+        LOG_INFO("poll > %d:%s?%s", pos->pac->srcid, pos->pac->header, pos->pac->data);
 
         struct api_station *src = find_station(&ctx->stations, pos->pac->srcid);
         if (src == NULL) {
@@ -343,13 +352,13 @@ static void handle_request(struct apix *ctx)
         int dstid = 0;
         int nr = sscanf(pos->pac->header, "/%d/", &dstid);
         if (nr != 1) {
-            apix_send(ctx, pos->fd, "STATION NOT FOUND", 17);
+            apix_response(ctx, pos->fd, pos->pac, "STATION NOT FOUND");
             api_request_delete(pos);
             continue;
         }
         struct api_station *dst = find_station(&ctx->stations, dstid);
         if (dst == NULL) {
-            apix_send(ctx, pos->fd, "STATION NOT FOUND", 17);
+            apix_response(ctx, pos->fd, pos->pac, "STATION NOT FOUND");
             api_request_delete(pos);
             continue;
         }
@@ -364,7 +373,7 @@ static void handle_response(struct apix *ctx)
 {
     struct api_response *pos, *n;
     list_for_each_entry_safe(pos, n, &ctx->responses, node) {
-        LOG_INFO("poll <: %.4x:%s?%s", pos->pac->srcid, pos->pac->header, pos->pac->data);
+        LOG_INFO("poll < %d:%s?%s", pos->pac->srcid, pos->pac->header, pos->pac->data);
 
         struct api_request *pos_req, *n_req;
         list_for_each_entry_safe(pos_req, n_req, &ctx->requests, node) {
@@ -397,13 +406,13 @@ static void handle_topic_msg(struct apix *ctx)
     list_for_each_entry_safe(pos, n, &ctx->topic_msgs, node) {
         if (pos->pac->leader == SRRP_SUBSCRIBE_LEADER) {
             topic_sub_handler(ctx, pos);
-            LOG_INFO("poll #: %s?%s", pos->pac->header, pos->pac->data);
+            LOG_INFO("poll # %s?%s", pos->pac->header, pos->pac->data);
         } else if (pos->pac->leader == SRRP_UNSUBSCRIBE_LEADER) {
             topic_unsub_handler(ctx, pos);
-            LOG_INFO("poll %: %s?%s", pos->pac->header, pos->pac->data);
+            LOG_INFO("poll % %s?%s", pos->pac->header, pos->pac->data);
         } else {
             topic_pub_handler(ctx, pos);
-            LOG_INFO("poll @: %s?%s", pos->pac->header, pos->pac->data);
+            LOG_INFO("poll @ %s?%s", pos->pac->header, pos->pac->data);
         }
         api_topic_msg_delete(pos);
     }
