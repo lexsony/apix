@@ -20,6 +20,8 @@
 #include <atbuf.h>
 #include "opt.h"
 #include "cli.h"
+#include "svcx.h"
+#include "crc16.h"
 
 #define KBYTES 1024 * 1024
 #define FD_SIZE 4096
@@ -28,6 +30,7 @@
 
 static int exit_flag;
 static struct apix *ctx;
+static struct svchub *svc;
 
 struct fd_struct {
     int fd;
@@ -35,10 +38,10 @@ struct fd_struct {
     const char *mode;
     atbuf_t *msg;
     char type; /* c: connect, l: listen, a: accept */
-
     int can_id;
 };
 
+static unsigned int node_id;
 static struct fd_struct fds[FD_SIZE];
 static const char *cur_mode = CUR_MODE_NONE;
 static int cur_fd = -1;
@@ -103,6 +106,23 @@ static int on_fd_pollin(int fd, const char *buf, size_t len)
     if (atbuf_spare(fds[fd].msg) < len)
         atbuf_clear(fds[fd].msg);
     atbuf_write(fds[fd].msg, buf, len);
+
+
+    uint32_t offset = srrp_next_packet_offset(buf, len);
+    struct srrp_packet *req = srrp_parse(buf + offset);
+    if (req == NULL) {
+        apix_send(ctx, fd, "\0", 1);
+    } else {
+        struct srrp_packet *resp = NULL;
+        if (svchub_deal(svc, req, &resp) == 0) {
+            assert(resp);
+            int nr = apix_send(ctx, fd, (uint8_t *)resp->raw, resp->len);
+            assert(nr != -1);
+            assert(nr != 0);
+            srrp_free(resp);
+        }
+        srrp_free(req);
+    }
 
     return len;
 }
@@ -279,18 +299,21 @@ static void on_cmd_print(const char *cmd)
     }
 }
 
+static void on_cmd_env(const char *cmd)
+{
+    printf("node_id: %d\n", node_id);
+    printf("cur_mode: %s\n", cur_mode);
+    printf("cur_fd: %d\n", cur_fd);
+    printf("print: %s\n", print_all ? "all" : "cur");
+}
+
 static void on_cmd_fds(const char *cmd)
 {
     for (int i = 0; i < sizeof(fds) / sizeof(fds[0]); i++) {
         if (fds[i].fd == 0)
             continue;
-        if (strcmp(fds[i].mode, "can") == 0) {
-            printf("fd: %d, type: %c, addr: %s, can_id: 0x%08x\n",
-                   fds[i].fd, fds[i].type, fds[i].addr, fds[i].can_id);
-        } else {
-            printf("fd: %d, type: %c, addr: %s\n",
-                   fds[i].fd, fds[i].type, fds[i].addr);
-        }
+        printf("fd: %d, type: %c, addr: %s\n",
+               fds[i].fd, fds[i].type, fds[i].addr);
     }
 }
 
@@ -478,7 +501,7 @@ static void on_cmd_com_open(const char *cmd)
         apix_on_fd_pollin(ctx, fd, on_fd_pollin);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
-        snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
+        snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", strstr(cmd, "open "));
         fds[fd].type = 'c';
         fds[fd].mode = "com";
         cur_fd = fd;
@@ -492,7 +515,8 @@ static void on_cmd_can_open(const char *cmd)
         return;
 
     char addr[64] = {0};
-    int nr = sscanf(cmd, "open %s", addr);
+    int can_id = 0;
+    int nr = sscanf(cmd, "open %s:%d", addr, &can_id);
     if (nr == 1) {
         int fd = apix_open_can(ctx, addr);
         if (fd == -1) {
@@ -502,9 +526,10 @@ static void on_cmd_can_open(const char *cmd)
         apix_on_fd_pollin(ctx, fd, on_can_pollin);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
-        snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
+        snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", strstr(cmd, "open "));
         fds[fd].type = 'c';
         fds[fd].mode = "can";
+        fds[fd].can_id = can_id;
         cur_fd = fd;
         printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
     }
@@ -534,7 +559,32 @@ static void on_cmd_close(const char *cmd)
     }
 }
 
-static void on_cmd_can_setid(const char *cmd)
+static void on_cmd_send(const char *cmd)
+{
+    if (cur_fd == 0)
+        return;
+
+    char msg[4096] = {0};
+    int nr = sscanf(cmd, "send %s", msg);
+    if (nr != 1) {
+        printf("param error\n");
+        return;
+    }
+
+    int len = transfer_hex_msg(msg, strlen(msg));
+
+    if (strcmp(cur_mode, "can") == 0) {
+        struct can_frame frame = {0};
+        memcpy(frame.data, msg, len);
+        frame.can_dlc = strlen(msg);
+        frame.can_id = fds[cur_fd].can_id | CAN_EFF_FLAG;
+        apix_send(ctx, cur_fd, &frame, sizeof(frame));
+    } else {
+        apix_send(ctx, cur_fd, msg, len);
+    }
+}
+
+static void on_cmd_setid(const char *cmd)
 {
     int id = 0;
     int nr = sscanf(cmd, "setid %x", &id);
@@ -543,44 +593,73 @@ static void on_cmd_can_setid(const char *cmd)
         return;
     }
 
-    fds[cur_fd].can_id = id;
+    node_id = id;
 }
 
-static void on_cmd_can_send(const char *cmd)
-{
-    char msg[4096] = {0};
-    int nr = sscanf(cmd, "send %s", msg);
-    if (nr != 1) {
-        printf("param error\n");
-        return;
-    }
-
-    struct can_frame frame = {0};
-    int len = transfer_hex_msg(msg, strlen(msg));
-    memcpy(frame.data, msg, len);
-    frame.can_dlc = strlen(msg);
-    frame.can_id = fds[cur_fd].can_id | CAN_EFF_FLAG;
-
-    apix_send(ctx, cur_fd, &frame, sizeof(frame));
-}
-
-static void on_cmd_send(const char *cmd)
+static void on_cmd_srrpget(const char *cmd)
 {
     if (cur_fd == 0)
         return;
 
-    if (strcmp(cur_mode, "can") == 0)
-        return on_cmd_can_send(cmd);
-
+    char hdr[256] = {0};
     char msg[4096] = {0};
-    int nr = sscanf(cmd, "send %s", msg);
+    int nr = sscanf(cmd, "srrpget %s %s", hdr, msg);
+    if (nr != 2) {
+        printf("param error\n");
+        return;
+    }
+
+    struct srrp_packet *pac = srrp_new_request(node_id, hdr, msg);
+    if (strcmp(cur_mode, "can") == 0) {
+        struct can_frame frame = {0};
+        memcpy(frame.data, pac->raw, pac->len);
+        frame.can_dlc = strlen(msg);
+        frame.can_id = fds[cur_fd].can_id | CAN_EFF_FLAG;
+        apix_send(ctx, cur_fd, &frame, sizeof(frame));
+    } else {
+        apix_send(ctx, cur_fd, pac->raw, pac->len);
+    }
+    srrp_free(pac);
+}
+
+static int on_srrp(struct srrp_packet *req, struct srrp_packet **resp)
+{
+    uint16_t crc = crc16(req->header, req->header_len);
+    crc = crc16_crc(crc, req->data, req->data_len);
+    *resp = srrp_new_response(req->srcid, crc, req->header, "{msg:'...'}");
+    return 0;
+}
+
+static void on_cmd_srrpadd(const char *cmd)
+{
+    if (cur_fd == 0)
+        return;
+
+    char hdr[256] = {0};
+    char msg[4096] = {0};
+    sprintf(hdr, "/%d", node_id);
+    int nr = sscanf(cmd, "srrpadd %s %s", hdr + strlen(hdr), msg);
+    if (nr != 2) {
+        printf("param error\n");
+        return;
+    }
+
+    svchub_add_service(svc, hdr, on_srrp);
+}
+
+static void on_cmd_srrpdel(const char *cmd)
+{
+    if (cur_fd == 0)
+        return;
+
+    char hdr[256] = {0};
+    int nr = sscanf(cmd, "srrpdel %s", hdr);
     if (nr != 1) {
         printf("param error\n");
         return;
     }
 
-    int len = transfer_hex_msg(msg, strlen(msg));
-    apix_send(ctx, cur_fd, msg, len);
+    svchub_del_service(svc, hdr);
 }
 
 static void on_cmd_default(const char *cmd)
@@ -597,6 +676,7 @@ static const struct cli_cmd cli_cmds[] = {
     { "quit", on_cmd_quit, "quit cli" },
     { "exit", on_cmd_exit, "exit cur_mode or quit cli" },
     { "print", on_cmd_print, "print all|cur" },
+    { "env", on_cmd_env, "display environments" },
     { "ll", on_cmd_fds, "list fds" },
     { "fds", on_cmd_fds, "list fds" },
     { "use", on_cmd_use, "set frontend fd" },
@@ -608,7 +688,10 @@ static const struct cli_cmd cli_cmds[] = {
     { "open", on_cmd_open, "open fd" },
     { "close", on_cmd_close, "close fd" },
     { "send", on_cmd_send, "send msg" },
-    { "setid", on_cmd_can_setid, "set can id" },
+    { "setid", on_cmd_setid, "set node id" },
+    { "srrpget", on_cmd_srrpget, "srrpget hdr msg" },
+    { "srrpadd", on_cmd_srrpadd, "srrpadd hdr msg" },
+    { "srrpdel", on_cmd_srrpdel, "srrpdel hdr" },
     { NULL, NULL }
 };
 
@@ -642,6 +725,10 @@ int main(int argc, char *argv[])
     signal(SIGINT, signal_handler);
     signal(SIGQUIT, signal_handler);
 
+    srand(time(0));
+    node_id = rand() % 65536;
+    svc = svchub_new();
+
     pthread_t apix_pid;
     pthread_create(&apix_pid, NULL, apix_thread, NULL);
     pthread_t cli_pid;
@@ -653,5 +740,6 @@ int main(int argc, char *argv[])
 
     pthread_join(apix_pid, NULL);
     pthread_join(cli_pid, NULL);
+    svchub_destroy(svc);
     return 0;
 }
