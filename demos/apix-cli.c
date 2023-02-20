@@ -502,21 +502,24 @@ static void on_cmd_tcp_open(const char *cmd)
 
     char addr[64] = {0};
     int nr = sscanf(cmd, "open %s", addr);
-    if (nr == 1) {
-        int fd = apix_open_tcp_client(ctx, addr);
-        if (fd == -1) {
-            perror("open_tcp");
-            return;
-        }
-        apix_on_fd_pollin(ctx, fd, on_fd_pollin);
-        assert(fds[fd].fd == 0);
-        fds[fd].fd = fd;
-        snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
-        fds[fd].type = 'c';
-        fds[fd].mode = "tcp";
-        cur_fd = fd;
-        printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
+    if (nr != 1) {
+        printf("param error\n");
+        return;
     }
+
+    int fd = apix_open_tcp_client(ctx, addr);
+    if (fd == -1) {
+        perror("open_tcp");
+        return;
+    }
+    apix_on_fd_pollin(ctx, fd, on_fd_pollin);
+    assert(fds[fd].fd == 0);
+    fds[fd].fd = fd;
+    snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
+    fds[fd].type = 'c';
+    fds[fd].mode = "tcp";
+    cur_fd = fd;
+    printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
 }
 
 static void on_cmd_com_open(const char *cmd)
@@ -531,33 +534,36 @@ static void on_cmd_com_open(const char *cmd)
     int stop_bits = 1;
     int nr = sscanf(cmd, "open %s,%d,%d,%c,%d",
                     addr, &baud, &data_bits, &parity, &stop_bits);
-    if (nr == 1) {
-        int fd = apix_open_serial(ctx, addr);
-        if (fd == -1) {
-            perror("open_com");
-            return;
-        }
-        struct ioctl_serial_param sp = {
-            .baud = baud,
-            .bits = data_bits,
-            .parity = parity,
-            .stop = stop_bits,
-        };
-        int rc = apix_ioctl(ctx, fd, 0, (unsigned long)&sp);
-        if (rc == -1) {
-            apix_close(ctx, fd);
-            perror("ioctl_com");
-            return;
-        }
-        apix_on_fd_pollin(ctx, fd, on_fd_pollin);
-        assert(fds[fd].fd == 0);
-        fds[fd].fd = fd;
-        snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", strstr(cmd, "open "));
-        fds[fd].type = 'c';
-        fds[fd].mode = "com";
-        cur_fd = fd;
-        printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
+    if (nr != 5) {
+        printf("param error\n");
+        return;
     }
+
+    int fd = apix_open_serial(ctx, addr);
+    if (fd == -1) {
+        perror("open_com");
+        return;
+    }
+    struct ioctl_serial_param sp = {
+        .baud = baud,
+        .bits = data_bits,
+        .parity = parity,
+        .stop = stop_bits,
+    };
+    int rc = apix_ioctl(ctx, fd, 0, (unsigned long)&sp);
+    if (rc == -1) {
+        apix_close(ctx, fd);
+        perror("ioctl_com");
+        return;
+    }
+    apix_on_fd_pollin(ctx, fd, on_fd_pollin);
+    assert(fds[fd].fd == 0);
+    fds[fd].fd = fd;
+    snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", strstr(cmd, "open "));
+    fds[fd].type = 'c';
+    fds[fd].mode = "com";
+    cur_fd = fd;
+    printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
 }
 
 static void on_cmd_can_open(const char *cmd)
@@ -567,23 +573,31 @@ static void on_cmd_can_open(const char *cmd)
 
     char addr[64] = {0};
     int can_id = 0;
-    int nr = sscanf(cmd, "open %s:%d", addr, &can_id);
-    if (nr == 1) {
-        int fd = apix_open_can(ctx, addr);
-        if (fd == -1) {
-            perror("open_can");
-            return;
-        }
-        apix_on_fd_pollin(ctx, fd, on_can_pollin);
-        assert(fds[fd].fd == 0);
-        fds[fd].fd = fd;
-        snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", strstr(cmd, "open "));
-        fds[fd].type = 'c';
-        fds[fd].mode = "can";
-        fds[fd].can_id = can_id;
-        cur_fd = fd;
-        printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
+    int nr;
+    if (strstr(cmd, ":0x"))
+        nr = sscanf(cmd, "open %[^:]:0x%x", addr, &can_id);
+    else
+        nr = sscanf(cmd, "open %[^:]:%d", addr, &can_id);
+    if (nr != 2) {
+        printf("param error\n");
+        return;
     }
+
+    printf("can_id = %x\n", can_id);
+    int fd = apix_open_can(ctx, addr);
+    if (fd == -1) {
+        perror("open_can");
+        return;
+    }
+    apix_on_fd_pollin(ctx, fd, on_can_pollin);
+    assert(fds[fd].fd == 0);
+    fds[fd].fd = fd;
+    snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", strstr(cmd, "open "));
+    fds[fd].type = 'c';
+    fds[fd].mode = "can";
+    fds[fd].can_id = can_id;
+    cur_fd = fd;
+    printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
 }
 
 static void on_cmd_open(const char *cmd)
@@ -638,7 +652,7 @@ static void on_cmd_send(const char *cmd)
 static void on_cmd_setid(const char *cmd)
 {
     int id = 0;
-    int nr = sscanf(cmd, "setid %x", &id);
+    int nr = sscanf(cmd, "setid %d", &id);
     if (nr != 1) {
         printf("param error\n");
         return;
