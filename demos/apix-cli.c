@@ -69,7 +69,7 @@ static struct opt opttab[] = {
     INIT_OPT_NONE(),
 };
 
-static size_t transfer_hex_msg(char *buf, size_t len)
+static size_t transfer_hex_string(char *buf, size_t len)
 {
     int idx = 0;
     char tmp[3] = {0};
@@ -92,6 +92,17 @@ static size_t transfer_hex_msg(char *buf, size_t len)
 
     buf[idx] = 0;
     return idx; // new len
+}
+
+static void log_hex_string(const char *buf, size_t len)
+{
+    for (int i = 0; i < (int)len; i++) {
+        if (isprint(buf[i]))
+            printf("%c", buf[i]);
+        else
+            printf("_0x%.2x", buf[i]);
+    }
+    printf("\n");
 }
 
 static void close_fd(int fd)
@@ -190,9 +201,9 @@ static int on_can_pollin(int fd, const char *buf, size_t len)
     }
 
     if (frame->can_id & CAN_EFF_FLAG)
-        printf("extended <0x%08x> ", frame->can_id & CAN_EFF_MASK);
+        printf("ext <0x%08x> ", frame->can_id & CAN_EFF_MASK);
     else
-        printf("standard <0x%03x> ", frame->can_id & CAN_SFF_MASK);
+        printf("std <0x%03x> ", frame->can_id & CAN_SFF_MASK);
 
     if (frame->can_id & CAN_RTR_FLAG) {
         printf("remote request\n");
@@ -200,10 +211,7 @@ static int on_can_pollin(int fd, const char *buf, size_t len)
     }
 
     printf("[%d] ", frame->can_dlc);
-    for (int i = 0; i < frame->can_dlc; i++)
-        printf("%c", frame->data[i]);
-    printf("\n");
-
+    log_hex_string((char *)frame->data, frame->can_dlc);
     return sizeof(struct can_frame);
 }
 
@@ -614,7 +622,7 @@ static void on_cmd_send(const char *cmd)
         return;
     }
 
-    int len = transfer_hex_msg(msg, strlen(msg));
+    int len = transfer_hex_string(msg, strlen(msg));
 
     if (strcmp(cur_mode, "can") == 0) {
         struct can_frame frame = {0};
