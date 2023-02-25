@@ -1,11 +1,12 @@
 # Directories
-build/
+build*/
 include/
 lib/
 lib64
 bin/
 share/
 .cache/
+tmp/
 
 # Prerequisites
 *.d

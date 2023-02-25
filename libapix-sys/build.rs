@@ -11,7 +11,7 @@ fn main() {
     let mut cc_builder = cc::Build::new();
     cc_builder
         .out_dir("build");
-    add_c_files(&mut cc_builder, "src");
+    add_c_files(&mut cc_builder, "../src");
     cc_builder
         .compile("apix");
 

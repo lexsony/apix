@@ -1,0 +1,7 @@
+#include "../src/apix.h"
+#include "../src/apix-posix.h"
+#include "../src/srrp.h"
+#include "../src/svcx.h"
+#include "../src/log.h"
+#include "../src/atbuf.h"
+#include "../src/ringbuf.h"
