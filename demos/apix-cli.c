@@ -14,7 +14,6 @@
 #include <readline/readline.h>
 
 #include <apix/apix.h>
-#include <apix/apix-posix.h>
 #include <apix/srrp.h>
 #include <apix/log.h>
 #include <apix/atbuf.h>

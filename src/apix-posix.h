@@ -1,10 +1,9 @@
 #ifndef __APIX_POSIX_H
 #define __APIX_POSIX_H
 
-#if defined __unix__ || defined __linux__ || defined __APPLE__
+#if defined __unix__
 
 #include <stdint.h>
-#include "apix.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,6 +33,8 @@ extern "C" {
 #define SERIAL_ARG_PARITY_N 'N'
 #define SERIAL_ARG_STOP_1 1
 #define SERIAL_ARG_STOP_2 2
+
+struct apix;
 
 struct ioctl_serial_param {
     uint32_t baud;

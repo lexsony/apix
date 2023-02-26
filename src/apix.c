@@ -260,11 +260,11 @@ void apix_destroy(struct apix *ctx)
     free(ctx);
 }
 
-int apix_open(struct apix *ctx, const char *id, const char *addr)
+int apix_open(struct apix *ctx, const char *sinkid, const char *addr)
 {
     struct apisink *pos;
     list_for_each_entry(pos, &ctx->sinks, node) {
-        if (strcmp(pos->id, id) == 0) {
+        if (strcmp(pos->id, sinkid) == 0) {
             assert(pos->ops.open);
             return pos->ops.open(pos, addr);
         }

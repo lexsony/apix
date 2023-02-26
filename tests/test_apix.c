@@ -12,7 +12,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "apix.h"
-#include "apix-posix.h"
 #include "srrp.h"
 #include "crc16.h"
 #include "log.h"

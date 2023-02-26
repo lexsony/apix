@@ -3,6 +3,14 @@
 
 #include <stddef.h>
 
+#if defined __arm__ && !defined __unix__
+    #include "apix-stm32.h"
+#elif defined __unix__
+    #include "apix-posix.h"
+#else
+    #error unknown platform
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -22,7 +30,7 @@ int apix_poll(struct apix *ctx);
  * - treat it as UNIX style fd operations
  */
 
-int /*fd*/ apix_open(struct apix *ctx, const char *id, const char *addr);
+int /*fd*/ apix_open(struct apix *ctx, const char *sinkid, const char *addr);
 int apix_close(struct apix *ctx, int fd);
 int apix_ioctl(struct apix *ctx, int fd, unsigned int cmd, unsigned long arg);
 int apix_send(struct apix *ctx, int fd, const void *buf, size_t len);
