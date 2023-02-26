@@ -412,10 +412,10 @@ static struct apisink_operations tcp_c_ops = {
 };
 
 /**
- * serial
+ * com
  */
 
-static int serial_open(struct apisink *sink, const char *addr)
+static int com_open(struct apisink *sink, const char *addr)
 {
     int fd = open(addr, O_RDWR | O_NOCTTY | O_NDELAY);
     if (fd == -1) return -1;
@@ -427,19 +427,19 @@ static int serial_open(struct apisink *sink, const char *addr)
     list_add(&sinkfd->node_sink, &sink->sinkfds);
     list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
 
-    struct posix_sink *serial_sink = container_of(sink, struct posix_sink, sink);
-    FD_SET(fd, &serial_sink->fds);
-    serial_sink->nfds = fd + 1;
+    struct posix_sink *com_sink = container_of(sink, struct posix_sink, sink);
+    FD_SET(fd, &com_sink->fds);
+    com_sink->nfds = fd + 1;
 
     return fd;
 }
 
 static int
-serial_ioctl(struct apisink *sink, int fd, unsigned int cmd, unsigned long arg)
+com_ioctl(struct apisink *sink, int fd, unsigned int cmd, unsigned long arg)
 {
     UNUSED(sink);
     UNUSED(cmd);
-    struct ioctl_serial_param *sp = (struct ioctl_serial_param *)arg;
+    struct ioctl_com_param *sp = (struct ioctl_com_param *)arg;
     struct termios newtio, oldtio;
 
     if (tcgetattr(fd, &oldtio) != 0)
@@ -449,36 +449,36 @@ serial_ioctl(struct apisink *sink, int fd, unsigned int cmd, unsigned long arg)
     newtio.c_cflag |= (CLOCAL | CREAD);
     newtio.c_cflag &= ~CSIZE;
 
-    if (sp->baud == SERIAL_ARG_BAUD_9600) {
+    if (sp->baud == COM_ARG_BAUD_9600) {
         cfsetispeed(&newtio, B9600);
-    } else if (sp->baud == SERIAL_ARG_BAUD_115200) {
+    } else if (sp->baud == COM_ARG_BAUD_115200) {
         cfsetispeed(&newtio, B115200);
     } else {
         return -1;
     }
-    if (sp->bits == SERIAL_ARG_BITS_7) {
+    if (sp->bits == COM_ARG_BITS_7) {
         newtio.c_cflag |= CS7;
-    } else if (sp->bits == SERIAL_ARG_BITS_8) {
+    } else if (sp->bits == COM_ARG_BITS_8) {
         newtio.c_cflag |= CS8;
     } else {
         return -1;
     }
-    if (sp->parity == SERIAL_ARG_PARITY_O) {
+    if (sp->parity == COM_ARG_PARITY_O) {
         newtio.c_cflag |= PARENB;
         newtio.c_cflag |= PARODD;
         newtio.c_cflag |= (INPCK | ISTRIP);
-    } else if (sp->parity == SERIAL_ARG_PARITY_E) {
+    } else if (sp->parity == COM_ARG_PARITY_E) {
         newtio.c_cflag |= PARENB;
         newtio.c_cflag &= ~PARODD;
         newtio.c_cflag |= (INPCK | ISTRIP);
-    } else if (sp->parity == SERIAL_ARG_PARITY_N) {
+    } else if (sp->parity == COM_ARG_PARITY_N) {
         newtio.c_cflag &= ~PARENB;
     } else {
         return -1;
     }
-    if (sp->stop == SERIAL_ARG_STOP_1) {
+    if (sp->stop == COM_ARG_STOP_1) {
         newtio.c_cflag &= ~CSTOPB;
-    } else if (sp->stop == SERIAL_ARG_STOP_2) {
+    } else if (sp->stop == COM_ARG_STOP_2) {
         newtio.c_cflag |= CSTOPB;
     } else {
         return -1;
@@ -494,19 +494,19 @@ serial_ioctl(struct apisink *sink, int fd, unsigned int cmd, unsigned long arg)
     return 0;
 }
 
-static int serial_send(struct apisink *sink, int fd, const void *buf, size_t len)
+static int com_send(struct apisink *sink, int fd, const void *buf, size_t len)
 {
     UNUSED(sink);
     return write(fd, buf, len);
 }
 
-static int serial_recv(struct apisink *sink, int fd, void *buf, size_t size)
+static int com_recv(struct apisink *sink, int fd, void *buf, size_t size)
 {
     UNUSED(sink);
     return read(fd, buf, size);
 }
 
-static int serial_poll(struct apisink *sink)
+static int com_poll(struct apisink *sink)
 {
     struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
 
@@ -548,13 +548,13 @@ static int serial_poll(struct apisink *sink)
     return 0;
 }
 
-static struct apisink_operations serial_ops = {
-    .open = serial_open,
+static struct apisink_operations com_ops = {
+    .open = com_open,
     .close = __fd_close,
-    .ioctl = serial_ioctl,
-    .send = serial_send,
-    .recv = serial_recv,
-    .poll = serial_poll,
+    .ioctl = com_ioctl,
+    .send = com_send,
+    .recv = com_recv,
+    .poll = com_poll,
 };
 
 /**
@@ -685,10 +685,10 @@ int apix_enable_posix(struct apix *ctx)
     apisink_init(&tcp_c_sink->sink, APISINK_TCP_C, &tcp_c_ops);
     apix_sink_register(ctx, &tcp_c_sink->sink);
 
-    // serial
-    struct posix_sink *serial_sink = calloc(1, sizeof(struct posix_sink));
-    apisink_init(&serial_sink->sink, APISINK_SERIAL, &serial_ops);
-    apix_sink_register(ctx, &serial_sink->sink);
+    // com
+    struct posix_sink *com_sink = calloc(1, sizeof(struct posix_sink));
+    apisink_init(&com_sink->sink, APISINK_COM, &com_ops);
+    apix_sink_register(ctx, &com_sink->sink);
 
     // can
     struct posix_sink *can_sink = calloc(1, sizeof(struct posix_sink));
@@ -738,13 +738,13 @@ void apix_disable_posix(struct apix *ctx)
             free(tcp_c_sink);
         }
 
-        // serial
-        if (strcmp(pos->id, APISINK_SERIAL) == 0) {
-            struct posix_sink *serial_sink =
+        // com
+        if (strcmp(pos->id, APISINK_COM) == 0) {
+            struct posix_sink *com_sink =
                 container_of(pos, struct posix_sink, sink);
-            apix_sink_unregister(ctx, &serial_sink->sink);
-            apisink_fini(&serial_sink->sink);
-            free(serial_sink);
+            apix_sink_unregister(ctx, &com_sink->sink);
+            apisink_fini(&com_sink->sink);
+            free(com_sink);
         }
 
         // can

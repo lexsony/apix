@@ -305,10 +305,10 @@ static const struct apisink_operations tcp_c_ops = {
 };
 
 /**
- * serial
+ * com
  */
 
-static int serial_open(struct apisink *sink, const char *addr)
+static int com_open(struct apisink *sink, const char *addr)
 {
     int fd = open(addr, O_RDWR | O_NOCTTY);
     if (fd == -1) return -1;
@@ -323,7 +323,7 @@ static int serial_open(struct apisink *sink, const char *addr)
     return fd;
 }
 
-static int serial_close(struct apisink *sink, int fd)
+static int com_close(struct apisink *sink, int fd)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apisink(sink, fd);
     if (sinkfd == NULL)
@@ -334,26 +334,26 @@ static int serial_close(struct apisink *sink, int fd)
 }
 
 static int
-serial_ioctl(struct apisink *sink, int fd, unsigned int cmd, unsigned long arg)
+com_ioctl(struct apisink *sink, int fd, unsigned int cmd, unsigned long arg)
 {
     UNUSED(sink);
     UNUSED(cmd);
     return 0;
 }
 
-static int serial_send(struct apisink *sink, int fd, const void *buf, size_t len)
+static int com_send(struct apisink *sink, int fd, const void *buf, size_t len)
 {
     UNUSED(sink);
     return write(fd, buf, len);
 }
 
-static int serial_recv(struct apisink *sink, int fd, void *buf, size_t size)
+static int com_recv(struct apisink *sink, int fd, void *buf, size_t size)
 {
     UNUSED(sink);
     return read(fd, buf, size);
 }
 
-static int serial_poll(struct apisink *sink)
+static int com_poll(struct apisink *sink)
 {
     struct sinkfd *pos;
     list_for_each_entry(pos, &sink->sinkfds, node_sink) {
@@ -368,13 +368,13 @@ static int serial_poll(struct apisink *sink)
     return 0;
 }
 
-static const struct apisink_operations serial_ops = {
-    .open = serial_open,
-    .close = serial_close,
-    .ioctl = serial_ioctl,
-    .send = serial_send,
-    .recv = serial_recv,
-    .poll = serial_poll,
+static const struct apisink_operations com_ops = {
+    .open = com_open,
+    .close = com_close,
+    .ioctl = com_ioctl,
+    .send = com_send,
+    .recv = com_recv,
+    .poll = com_poll,
 };
 
 int apix_enable_stm32(struct apix *ctx)
@@ -389,10 +389,10 @@ int apix_enable_stm32(struct apix *ctx)
     apisink_init(&tcp_c_sink->sink, APISINK_STM32_TCP_C, &tcp_c_ops);
     apix_sink_register(ctx, &tcp_c_sink->sink);
 
-    // serial
-    struct posix_sink *serial_sink = calloc(1, sizeof(struct posix_sink));
-    apisink_init(&serial_sink->sink, APISINK_STM32_SERIAL, &serial_ops);
-    apix_sink_register(ctx, &serial_sink->sink);
+    // com
+    struct posix_sink *com_sink = calloc(1, sizeof(struct posix_sink));
+    apisink_init(&com_sink->sink, APISINK_STM32_COM, &com_ops);
+    apix_sink_register(ctx, &com_sink->sink);
 
     return 0;
 }
@@ -419,13 +419,13 @@ void apix_disable_stm32(struct apix *ctx)
             free(tcp_c_sink);
         }
 
-        // serial
-        if (strcmp(pos->id, APISINK_STM32_SERIAL) == 0) {
-            struct posix_sink *serial_sink =
+        // com
+        if (strcmp(pos->id, APISINK_STM32_COM) == 0) {
+            struct posix_sink *com_sink =
                 container_of(pos, struct posix_sink, sink);
-            apix_sink_unregister(ctx, &serial_sink->sink);
-            apisink_fini(&serial_sink->sink);
-            free(serial_sink);
+            apix_sink_unregister(ctx, &com_sink->sink);
+            apisink_fini(&com_sink->sink);
+            free(com_sink);
         }
     }
 }

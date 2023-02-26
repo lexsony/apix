@@ -538,12 +538,12 @@ static void on_cmd_com_open(const char *cmd)
         return;
     }
 
-    int fd = apix_open_serial(ctx, addr);
+    int fd = apix_open_com(ctx, addr);
     if (fd == -1) {
         perror("open_com");
         return;
     }
-    struct ioctl_serial_param sp = {
+    struct ioctl_com_param sp = {
         .baud = baud,
         .bits = data_bits,
         .parity = parity,
