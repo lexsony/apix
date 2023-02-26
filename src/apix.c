@@ -65,15 +65,15 @@ static void parse_packet(struct apix *ctx, struct sinkfd *sinkfd)
             req->fd = sinkfd->fd;
             req->crc16 = crc16(pac->header, pac->header_len);
             req->crc16 = crc16_crc(req->crc16, pac->data, pac->data_len);
-            INIT_LIST_HEAD(&req->node);
-            list_add(&req->node, &ctx->requests);
+            INIT_LIST_HEAD(&req->ln);
+            list_add(&req->ln, &ctx->requests);
         } else if (pac->leader == SRRP_RESPONSE_LEADER) {
             struct api_response *resp = malloc(sizeof(*resp));
             memset(resp, 0, sizeof(*resp));
             resp->pac = pac;
             resp->fd = sinkfd->fd;
-            INIT_LIST_HEAD(&resp->node);
-            list_add(&resp->node, &ctx->responses);
+            INIT_LIST_HEAD(&resp->ln);
+            list_add(&resp->ln, &ctx->responses);
         } else if (pac->leader == SRRP_SUBSCRIBE_LEADER ||
                    pac->leader == SRRP_UNSUBSCRIBE_LEADER ||
                    pac->leader == SRRP_PUBLISH_LEADER) {
@@ -81,8 +81,8 @@ static void parse_packet(struct apix *ctx, struct sinkfd *sinkfd)
             memset(tmsg, 0, sizeof(*tmsg));
             tmsg->pac = pac;
             tmsg->fd = sinkfd->fd;
-            INIT_LIST_HEAD(&tmsg->node);
-            list_add(&tmsg->node, &ctx->topic_msgs);
+            INIT_LIST_HEAD(&tmsg->ln);
+            list_add(&tmsg->ln, &ctx->topic_msgs);
         }
 
         atbuf_read_advance(sinkfd->rxbuf, pac->len);
@@ -93,7 +93,7 @@ static struct api_station *
 find_station(struct list_head *stations, uint16_t sttid)
 {
     struct api_station *pos;
-    list_for_each_entry(pos, stations, node) {
+    list_for_each_entry(pos, stations, ln) {
         if (pos->sttid == sttid) {
             return pos;
         }
@@ -105,7 +105,7 @@ static struct api_topic *
 find_topic(struct list_head *topics, const void *header, size_t len)
 {
     struct api_topic *pos;
-    list_for_each_entry(pos, topics, node) {
+    list_for_each_entry(pos, topics, ln) {
         if (memcmp(pos->header, header, len) == 0) {
             return pos;
         }
@@ -116,10 +116,10 @@ find_topic(struct list_head *topics, const void *header, size_t len)
 static void clear_unalive_station(struct apix *ctx)
 {
     struct api_station *pos, *n;
-    list_for_each_entry_safe(pos, n, &ctx->stations, node) {
+    list_for_each_entry_safe(pos, n, &ctx->stations, ln) {
         if (time(0) > pos->ts_alive + APIX_STATION_ALIVE_TIMEOUT / 1000) {
             LOG_DEBUG("clear unalive station: %x", pos->sttid);
-            list_del(&pos->node);
+            list_del(&pos->ln);
             free(pos);
         }
     }
@@ -132,15 +132,15 @@ static void add_station(struct apix *ctx, struct api_request *req)
     stt->sttid = req->pac->srcid;
     stt->ts_alive = time(0);
     stt->fd = req->fd;
-    INIT_LIST_HEAD(&stt->node);
-    list_add(&stt->node, &ctx->stations);
+    INIT_LIST_HEAD(&stt->ln);
+    list_add(&stt->ln, &ctx->stations);
 }
 
 static void topic_sub_handler(struct apix *ctx, struct api_topic_msg *tmsg)
 {
     struct api_topic *topic = NULL;
     struct api_topic *pos;
-    list_for_each_entry(pos, &ctx->topics, node) {
+    list_for_each_entry(pos, &ctx->topics, ln) {
         if (memcmp(pos->header, tmsg->pac->header, strlen(pos->header)) == 0) {
             topic = pos;
             break;
@@ -150,8 +150,8 @@ static void topic_sub_handler(struct apix *ctx, struct api_topic_msg *tmsg)
         topic = malloc(sizeof(*topic));
         memset(topic, 0, sizeof(*topic));
         snprintf(topic->header, sizeof(topic->header), "%s", tmsg->pac->header);
-        INIT_LIST_HEAD(&topic->node);
-        list_add(&topic->node, &ctx->topics);
+        INIT_LIST_HEAD(&topic->ln);
+        list_add(&topic->ln, &ctx->topics);
     }
     assert(topic);
     topic->fds[topic->nfds] = tmsg->fd;
@@ -163,7 +163,7 @@ static void topic_sub_handler(struct apix *ctx, struct api_topic_msg *tmsg)
 static void topic_unsub_handler(struct apix *ctx, struct api_topic_msg *tmsg)
 {
     struct api_topic *topic = NULL;
-    list_for_each_entry(topic, &ctx->topics, node) {
+    list_for_each_entry(topic, &ctx->topics, ln) {
         if (strcmp(topic->header, tmsg->pac->header) == 0) {
             break;
         }
@@ -211,47 +211,47 @@ void apix_destroy(struct apix *ctx)
 {
     {
         struct api_request *pos, *n;
-        list_for_each_entry_safe(pos, n, &ctx->requests, node)
+        list_for_each_entry_safe(pos, n, &ctx->requests, ln)
             api_request_delete(pos);
     }
 
     {
         struct api_response *pos, *n;
-        list_for_each_entry_safe(pos, n, &ctx->responses, node)
+        list_for_each_entry_safe(pos, n, &ctx->responses, ln)
             api_response_delete(pos);
     }
 
     {
         struct api_station *pos, *n;
-        list_for_each_entry_safe(pos, n, &ctx->stations, node) {
-            list_del_init(&pos->node);
+        list_for_each_entry_safe(pos, n, &ctx->stations, ln) {
+            list_del_init(&pos->ln);
             free(pos);
         }
     }
 
     {
         struct api_topic_msg *pos, *n;
-        list_for_each_entry_safe(pos, n, &ctx->topic_msgs, node)
+        list_for_each_entry_safe(pos, n, &ctx->topic_msgs, ln)
             api_topic_msg_delete(pos);
     }
 
     {
         struct api_topic *pos, *n;
-        list_for_each_entry_safe(pos, n, &ctx->topics, node) {
-            list_del_init(&pos->node);
+        list_for_each_entry_safe(pos, n, &ctx->topics, ln) {
+            list_del_init(&pos->ln);
             free(pos);
         }
     }
 
     {
         struct sinkfd *pos, *n;
-        list_for_each_entry_safe(pos, n, &ctx->sinkfds, node_ctx)
+        list_for_each_entry_safe(pos, n, &ctx->sinkfds, ln_ctx)
             sinkfd_destroy(pos);
     }
 
     {
         struct apisink *pos, *n;
-        list_for_each_entry_safe(pos, n, &ctx->sinks, node) {
+        list_for_each_entry_safe(pos, n, &ctx->sinks, ln) {
             apix_sink_unregister(pos->ctx, pos);
             apisink_fini(pos);
         }
@@ -263,7 +263,7 @@ void apix_destroy(struct apix *ctx)
 int apix_open(struct apix *ctx, const char *sinkid, const char *addr)
 {
     struct apisink *pos;
-    list_for_each_entry(pos, &ctx->sinks, node) {
+    list_for_each_entry(pos, &ctx->sinks, ln) {
         if (strcmp(pos->id, sinkid) == 0) {
             assert(pos->ops.open);
             return pos->ops.open(pos, addr);
@@ -327,7 +327,7 @@ static int apix_response(struct apix *ctx, int fd, struct srrp_packet *req, cons
 static void handle_request(struct apix *ctx)
 {
     struct api_request *pos, *n;
-    list_for_each_entry_safe(pos, n, &ctx->requests, node) {
+    list_for_each_entry_safe(pos, n, &ctx->requests, ln) {
         if (pos->state == API_REQUEST_ST_WAIT_RESPONSE) {
             if (time(0) < pos->ts_send + API_REQUEST_TIMEOUT / 1000)
                 continue;
@@ -372,11 +372,11 @@ static void handle_request(struct apix *ctx)
 static void handle_response(struct apix *ctx)
 {
     struct api_response *pos, *n;
-    list_for_each_entry_safe(pos, n, &ctx->responses, node) {
+    list_for_each_entry_safe(pos, n, &ctx->responses, ln) {
         LOG_INFO("poll < %d:%s?%s", pos->pac->srcid, pos->pac->header, pos->pac->data);
 
         struct api_request *pos_req, *n_req;
-        list_for_each_entry_safe(pos_req, n_req, &ctx->requests, node) {
+        list_for_each_entry_safe(pos_req, n_req, &ctx->requests, ln) {
             if (pos_req->crc16 == pos->pac->reqcrc16 &&
                 strcmp(pos_req->pac->header, pos->pac->header) == 0 &&
                 pos_req->pac->srcid == pos->pac->srcid) {
@@ -403,7 +403,7 @@ static void handle_response(struct apix *ctx)
 static void handle_topic_msg(struct apix *ctx)
 {
     struct api_topic_msg *pos, *n;
-    list_for_each_entry_safe(pos, n, &ctx->topic_msgs, node) {
+    list_for_each_entry_safe(pos, n, &ctx->topic_msgs, ln) {
         if (pos->pac->leader == SRRP_SUBSCRIBE_LEADER) {
             topic_sub_handler(ctx, pos);
             LOG_INFO("poll # %s?%s", pos->pac->header, pos->pac->data);
@@ -425,7 +425,7 @@ int apix_poll(struct apix *ctx)
 
     // poll each sink
     struct apisink *pos_sink;
-    list_for_each_entry(pos_sink, &ctx->sinks, node) {
+    list_for_each_entry(pos_sink, &ctx->sinks, ln) {
         if (pos_sink->ops.poll(pos_sink) != 0) {
             LOG_ERROR("%s", strerror(errno));
         }
@@ -433,7 +433,7 @@ int apix_poll(struct apix *ctx)
 
     // parse each sinkfds
     struct sinkfd *pos_fd;
-    list_for_each_entry(pos_fd, &ctx->sinkfds, node_ctx) {
+    list_for_each_entry(pos_fd, &ctx->sinkfds, ln_ctx) {
         if (timercmp(&ctx->poll_ts, &pos_fd->ts_poll_recv, <)) {
             ctx->poll_cnt++;
 
@@ -530,7 +530,7 @@ void apisink_init(struct apisink *sink, const char *name,
 {
     assert(strlen(name) < APISINK_ID_SIZE);
     INIT_LIST_HEAD(&sink->sinkfds);
-    INIT_LIST_HEAD(&sink->node);
+    INIT_LIST_HEAD(&sink->ln);
     snprintf(sink->id, sizeof(sink->id), "%s", name);
     sink->ops = *ops;
     sink->ctx = NULL;
@@ -539,7 +539,7 @@ void apisink_init(struct apisink *sink, const char *name,
 void apisink_fini(struct apisink *sink)
 {
     struct sinkfd *pos, *n;
-    list_for_each_entry_safe(pos, n, &sink->sinkfds, node_sink)
+    list_for_each_entry_safe(pos, n, &sink->sinkfds, ln_sink)
         sinkfd_destroy(pos);
 
     // delete from apix outside
@@ -551,12 +551,12 @@ void apisink_fini(struct apisink *sink)
 int apix_sink_register(struct apix *ctx, struct apisink *sink)
 {
     struct apisink *pos;
-    list_for_each_entry(pos, &ctx->sinks, node) {
+    list_for_each_entry(pos, &ctx->sinks, ln) {
         if (strcmp(sink->id, pos->id) == 0)
             return -1;
     }
 
-    list_add(&sink->node, &ctx->sinks);
+    list_add(&sink->ln, &ctx->sinks);
     sink->ctx = ctx;
     return 0;
 }
@@ -564,7 +564,7 @@ int apix_sink_register(struct apix *ctx, struct apisink *sink)
 void apix_sink_unregister(struct apix *ctx, struct apisink *sink)
 {
     UNUSED(ctx);
-    list_del_init(&sink->node);
+    list_del_init(&sink->ln);
     sink->ctx = NULL;
 }
 
@@ -577,8 +577,8 @@ struct sinkfd *sinkfd_new()
     //sinkfd->txbuf = atbuf_new(0);
     sinkfd->rxbuf = atbuf_new(0);
     sinkfd->sink = NULL;
-    INIT_LIST_HEAD(&sinkfd->node_sink);
-    INIT_LIST_HEAD(&sinkfd->node_ctx);
+    INIT_LIST_HEAD(&sinkfd->ln_sink);
+    INIT_LIST_HEAD(&sinkfd->ln_ctx);
     return sinkfd;
 }
 
@@ -587,8 +587,8 @@ void sinkfd_destroy(struct sinkfd *sinkfd)
     //atbuf_delete(sinkfd->txbuf);
     atbuf_delete(sinkfd->rxbuf);
     sinkfd->sink = NULL;
-    list_del_init(&sinkfd->node_sink);
-    list_del_init(&sinkfd->node_ctx);
+    list_del_init(&sinkfd->ln_sink);
+    list_del_init(&sinkfd->ln_ctx);
     if (sinkfd->events.on_close)
         sinkfd->events.on_close(sinkfd->fd);
     free(sinkfd);
@@ -597,7 +597,7 @@ void sinkfd_destroy(struct sinkfd *sinkfd)
 struct sinkfd *find_sinkfd_in_apix(struct apix *ctx, int fd)
 {
     struct sinkfd *pos, *n;
-    list_for_each_entry_safe(pos, n, &ctx->sinkfds, node_ctx) {
+    list_for_each_entry_safe(pos, n, &ctx->sinkfds, ln_ctx) {
         if (pos->fd == fd)
             return pos;
     }
@@ -607,7 +607,7 @@ struct sinkfd *find_sinkfd_in_apix(struct apix *ctx, int fd)
 struct sinkfd *find_sinkfd_in_apisink(struct apisink *sink, int fd)
 {
     struct sinkfd *pos, *n;
-    list_for_each_entry_safe(pos, n, &sink->sinkfds, node_sink) {
+    list_for_each_entry_safe(pos, n, &sink->sinkfds, ln_sink) {
         if (pos->fd == fd)
             return pos;
     }

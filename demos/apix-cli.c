@@ -37,7 +37,7 @@ struct fd_struct {
 };
 
 struct service {
-    struct list_head node;
+    struct list_head ln;
     char header[256];
     char msg[1024];
 };
@@ -122,7 +122,7 @@ static void close_fd(int fd)
 static int on_srrp(struct srrp_packet *req, struct srrp_packet **resp)
 {
     struct service *pos;
-    list_for_each_entry(pos, &services, node) {
+    list_for_each_entry(pos, &services, ln) {
         if (strncmp(pos->header, req->header, strlen(pos->header)) == 0) {
             *resp = srrp_new_response(req->srcid, srrp_crc(req), req->header, pos->msg);
             return 0;
@@ -706,8 +706,8 @@ static void on_cmd_srrpadd(const char *cmd)
     assert(serv);
     snprintf(serv->header, sizeof(serv->header), "%s", hdr);
     snprintf(serv->msg, sizeof(serv->msg), "%s", msg);
-    INIT_LIST_HEAD(&serv->node);
-    list_add(&serv->node, &services);
+    INIT_LIST_HEAD(&serv->ln);
+    list_add(&serv->ln, &services);
 }
 
 static void on_cmd_srrpdel(const char *cmd)
@@ -725,9 +725,9 @@ static void on_cmd_srrpdel(const char *cmd)
     svchub_del_service(svc, hdr);
 
     struct service *pos;
-    list_for_each_entry(pos, &services, node) {
+    list_for_each_entry(pos, &services, ln) {
         if (strncmp(pos->header, hdr, strlen(pos->header)) == 0) {
-            list_del(&pos->node);
+            list_del(&pos->ln);
             free(pos);
         }
     }
@@ -736,7 +736,7 @@ static void on_cmd_srrpdel(const char *cmd)
 static void on_cmd_srrpinfo(const char *cmd)
 {
     struct service *pos;
-    list_for_each_entry(pos, &services, node) {
+    list_for_each_entry(pos, &services, ln) {
         printf("hdr: %s, msg: %s\n", pos->header, pos->msg);
     }
 }

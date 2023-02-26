@@ -69,8 +69,8 @@ static int tcp_s_open(struct apisink *sink, const char *addr)
     sinkfd->type = 'l';
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
     sinkfd->sink = sink;
-    list_add(&sinkfd->node_sink, &sink->sinkfds);
-    list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
+    list_add(&sinkfd->ln_sink, &sink->sinkfds);
+    list_add(&sinkfd->ln_ctx, &sink->ctx->sinkfds);
 
     struct posix_sink *tcp_s_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &tcp_s_sink->fds);
@@ -121,7 +121,7 @@ static int tcp_s_poll(struct apisink *sink)
     }
 
     struct sinkfd *pos, *n;
-    list_for_each_entry_safe(pos, n, &sink->sinkfds, node_sink) {
+    list_for_each_entry_safe(pos, n, &sink->sinkfds, ln_sink) {
         if (nr_recv_fds == 0) break;
 
         if (!FD_ISSET(pos->fd, &recvfds))
@@ -141,8 +141,8 @@ static int tcp_s_poll(struct apisink *sink)
         //    struct sinkfd *sinkfd = sinkfd_new();
         //    sinkfd->fd = newfd;
         //    sinkfd->sink = sink;
-        //    list_add(&sinkfd->node_sink, &sink->sinkfds);
-        //    list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
+        //    list_add(&sinkfd->ln_sink, &sink->sinkfds);
+        //    list_add(&sinkfd->ln_ctx, &sink->ctx->sinkfds);
 
         //    if (tcp_s_sink->nfds < newfd + 1)
         //        tcp_s_sink->nfds = newfd + 1;
@@ -213,8 +213,8 @@ static int tcp_c_open(struct apisink *sink, const char *addr)
     sinkfd->type = 'l';
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
     sinkfd->sink = sink;
-    list_add(&sinkfd->node_sink, &sink->sinkfds);
-    list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
+    list_add(&sinkfd->ln_sink, &sink->sinkfds);
+    list_add(&sinkfd->ln_ctx, &sink->ctx->sinkfds);
 
     struct posix_sink *tcp_c_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &tcp_c_sink->fds);
@@ -268,7 +268,7 @@ static int tcp_c_poll(struct apisink *sink)
     }
 
     struct sinkfd *pos, *n;
-    list_for_each_entry_safe(pos, n, &sink->sinkfds, node_sink) {
+    list_for_each_entry_safe(pos, n, &sink->sinkfds, ln_sink) {
         if (nr_recv_fds == 0) break;
 
         if (!FD_ISSET(pos->fd, &recvfds))
@@ -317,8 +317,8 @@ static int com_open(struct apisink *sink, const char *addr)
     sinkfd->fd = fd;
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
     sinkfd->sink = sink;
-    list_add(&sinkfd->node_sink, &sink->sinkfds);
-    list_add(&sinkfd->node_ctx, &sink->ctx->sinkfds);
+    list_add(&sinkfd->ln_sink, &sink->sinkfds);
+    list_add(&sinkfd->ln_ctx, &sink->ctx->sinkfds);
 
     return fd;
 }
@@ -356,7 +356,7 @@ static int com_recv(struct apisink *sink, int fd, void *buf, size_t size)
 static int com_poll(struct apisink *sink)
 {
     struct sinkfd *pos;
-    list_for_each_entry(pos, &sink->sinkfds, node_sink) {
+    list_for_each_entry(pos, &sink->sinkfds, ln_sink) {
         int nr = read(pos->fd, atbuf_write_pos(pos->rxbuf), atbuf_spare(pos->rxbuf));
         if (nr == 0) continue;
         if (nr == -1) {
@@ -400,7 +400,7 @@ int apix_enable_stm32(struct apix *ctx)
 void apix_disable_stm32(struct apix *ctx)
 {
     struct apisink *pos, *n;
-    list_for_each_entry_safe(pos, n, &ctx->sinks, node) {
+    list_for_each_entry_safe(pos, n, &ctx->sinks, ln) {
         // tcp_s
         if (strcmp(pos->id, APISINK_STM32_TCP_S) == 0) {
             struct posix_sink *tcp_s_sink =

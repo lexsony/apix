@@ -64,7 +64,7 @@ struct apisink {
     struct apisink_operations ops;
     struct apix *ctx;
     struct list_head sinkfds;
-    struct list_head node;
+    struct list_head ln;
 };
 
 void apisink_init(struct apisink *sink, const char *id,
@@ -94,8 +94,8 @@ struct sinkfd {
         fd_pollin_func_t on_pollin;
         fd_pollout_func_t on_pollout;
     } events;
-    struct list_head node_sink;
-    struct list_head node_ctx;
+    struct list_head ln_sink;
+    struct list_head ln_ctx;
 };
 
 struct sinkfd *sinkfd_new();
@@ -118,52 +118,52 @@ struct api_request {
     time_t ts_send;
     int fd;
     uint16_t crc16;
-    struct list_head node;
+    struct list_head ln;
 };
 
 struct api_response {
     struct srrp_packet *pac;
     int fd;
-    struct list_head node;
+    struct list_head ln;
 };
 
 struct api_station {
     uint16_t sttid;
     time_t ts_alive;
     int fd;
-    struct list_head node;
+    struct list_head ln;
 };
 
 struct api_topic_msg {
     struct srrp_packet *pac;
     int fd;
-    struct list_head node;
+    struct list_head ln;
 };
 
 struct api_topic {
     char header[API_HEADER_SIZE];
     int fds[API_TOPIC_SUBSCRIBE_MAX];
     int nfds;
-    struct list_head node;
+    struct list_head ln;
 };
 
 #define api_request_delete(req) \
 { \
-    list_del(&req->node); \
+    list_del(&req->ln); \
     srrp_free(req->pac); \
     free(req); \
 }
 
 #define api_response_delete(resp) \
 { \
-    list_del(&resp->node); \
+    list_del(&resp->ln); \
     srrp_free(resp->pac); \
     free(resp); \
 }
 
 #define api_topic_msg_delete(tmsg) \
 { \
-    list_del(&tmsg->node); \
+    list_del(&tmsg->ln); \
     srrp_free(tmsg->pac); \
     free(tmsg); \
 }
