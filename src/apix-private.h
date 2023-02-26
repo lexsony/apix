@@ -20,7 +20,6 @@
 #define API_REQUEST_TIMEOUT 3000 /*ms*/
 #define PARSE_PACKET_TIMEOUT 1000 /*ms*/
 #define APIX_IDLE_MAX (1 * 1000 * 1000) /*us*/
-#define APIX_STATION_ALIVE_TIMEOUT (600 * 1000) /*ms*/
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,7 +32,6 @@ extern "C" {
 struct apix {
     struct list_head requests;
     struct list_head responses;
-    struct list_head stations;
     struct list_head topic_msgs;
     struct list_head topics;
     struct list_head sinkfds;
@@ -84,16 +82,21 @@ struct sinkfd {
     int fd;
     char type; /* c: connect, l: listen, a: accept */
     char addr[SINKFD_ADDR_SIZE];
+
     //atbuf_t *txbuf;
     atbuf_t *rxbuf;
+
+    uint32_t nodeid; /* nodeid of accept always equal remote connect */
     struct timeval ts_poll_recv;
-    struct apisink *sink;
+
     struct apix_events {
         fd_close_func_t on_close;
         fd_accept_func_t on_accept;
         fd_pollin_func_t on_pollin;
         fd_pollout_func_t on_pollout;
     } events;
+
+    struct apisink *sink;
     struct list_head ln_sink;
     struct list_head ln_ctx;
 };
@@ -103,11 +106,11 @@ void sinkfd_destroy();
 
 struct sinkfd *find_sinkfd_in_apix(struct apix *ctx, int fd);
 struct sinkfd *find_sinkfd_in_apisink(struct apisink *sink, int fd);
+struct sinkfd *find_sinkfd_by_nodeid(struct apix *ctx, int nodeid);
 
 /**
  * api_request
  * api_response
- * api_station
  * api_topic
  */
 
@@ -123,13 +126,6 @@ struct api_request {
 
 struct api_response {
     struct srrp_packet *pac;
-    int fd;
-    struct list_head ln;
-};
-
-struct api_station {
-    uint16_t sttid;
-    time_t ts_alive;
     int fd;
     struct list_head ln;
 };

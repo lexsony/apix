@@ -89,18 +89,6 @@ static void parse_packet(struct apix *ctx, struct sinkfd *sinkfd)
     }
 }
 
-static struct api_station *
-find_station(struct list_head *stations, uint16_t sttid)
-{
-    struct api_station *pos;
-    list_for_each_entry(pos, stations, ln) {
-        if (pos->sttid == sttid) {
-            return pos;
-        }
-    }
-    return NULL;
-}
-
 static struct api_topic *
 find_topic(struct list_head *topics, const void *header, size_t len)
 {
@@ -111,29 +99,6 @@ find_topic(struct list_head *topics, const void *header, size_t len)
         }
     }
     return NULL;
-}
-
-static void clear_unalive_station(struct apix *ctx)
-{
-    struct api_station *pos, *n;
-    list_for_each_entry_safe(pos, n, &ctx->stations, ln) {
-        if (time(0) > pos->ts_alive + APIX_STATION_ALIVE_TIMEOUT / 1000) {
-            LOG_DEBUG("clear unalive station: %x", pos->sttid);
-            list_del(&pos->ln);
-            free(pos);
-        }
-    }
-}
-
-static void add_station(struct apix *ctx, struct api_request *req)
-{
-    struct api_station *stt = malloc(sizeof(*stt));
-    memset(stt, 0, sizeof(*stt));
-    stt->sttid = req->pac->srcid;
-    stt->ts_alive = time(0);
-    stt->fd = req->fd;
-    INIT_LIST_HEAD(&stt->ln);
-    list_add(&stt->ln, &ctx->stations);
 }
 
 static void topic_sub_handler(struct apix *ctx, struct api_topic_msg *tmsg)
@@ -199,7 +164,6 @@ struct apix *apix_new()
     bzero(ctx, sizeof(*ctx));
     INIT_LIST_HEAD(&ctx->requests);
     INIT_LIST_HEAD(&ctx->responses);
-    INIT_LIST_HEAD(&ctx->stations);
     INIT_LIST_HEAD(&ctx->topic_msgs);
     INIT_LIST_HEAD(&ctx->topics);
     INIT_LIST_HEAD(&ctx->sinkfds);
@@ -219,14 +183,6 @@ void apix_destroy(struct apix *ctx)
         struct api_response *pos, *n;
         list_for_each_entry_safe(pos, n, &ctx->responses, ln)
             api_response_delete(pos);
-    }
-
-    {
-        struct api_station *pos, *n;
-        list_for_each_entry_safe(pos, n, &ctx->stations, ln) {
-            list_del_init(&pos->ln);
-            free(pos);
-        }
     }
 
     {
@@ -339,26 +295,45 @@ static void handle_request(struct apix *ctx)
 
         LOG_INFO("poll > %d:%s?%s", pos->pac->srcid, pos->pac->header, pos->pac->data);
 
-        struct api_station *src = find_station(&ctx->stations, pos->pac->srcid);
+        struct sinkfd *src = find_sinkfd_in_apix(ctx, pos->fd);
         if (src == NULL) {
-            add_station(ctx, pos);
+            api_request_delete(pos);
+            continue;
+        }
+
+        if (pos->pac->srcid == 0) {
+            apix_response(ctx, pos->fd, pos->pac, "NODEID SHOULD NOT BE ZERO");
+            api_request_delete(pos);
+            continue;
+        }
+
+        struct sinkfd *tmp = find_sinkfd_by_nodeid(ctx, pos->pac->srcid);
+        if (tmp != NULL && tmp != src) {
+            apix_response(ctx, pos->fd, pos->pac, "NODEID HAVE BEEN USED");
+            api_request_delete(pos);
+            continue;
+        }
+
+        if (src->nodeid == 0) {
+            src->nodeid = pos->pac->srcid;
         } else {
-            // update station fd
-            if (src->fd != pos->fd)
-                src->fd = pos->fd;
-            src->ts_alive = time(0);
+            if (src->nodeid != pos->pac->srcid) {
+                apix_response(ctx, pos->fd, pos->pac, "NODEID SHOULD NOT CHANGE");
+                api_request_delete(pos);
+                continue;
+            }
         }
 
         int dstid = 0;
         int nr = sscanf(pos->pac->header, "/%d/", &dstid);
         if (nr != 1) {
-            apix_response(ctx, pos->fd, pos->pac, "STATION NOT FOUND");
+            apix_response(ctx, pos->fd, pos->pac, "DESTINATION FORMAT ERROR");
             api_request_delete(pos);
             continue;
         }
-        struct api_station *dst = find_station(&ctx->stations, dstid);
+        struct sinkfd *dst = find_sinkfd_by_nodeid(ctx, dstid);
         if (dst == NULL) {
-            apix_response(ctx, pos->fd, pos->pac, "STATION NOT FOUND");
+            apix_response(ctx, pos->fd, pos->pac, "DESTINATION NOT FOUND");
             api_request_delete(pos);
             continue;
         }
@@ -384,16 +359,6 @@ static void handle_response(struct apix *ctx)
                 api_request_delete(pos_req);
                 break;
             }
-        }
-
-        int dstid = 0;
-        int nr = sscanf(pos->pac->header, "/%d/", &dstid);
-        if (nr == 1) {
-            struct api_station *dst = find_station(&ctx->stations, dstid);
-            if (!dst)
-                LOG_WARN("fake station: %d", dstid);
-            else
-                dst->ts_alive = time(0);
         }
 
         api_response_delete(pos);
@@ -478,9 +443,6 @@ int apix_poll(struct apix *ctx)
     handle_request(ctx);
     handle_response(ctx);
     handle_topic_msg(ctx);
-
-    // clear station which is not alive
-    clear_unalive_station(ctx);
 
     return 0;
 }
@@ -572,10 +534,11 @@ struct sinkfd *sinkfd_new()
 {
     struct sinkfd *sinkfd = malloc(sizeof(struct sinkfd));
     memset(sinkfd, 0, sizeof(*sinkfd));
-    sinkfd->fd = 0;
+    sinkfd->fd = -1;
     sinkfd->type = 0;
     //sinkfd->txbuf = atbuf_new(0);
     sinkfd->rxbuf = atbuf_new(0);
+    sinkfd->nodeid = 0;
     sinkfd->sink = NULL;
     INIT_LIST_HEAD(&sinkfd->ln_sink);
     INIT_LIST_HEAD(&sinkfd->ln_ctx);
@@ -609,6 +572,16 @@ struct sinkfd *find_sinkfd_in_apisink(struct apisink *sink, int fd)
     struct sinkfd *pos, *n;
     list_for_each_entry_safe(pos, n, &sink->sinkfds, ln_sink) {
         if (pos->fd == fd)
+            return pos;
+    }
+    return NULL;
+}
+
+struct sinkfd *find_sinkfd_by_nodeid(struct apix *ctx, int nodeid)
+{
+    struct sinkfd *pos, *n;
+    list_for_each_entry_safe(pos, n, &ctx->sinkfds, ln_ctx) {
+        if (pos->nodeid == nodeid)
             return pos;
     }
     return NULL;
