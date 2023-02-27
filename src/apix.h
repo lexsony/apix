@@ -2,6 +2,7 @@
 #define __APIX_H
 
 #include <stddef.h>
+#include "srrp.h"
 
 #if defined __arm__ && !defined __unix__
     #include "apix-stm32.h"
@@ -18,12 +19,11 @@ extern "C" {
 struct apix;
 
 /**
- * apix is designed with poll mechanism
+ * apix init & fini
  */
 
 struct apix *apix_new();
 void apix_destroy(struct apix *ctx);
-int apix_poll(struct apix *ctx);
 
 /**
  * apix fd operations
@@ -35,6 +35,11 @@ int apix_close(struct apix *ctx, int fd);
 int apix_ioctl(struct apix *ctx, int fd, unsigned int cmd, unsigned long arg);
 int apix_send(struct apix *ctx, int fd, const void *buf, size_t len);
 int apix_recv(struct apix *ctx, int fd, void *buf, size_t size);
+
+/**
+ * apix is designed with poll mechanism
+ */
+int apix_poll(struct apix *ctx);
 
 /**
  * apix_on_fd_close
@@ -65,6 +70,32 @@ int apix_on_fd_pollin(struct apix *ctx, int fd, fd_pollin_func_t func);
  */
 typedef int (*fd_pollout_func_t)(int fd, const char *buf, size_t len);
 int apix_on_fd_pollout(struct apix *ctx, int fd, fd_pollout_func_t func);
+
+/**
+ * apix_enable_srrp_mode
+ * - enable srrp mode
+ */
+int apix_enable_srrp_mode(struct apix *ctx, int fd, uint32_t nodeid);
+
+/**
+ * apix_enable_srrp_mode
+ * - enable srrp mode
+ */
+int apix_disable_srrp_mode(struct apix *ctx, int fd);
+
+/**
+ * apix_on_srrp_request
+ * - called when received srrp requests
+ */
+typedef void (*srrp_request_func_t)(int fd, struct srrp_packet *req, struct srrp_packet **resp);
+int apix_on_srrp_request(struct apix *ctx, int fd, srrp_request_func_t func);
+
+/**
+ * apix_on_srrp_response
+ * - called when received srrp responses
+ */
+typedef void (*srrp_response_func_t)(int fd, struct srrp_packet *resp);
+int apix_on_srrp_response(struct apix *ctx, int fd, srrp_response_func_t func);
 
 #ifdef __cplusplus
 }

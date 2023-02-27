@@ -155,6 +155,7 @@ static int unix_s_poll(struct apisink *sink)
             struct sinkfd *sinkfd = sinkfd_new();
             sinkfd->fd = newfd;
             sinkfd->type = 'a';
+            sinkfd->srrp_mode = pos->srrp_mode;
             sinkfd->sink = sink;
             list_add(&sinkfd->ln_sink, &sink->sinkfds);
             list_add(&sinkfd->ln_ctx, &sink->ctx->sinkfds);

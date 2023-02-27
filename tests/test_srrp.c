@@ -15,36 +15,39 @@ static void test_srrp_request_reponse(void **status)
     struct srrp_packet *txpac = NULL;
     struct srrp_packet *rxpac = NULL;
     char buf[1024] = {0};
+    size_t buf_idx = 0;
 
     // 1
-    txpac = srrp_new_request(
-        0x8888, "/hello/x", "{name:'yon',age:'18',equip:['hat','shoes']}");
+    txpac = srrp_new_request(0x3333, 0x8888, "/hello/x",
+                             "j:{name:'yon',age:'18',equip:['hat','shoes']}");
     assert_true(txpac);
     rxpac = srrp_parse(txpac->raw);
     assert_true(rxpac);
-    assert_true(rxpac->len == strlen(txpac->raw) + 1);
+    assert_true(rxpac->len == txpac->len);
     assert_true(rxpac->leader == '>');
     assert_true(rxpac->seat == '$');
-    assert_true(rxpac->srcid == 0x8888);
+    assert_true(rxpac->srcid == 0x3333);
+    assert_true(rxpac->dstid == 0x8888);
     assert_true(memcmp(rxpac->header, "/hello/x", rxpac->header_len) == 0);
-    uint16_t crc = crc16(rxpac->header, rxpac->header_len);
-    crc = crc16_crc(crc, rxpac->data, rxpac->data_len);
-    memcpy(buf, txpac->raw, strlen(txpac->raw));
+    uint16_t crc = rxpac->crc16;
+    memcpy(buf, txpac->raw, txpac->len);
+    buf_idx = txpac->len;
     srrp_free(txpac);
     srrp_free(rxpac);
 
     // 2
     txpac = srrp_new_response(
-        0x8888, crc, "/hello/x", "{err:0,errmsg:'succ',data:{msg:'world'}}");
+        0x8888, 0x3333, crc, "/hello/x", "j:{err:0,errmsg:'succ',data:{msg:'world'}}");
     rxpac = srrp_parse(txpac->raw);
     assert_true(rxpac);
-    assert_true(rxpac->len == strlen(txpac->raw) + 1);
+    assert_true(rxpac->len == txpac->len);
     assert_true(rxpac->leader == '<');
     assert_true(rxpac->seat == '$');
     assert_true(rxpac->srcid == 0x8888);
+    assert_true(rxpac->dstid == 0x3333);
     assert_true(rxpac->reqcrc16 == crc);
     assert_true(memcmp(rxpac->header, "/hello/x", rxpac->header_len) == 0);
-    memcpy(buf + strlen(buf) + 1, txpac->raw, strlen(txpac->raw));
+    memcpy(buf + buf_idx, txpac->raw, txpac->len);
     srrp_free(txpac);
     srrp_free(rxpac);
 
@@ -53,7 +56,8 @@ static void test_srrp_request_reponse(void **status)
     assert_true(rxpac);
     assert_true(rxpac->leader == '>');
     assert_true(rxpac->seat == '$');
-    assert_true(rxpac->srcid == 0x8888);
+    assert_true(rxpac->srcid == 0x3333);
+    assert_true(rxpac->dstid == 0x8888);
     assert_true(memcmp(rxpac->header, "/hello/x", rxpac->header_len) == 0);
     int len = rxpac->len;
     srrp_free(rxpac);
@@ -63,6 +67,7 @@ static void test_srrp_request_reponse(void **status)
     assert_true(rxpac->leader == '<');
     assert_true(rxpac->seat == '$');
     assert_true(rxpac->srcid == 0x8888);
+    assert_true(rxpac->dstid == 0x3333);
     assert_true(rxpac->reqcrc16 == crc);
     assert_true(memcmp(rxpac->header, "/hello/x", rxpac->header_len) == 0);
     srrp_free(rxpac);
@@ -75,16 +80,16 @@ static void test_srrp_subscribe_publish(void **status)
     struct srrp_packet *pub = NULL;
     struct srrp_packet *pac = NULL;
 
-    sub = srrp_new_subscribe("/motor/speed", "{ack:0,cache:100}");
-    unsub = srrp_new_unsubscribe("/motor/speed");
-    pub = srrp_new_publish("/motor/speed", "{speed:12,voltage:24}");
+    sub = srrp_new_subscribe("/motor/speed", "j:{ack:0,cache:100}");
+    unsub = srrp_new_unsubscribe("/motor/speed", "j:{}");
+    pub = srrp_new_publish("/motor/speed", "j:{speed:12,voltage:24}");
     assert_true(sub);
     assert_true(unsub);
     assert_true(pub);
 
     pac = srrp_parse(sub->raw);
     assert_true(pac);
-    assert_true(pac->len == strlen(sub->raw) + 1);
+    assert_true(pac->len == sub->len);
     assert_true(pac->leader == '#');
     assert_true(pac->seat == '$');
     assert_true(memcmp(pac->header, "/motor/speed", pac->header_len) == 0);
@@ -92,7 +97,7 @@ static void test_srrp_subscribe_publish(void **status)
 
     pac = srrp_parse(unsub->raw);
     assert_true(pac);
-    assert_true(pac->len == strlen(unsub->raw) + 1);
+    assert_true(pac->len == unsub->len);
     assert_true(pac->leader == '%');
     assert_true(pac->seat == '$');
     assert_true(memcmp(pac->header, "/motor/speed", pac->header_len) == 0);
@@ -100,21 +105,21 @@ static void test_srrp_subscribe_publish(void **status)
 
     pac = srrp_parse(pub->raw);
     assert_true(pac);
-    assert_true(pac->len == strlen(pub->raw) + 1);
+    assert_true(pac->len == pub->len);
     assert_true(pac->leader == '@');
     assert_true(pac->seat == '$');
     assert_true(memcmp(pac->header, "/motor/speed", pac->header_len) == 0);
 
-    int buf_len = strlen(sub->raw) + strlen(pub->raw) + 2;
+    int buf_len = sub->len + pub->len;
     char *buf = malloc(buf_len);
     memset(buf, 0, buf_len);
-    memcpy(buf, sub->raw, strlen(sub->raw));
-    memcpy(buf + strlen(sub->raw) + 1, pub->raw, strlen(pub->raw));
+    memcpy(buf, sub->raw, sub->len);
+    memcpy(buf + sub->len, pub->raw, pub->len);
     srrp_free(pac);
 
     pac = srrp_parse(buf);
     assert_true(pac);
-    assert_true(pac->len == strlen(sub->raw) + 1);
+    assert_true(pac->len == sub->len);
     assert_true(pac->leader == '#');
     assert_true(pac->seat == '$');
     assert_true(memcmp(pac->header, "/motor/speed", pac->header_len) == 0);
@@ -123,7 +128,7 @@ static void test_srrp_subscribe_publish(void **status)
 
     pac = srrp_parse(buf + len);
     assert_true(pac);
-    assert_true(pac->len == strlen(pub->raw) + 1);
+    assert_true(pac->len == pub->len);
     assert_true(pac->leader == '@');
     assert_true(pac->seat == '$');
     assert_true(memcmp(pac->header, "/motor/speed", pac->header_len) == 0);

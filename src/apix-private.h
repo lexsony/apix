@@ -2,6 +2,8 @@
 #define __APIX_PRIVATE_H
 
 #include <stdint.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <time.h>
 #include <sys/time.h>
 #include "apix.h"
@@ -13,9 +15,6 @@
 #define SINKFD_ADDR_SIZE 64
 #define API_HEADER_SIZE 256
 #define API_TOPIC_SUBSCRIBE_MAX 32
-
-#define API_REQUEST_ST_NONE 0
-#define API_REQUEST_ST_WAIT_RESPONSE 1
 
 #define API_REQUEST_TIMEOUT 3000 /*ms*/
 #define PARSE_PACKET_TIMEOUT 1000 /*ms*/
@@ -30,9 +29,7 @@ extern "C" {
  */
 
 struct apix {
-    struct list_head requests;
-    struct list_head responses;
-    struct list_head topic_msgs;
+    struct list_head msgs;
     struct list_head topics;
     struct list_head sinkfds;
     struct list_head sinks;
@@ -86,7 +83,10 @@ struct sinkfd {
     //atbuf_t *txbuf;
     atbuf_t *rxbuf;
 
-    uint32_t nodeid; /* nodeid of accept always equal remote connect */
+    int srrp_mode;
+    uint32_t l_nodeid; /* local nodeid */
+    uint32_t r_nodeid; /* remote nodeid */
+    time_t ts_alive;
     struct timeval ts_poll_recv;
 
     struct apix_events {
@@ -94,6 +94,8 @@ struct sinkfd {
         fd_accept_func_t on_accept;
         fd_pollin_func_t on_pollin;
         fd_pollout_func_t on_pollout;
+        srrp_request_func_t on_request;
+        srrp_response_func_t on_response;
     } events;
 
     struct apisink *sink;
@@ -102,38 +104,40 @@ struct sinkfd {
 };
 
 struct sinkfd *sinkfd_new();
-void sinkfd_destroy();
+void sinkfd_destroy(struct sinkfd *sinkfd);
 
 struct sinkfd *find_sinkfd_in_apix(struct apix *ctx, int fd);
 struct sinkfd *find_sinkfd_in_apisink(struct apisink *sink, int fd);
-struct sinkfd *find_sinkfd_by_nodeid(struct apix *ctx, int nodeid);
+struct sinkfd *find_sinkfd_by_nodeid(struct apix *ctx, uint32_t nodeid);
 
 /**
- * api_request
- * api_response
+ * apimsg
  * api_topic
  */
 
-struct api_request {
-    struct srrp_packet *pac;
+enum apimsg_type {
+    APIMSG_T_CTRL = 0,
+    APIMSG_T_REQUEST,
+    APIMSG_T_RESPONSE,
+    APIMSG_T_TOPIC_MSG,
+};
+
+enum apimsg_state {
+    APIMSG_ST_NONE = 0,
+    APIMSG_ST_WAIT_RESPONSE,
+    APIMSG_ST_FINISHED,
+};
+
+struct apimsg {
+    int type; /* apimsg_type */
     int state;
+    int fd;
+    struct srrp_packet *pac;
+    struct list_head ln;
+
+    /* only used by request */
     time_t ts_create;
     time_t ts_send;
-    int fd;
-    uint16_t crc16;
-    struct list_head ln;
-};
-
-struct api_response {
-    struct srrp_packet *pac;
-    int fd;
-    struct list_head ln;
-};
-
-struct api_topic_msg {
-    struct srrp_packet *pac;
-    int fd;
-    struct list_head ln;
 };
 
 struct api_topic {
@@ -143,25 +147,41 @@ struct api_topic {
     struct list_head ln;
 };
 
-#define api_request_delete(req) \
-{ \
-    list_del(&req->ln); \
-    srrp_free(req->pac); \
-    free(req); \
+static inline int apimsg_is_ctrl(struct apimsg *msg)
+{
+    return msg->type == APIMSG_T_CTRL;
 }
 
-#define api_response_delete(resp) \
-{ \
-    list_del(&resp->ln); \
-    srrp_free(resp->pac); \
-    free(resp); \
+static inline int apimsg_is_request(struct apimsg *msg)
+{
+    return msg->type == APIMSG_T_REQUEST;
 }
 
-#define api_topic_msg_delete(tmsg) \
-{ \
-    list_del(&tmsg->ln); \
-    srrp_free(tmsg->pac); \
-    free(tmsg); \
+static inline int apimsg_is_response(struct apimsg *msg)
+{
+    return msg->type == APIMSG_T_RESPONSE;
+}
+
+static inline int apimsg_is_topic_msg(struct apimsg *msg)
+{
+    return msg->type == APIMSG_T_TOPIC_MSG;
+}
+
+static inline int apimsg_is_finished(struct apimsg *msg)
+{
+    return msg->state == APIMSG_ST_FINISHED;
+}
+
+static inline void apimsg_finish(struct apimsg *msg)
+{
+    msg->state = APIMSG_ST_FINISHED;
+}
+
+static inline void apimsg_delete(struct apimsg *msg)
+{
+    list_del(&msg->ln);
+    srrp_free(msg->pac);
+    free(msg);
 }
 
 #ifdef __cplusplus

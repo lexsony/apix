@@ -14,10 +14,8 @@
 #include <readline/readline.h>
 
 #include <apix/apix.h>
-#include <apix/srrp.h>
 #include <apix/log.h>
 #include <apix/atbuf.h>
-#include <apix/svcx.h>
 #include <apix/list.h>
 #include "opt.h"
 #include "cli.h"
@@ -29,11 +27,15 @@
 
 struct fd_struct {
     int fd;
+    int father_fd;
     char addr[64];
-    const char *mode;
+    const char *mode; /* unix, tcp, com, can */
     atbuf_t *msg;
     char type; /* c: connect, l: listen, a: accept */
     int can_id;
+    int node_id;
+    int srrp_mode;
+    struct list_head services;
 };
 
 struct service {
@@ -44,14 +46,11 @@ struct service {
 
 static int exit_flag;
 static struct apix *ctx;
-static struct svchub *svc;
 
 static struct fd_struct fds[FD_SIZE];
 static const char *cur_mode = CUR_MODE_NONE;
 static int cur_fd = -1;
 static int print_all = 0;
-static unsigned int node_id = 0;
-static struct list_head services = LIST_HEAD_INIT(services);
 static int broker_mode = 0;
 
 static void signal_handler(int sig)
@@ -116,26 +115,47 @@ static void close_fd(int fd)
             atbuf_delete(fds[fd].msg);
             fds[fd].msg = NULL;
         }
+
+        struct service *pos, *n;
+        list_for_each_entry_safe(pos, n, &fds[fd].services, ln) {
+            free(pos);
+        }
     }
 }
 
-static int on_srrp(struct srrp_packet *req, struct srrp_packet **resp)
+static void on_srrp_request(int fd, struct srrp_packet *req, struct srrp_packet **resp)
 {
+    int real_fd = fd;
+    if (fds[fd].type == 'a')
+        real_fd = fds[fd].father_fd;
+    assert(real_fd != 0);
+
     struct service *pos;
-    list_for_each_entry(pos, &services, ln) {
+    list_for_each_entry(pos, &fds[real_fd].services, ln) {
         if (strncmp(pos->header, req->header, strlen(pos->header)) == 0) {
-            *resp = srrp_new_response(req->srcid, srrp_crc(req), req->header, pos->msg);
-            return 0;
+            *resp = srrp_new_response(
+                req->dstid, req->srcid, req->crc16, req->header, pos->msg);
+            return;
         }
     }
 
-    *resp = srrp_new_response(req->srcid, srrp_crc(req), req->header, "{msg:'...'}");
-    return 0;
+    *resp = srrp_new_response(
+        req->dstid, req->srcid, req->crc16, req->header, "{msg:'...'}");
+
+    printf("on srrp request(%d): %s\n", real_fd, req->raw);
+}
+
+static void on_srrp_response(int fd, struct srrp_packet *resp)
+{
+    printf("on srrp response(%d): %s\n", fd, resp->raw);
 }
 
 static int on_fd_pollin(int fd, const char *buf, size_t len)
 {
     if (broker_mode)
+        return -1;
+
+    if (fds[fd].srrp_mode == 1)
         return -1;
 
     if (fds[fd].msg == NULL) {
@@ -144,25 +164,6 @@ static int on_fd_pollin(int fd, const char *buf, size_t len)
     if (atbuf_spare(fds[fd].msg) < len)
         atbuf_clear(fds[fd].msg);
     atbuf_write(fds[fd].msg, buf, len);
-
-    uint32_t offset = srrp_next_packet_offset(buf, len);
-    struct srrp_packet *req = srrp_parse(buf + offset);
-    if (req == NULL) {
-        // do nothing ...
-    } else if (req->leader == SRRP_REQUEST_LEADER) {
-        struct srrp_packet *resp = NULL;
-        if (svchub_deal(svc, req, &resp) == -1) {
-            resp = srrp_new_response(
-                req->srcid, srrp_crc(req), req->header,
-                "{errcode:1, errmsg:'service not found.'}");
-        }
-        assert(resp);
-        int nr = apix_send(ctx, fd, (uint8_t *)resp->raw, resp->len);
-        assert(nr != -1);
-        assert(nr != 0);
-        srrp_free(resp);
-        srrp_free(req);
-    }
 
     return len;
 }
@@ -186,6 +187,9 @@ static int on_fd_accept(int _fd, int newfd)
     fds[newfd].fd = newfd;
     strcpy(fds[newfd].addr, fds[_fd].addr);
     fds[newfd].type = 'a';
+    fds[newfd].srrp_mode = fds[_fd].srrp_mode;
+    INIT_LIST_HEAD(&fds[newfd].services);
+    fds[newfd].father_fd = _fd;
     printf("accept #%d, %s(%c)\n", newfd, fds[newfd].addr, fds[newfd].type);
     return 0;
 }
@@ -350,7 +354,6 @@ static void on_cmd_broker(const char *cmd)
 
 static void on_cmd_env(const char *cmd)
 {
-    printf("node_id: %d\n", node_id);
     printf("cur_mode: %s\n", cur_mode);
     printf("cur_fd: %d\n", cur_fd);
     printf("print: %s\n", print_all ? "all" : "cur");
@@ -362,8 +365,14 @@ static void on_cmd_fds(const char *cmd)
     for (int i = 0; i < sizeof(fds) / sizeof(fds[0]); i++) {
         if (fds[i].fd == 0)
             continue;
-        printf("fd: %d, type: %c, addr: %s\n",
-               fds[i].fd, fds[i].type, fds[i].addr);
+        if (fds[i].type == 'a') {
+            printf("fd: %d, type: %c, addr: %s\n",
+                   fds[i].fd, fds[i].type, fds[i].addr);
+        } else {
+            printf("fd: %d, type: %c, addr: %s, nodeid: %d, srrpmode: %d\n",
+                   fds[i].fd, fds[i].type, fds[i].addr,
+                   fds[i].node_id, fds[i].srrp_mode);
+        }
     }
 }
 
@@ -375,9 +384,14 @@ static void on_cmd_use(const char *cmd)
     int fd = 0;
     int nr = sscanf(cmd, "use %d", &fd);
     if (nr == 1) {
-        if (fd >= 0 && fd < sizeof(fds) / sizeof(fds[0]))
-            if (fds[fd].fd != 0)
+        if (fd >= 0 && fd < sizeof(fds) / sizeof(fds[0])) {
+            if (fds[fd].type == 'a') {
+                printf("cannot use accept fd\n");
+            } else {
+                assert(fds[fd].fd != 0);
                 cur_fd = fds[fd].fd;
+            }
+        }
     }
 }
 
@@ -427,11 +441,15 @@ static void on_cmd_unix_listen(const char *cmd)
             return;
         }
         apix_on_fd_accept(ctx, fd, on_fd_accept);
+        apix_on_srrp_request(ctx, fd, on_srrp_request);
+        apix_on_srrp_response(ctx, fd, on_srrp_response);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'l';
         fds[fd].mode = "unix";
+        fds[fd].srrp_mode = 0;
+        INIT_LIST_HEAD(&fds[fd].services);
         cur_fd = fd;
         printf("listen #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
     }
@@ -451,11 +469,15 @@ static void on_cmd_tcp_listen(const char *cmd)
             return;
         }
         apix_on_fd_accept(ctx, fd, on_fd_accept);
+        apix_on_srrp_request(ctx, fd, on_srrp_request);
+        apix_on_srrp_response(ctx, fd, on_srrp_response);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'l';
         fds[fd].mode = "tcp";
+        fds[fd].srrp_mode = 0;
+        INIT_LIST_HEAD(&fds[fd].services);
         cur_fd = fd;
         printf("listen #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
     }
@@ -484,11 +506,15 @@ static void on_cmd_unix_open(const char *cmd)
             return;
         }
         apix_on_fd_pollin(ctx, fd, on_fd_pollin);
+        apix_on_srrp_request(ctx, fd, on_srrp_request);
+        apix_on_srrp_response(ctx, fd, on_srrp_response);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'c';
         fds[fd].mode = "unix";
+        fds[fd].srrp_mode = 0;
+        INIT_LIST_HEAD(&fds[fd].services);
         cur_fd = fd;
         printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
     }
@@ -512,11 +538,15 @@ static void on_cmd_tcp_open(const char *cmd)
         return;
     }
     apix_on_fd_pollin(ctx, fd, on_fd_pollin);
+    apix_on_srrp_request(ctx, fd, on_srrp_request);
+    apix_on_srrp_response(ctx, fd, on_srrp_response);
     assert(fds[fd].fd == 0);
     fds[fd].fd = fd;
     snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
     fds[fd].type = 'c';
     fds[fd].mode = "tcp";
+    fds[fd].srrp_mode = 0;
+    INIT_LIST_HEAD(&fds[fd].services);
     cur_fd = fd;
     printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
 }
@@ -556,11 +586,15 @@ static void on_cmd_com_open(const char *cmd)
         return;
     }
     apix_on_fd_pollin(ctx, fd, on_fd_pollin);
+    apix_on_srrp_request(ctx, fd, on_srrp_request);
+    apix_on_srrp_response(ctx, fd, on_srrp_response);
     assert(fds[fd].fd == 0);
     fds[fd].fd = fd;
     snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", strstr(cmd, "open "));
     fds[fd].type = 'c';
     fds[fd].mode = "com";
+    fds[fd].srrp_mode = 0;
+    INIT_LIST_HEAD(&fds[fd].services);
     cur_fd = fd;
     printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
 }
@@ -589,12 +623,16 @@ static void on_cmd_can_open(const char *cmd)
         return;
     }
     apix_on_fd_pollin(ctx, fd, on_can_pollin);
+    apix_on_srrp_request(ctx, fd, on_srrp_request);
+    apix_on_srrp_response(ctx, fd, on_srrp_response);
     assert(fds[fd].fd == 0);
     fds[fd].fd = fd;
     snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", strstr(cmd, "open "));
     fds[fd].type = 'c';
     fds[fd].mode = "can";
     fds[fd].can_id = can_id;
+    fds[fd].srrp_mode = 0;
+    INIT_LIST_HEAD(&fds[fd].services);
     cur_fd = fd;
     printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
 }
@@ -650,6 +688,13 @@ static void on_cmd_send(const char *cmd)
 
 static void on_cmd_setid(const char *cmd)
 {
+    if (cur_fd == 0)
+        return;
+
+    if (fds[cur_fd].srrp_mode == 1) {
+        printf("cannot change nodeid when in srrpmode\n");
+    }
+
     int id = 0;
     int nr = sscanf(cmd, "setid %d", &id);
     if (nr != 1) {
@@ -657,7 +702,30 @@ static void on_cmd_setid(const char *cmd)
         return;
     }
 
-    node_id = id;
+    fds[cur_fd].node_id = id;
+}
+
+static void on_cmd_srrpmode(const char *cmd)
+{
+    if (cur_fd == 0)
+        return;
+
+    char msg[32] = {0};
+    int nr = sscanf(cmd, "srrpmode %s", msg);
+    if (nr != 1) {
+        printf("param error\n");
+        return;
+    }
+
+    if (strcmp(msg, "on") == 0) {
+        fds[cur_fd].srrp_mode = 1;
+        apix_enable_srrp_mode(ctx, fds[cur_fd].fd, fds[cur_fd].node_id);
+    } else if (strcmp(msg, "off") == 0) {
+        fds[cur_fd].srrp_mode = 0;
+        apix_disable_srrp_mode(ctx, fds[cur_fd].fd);
+    } else {
+        printf("param error\n");
+    }
 }
 
 static void on_cmd_srrpget(const char *cmd)
@@ -665,15 +733,21 @@ static void on_cmd_srrpget(const char *cmd)
     if (cur_fd == 0)
         return;
 
+    if (fds[cur_fd].srrp_mode == 0) {
+        printf("srrpmode is disabled\n");
+        return;
+    }
+
+    int dstid = 0;
     char hdr[256] = {0};
     char msg[4096] = {0};
-    int nr = sscanf(cmd, "srrpget %s %s", hdr, msg);
-    if (nr != 2) {
+    int nr = sscanf(cmd, "srrpget %d:%[^?]?%[^\r\n]", &dstid, hdr, msg);
+    if (nr != 3) {
         printf("param error\n");
         return;
     }
 
-    struct srrp_packet *pac = srrp_new_request(node_id, hdr, msg);
+    struct srrp_packet *pac = srrp_new_request(fds[cur_fd].node_id, dstid, hdr, msg);
     if (strcmp(cur_mode, "can") == 0) {
         struct can_frame frame = {0};
         memcpy(frame.data, pac->raw, pac->len);
@@ -691,29 +765,36 @@ static void on_cmd_srrpadd(const char *cmd)
     if (cur_fd == 0)
         return;
 
+    if (fds[cur_fd].srrp_mode == 0) {
+        printf("srrpmode is disabled\n");
+        return;
+    }
+
     char hdr[256] = {0};
     char msg[1024] = {0};
-    sprintf(hdr, "/%d", node_id);
-    int nr = sscanf(cmd, "srrpadd %s %s", hdr + strlen(hdr), msg);
+    int nr = sscanf(cmd, "srrpadd %[^?]?%[^\t\n]", hdr, msg);
     if (nr != 2) {
         printf("param error\n");
         return;
     }
-
-    svchub_add_service(svc, hdr, on_srrp);
 
     struct service *serv = calloc(1, sizeof(*serv));
     assert(serv);
     snprintf(serv->header, sizeof(serv->header), "%s", hdr);
     snprintf(serv->msg, sizeof(serv->msg), "%s", msg);
     INIT_LIST_HEAD(&serv->ln);
-    list_add(&serv->ln, &services);
+    list_add(&serv->ln, &fds[cur_fd].services);
 }
 
 static void on_cmd_srrpdel(const char *cmd)
 {
     if (cur_fd == 0)
         return;
+
+    if (fds[cur_fd].srrp_mode == 0) {
+        printf("srrpmode is disabled\n");
+        return;
+    }
 
     char hdr[256] = {0};
     int nr = sscanf(cmd, "srrpdel %s", hdr);
@@ -722,30 +803,30 @@ static void on_cmd_srrpdel(const char *cmd)
         return;
     }
 
-    svchub_del_service(svc, hdr);
-
     struct service *pos;
-    list_for_each_entry(pos, &services, ln) {
+    list_for_each_entry(pos, &fds[cur_fd].services, ln) {
         if (strncmp(pos->header, hdr, strlen(pos->header)) == 0) {
             list_del(&pos->ln);
             free(pos);
+            break;
         }
     }
 }
 
 static void on_cmd_srrpinfo(const char *cmd)
 {
+    if (cur_fd == 0)
+        return;
+
+    if (fds[cur_fd].srrp_mode == 0) {
+        printf("srrpmode is disabled\n");
+        return;
+    }
+
     struct service *pos;
-    list_for_each_entry(pos, &services, ln) {
+    list_for_each_entry(pos, &fds[cur_fd].services, ln) {
         printf("hdr: %s, msg: %s\n", pos->header, pos->msg);
     }
-}
-
-static void on_cmd_srrpalive(const char *cmd)
-{
-    char newcmd[256] = {0};
-    sprintf(newcmd, "srrpget /%d/alive {}", node_id);
-    on_cmd_srrpget(newcmd);
 }
 
 static void on_cmd_default(const char *cmd)
@@ -776,11 +857,11 @@ static const struct cli_cmd cli_cmds[] = {
     { "close", on_cmd_close, "close fd" },
     { "send", on_cmd_send, "send msg" },
     { "setid", on_cmd_setid, "set node id" },
-    { "srrpget", on_cmd_srrpget, "srrpget hdr msg" },
-    { "srrpadd", on_cmd_srrpadd, "srrpadd hdr msg" },
+    { "srrpmode", on_cmd_srrpmode, "srrpmode on|off" },
+    { "srrpget", on_cmd_srrpget, "srrpget hdr?msg" },
+    { "srrpadd", on_cmd_srrpadd, "srrpadd hdr?msg" },
     { "srrpdel", on_cmd_srrpdel, "srrpdel hdr" },
     { "srrpinfo", on_cmd_srrpinfo, "srrpinfo" },
-    { "srrpalive", on_cmd_srrpalive, "srrpalive" },
     { NULL, NULL }
 };
 
@@ -797,8 +878,8 @@ static void *cli_thread(void *arg)
         if (cur_fd == -1) {
             snprintf(prompt, sizeof(prompt), "%s> ", cur_mode);
         } else {
-            snprintf(prompt, sizeof(prompt), "%s>%s(%c)> ",
-                     cur_mode, fds[cur_fd].addr, fds[cur_fd].type);
+            snprintf(prompt, sizeof(prompt), "%s>%s(%c:%d)> ",
+                     cur_mode, fds[cur_fd].addr, fds[cur_fd].type, cur_fd);
         }
         cli_run(prompt);
     }
@@ -827,9 +908,6 @@ int main(int argc, char *argv[])
     if (opt_bool(opt))
         broker_mode = 1;;
 
-    srand(time(0));
-    node_id = rand() % 65536;
-    svc = svchub_new();
     on_cmd_env("");
 
     pthread_t apix_pid;
@@ -843,6 +921,5 @@ int main(int argc, char *argv[])
 
     pthread_join(apix_pid, NULL);
     pthread_join(cli_pid, NULL);
-    svchub_destroy(svc);
     return 0;
 }
