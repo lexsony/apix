@@ -9,28 +9,31 @@
 #include "srrp.h"
 #include "crc16.h"
 
-int on_echo(struct srrp_packet *req, struct srrp_packet **resp)
+typedef int (*srrp_request_handle_func_t)(
+    struct srrp_packet *req, struct srrp_packet **resp);
+
+int on_echo(struct srrp_packet *req, struct srrp_packet **resp, void *private_data)
 {
     uint16_t crc = crc16(req->header, req->header_len);
     crc = crc16_crc(crc, req->data, req->data_len);
-    *resp = srrp_new_response(req->srcid, crc, req->header, "{msg:'world'}");
+    *resp = srrp_new_response(req->dstid, req->srcid, crc, req->header, "t:{msg:'world'}");
     return 0;
 }
 
 static void test_svc(void **status)
 {
-    struct svchub *hub = svchub_new();
-    svchub_add_service(hub, "/0007/echo", on_echo);
+    struct svcx *svcx = svcx_new();
+    svcx_add_service(svcx, "8888:/echo", on_echo);
 
     struct srrp_packet *req, *resp = NULL;
-    req = srrp_new_request(0x8888, "/0007/echo", "{msg:'hello'}");
-    svchub_deal(hub, req, &resp);
-    assert_true(strcmp(resp->data, "{msg:'world'}") == 0);
+    req = srrp_new_request(3333, 8888, "/echo", "{msg:'hello'}");
+    ((srrp_request_handle_func_t)(svcx_get_service_private(svcx, "8888:/echo")))(req, &resp);
+    assert_true(strcmp(resp->data, "t:{msg:'world'}") == 0);
     srrp_free(req);
     if (resp) srrp_free(resp);
 
-    svchub_del_service(hub, "/0007/echo");
-    svchub_destroy(hub);
+    svcx_del_service(svcx, "8888:/echo");
+    svcx_destroy(svcx);
 }
 
 int main(void)

@@ -1,17 +1,15 @@
 #ifndef __SVCX_H
 #define __SVCX_H
 
-#include "srrp.h"
+struct svcx;
 
-struct svchub;
+typedef void (*svcx_foreach_func_t)(const char *header, void *private_data);
 
-struct svchub *svchub_new();
-void svchub_destroy(struct svchub *hub);
-
-typedef int (*svc_handle_func_t)(struct srrp_packet *req, struct srrp_packet **resp);
-int svchub_add_service(struct svchub *hub, const char *header, svc_handle_func_t func);
-int svchub_del_service(struct svchub *hub, const char *header);
-
-int svchub_deal(struct svchub *hub, struct srrp_packet *req, struct srrp_packet **resp);
+struct svcx *svcx_new();
+void svcx_destroy(struct svcx *svcx);
+int svcx_add_service(struct svcx *svcx, const char *header, void *private_data);
+int svcx_del_service(struct svcx *svcx, const char *header);
+void *svcx_get_service_private(struct svcx *svcx, const char *header);
+void svcx_foreach(struct svcx *svcx, svcx_foreach_func_t func);
 
 #endif

@@ -9,47 +9,47 @@
 
 struct service {
     char header[SERVICE_HEADER_LEN];
-    svc_handle_func_t func;
+    void *private_data;
     struct list_head ln;
 };
 
-struct svchub {
+struct svcx {
     struct list_head services;
 };
 
-struct svchub *svchub_new()
+struct svcx *svcx_new()
 {
-    struct svchub *hub = calloc(1, sizeof(*hub));
-    assert(hub);
-    INIT_LIST_HEAD(&hub->services);
-    return hub;
+    struct svcx *svcx = calloc(1, sizeof(*svcx));
+    assert(svcx);
+    INIT_LIST_HEAD(&svcx->services);
+    return svcx;
 }
 
-void svchub_destroy(struct svchub *hub)
+void svcx_destroy(struct svcx *svcx)
 {
     struct service *pos, *n;
-    list_for_each_entry_safe(pos, n, &hub->services, ln) {
+    list_for_each_entry_safe(pos, n, &svcx->services, ln) {
         list_del(&pos->ln);
         free(pos);
     }
-    free(hub);
+    free(svcx);
 }
 
-int svchub_add_service(struct svchub *hub, const char *header, svc_handle_func_t func)
+int svcx_add_service(struct svcx *svcx, const char *header, void *private_data)
 {
     struct service *serv = calloc(1, sizeof(*serv));
     assert(serv);
     snprintf(serv->header, sizeof(serv->header), "%s", header);
-    serv->func = func;
+    serv->private_data = private_data;
     INIT_LIST_HEAD(&serv->ln);
-    list_add(&serv->ln, &hub->services);
+    list_add(&serv->ln, &svcx->services);
     return 0;
 }
 
-int svchub_del_service(struct svchub *hub, const char *header)
+int svcx_del_service(struct svcx *svcx, const char *header)
 {
     struct service *pos;
-    list_for_each_entry(pos, &hub->services, ln) {
+    list_for_each_entry(pos, &svcx->services, ln) {
         if (strncmp(pos->header, header, strlen(pos->header)) == 0) {
             list_del(&pos->ln);
             free(pos);
@@ -59,13 +59,21 @@ int svchub_del_service(struct svchub *hub, const char *header)
     return -1;
 }
 
-int svchub_deal(struct svchub *hub, struct srrp_packet *req, struct srrp_packet **resp)
+void *svcx_get_service_private(struct svcx *svcx, const char *header)
 {
     struct service *pos;
-    list_for_each_entry(pos, &hub->services, ln) {
-        if (strncmp(pos->header, req->header, strlen(pos->header)) == 0) {
-            return pos->func(req, resp);
+    list_for_each_entry(pos, &svcx->services, ln) {
+        if (strncmp(pos->header, header, strlen(pos->header)) == 0) {
+            return pos->private_data;
         }
     }
-    return -1;
+    return NULL;
+}
+
+void svcx_foreach(struct svcx *svcx, svcx_foreach_func_t func)
+{
+    struct service *pos;
+    list_for_each_entry(pos, &svcx->services, ln) {
+        func(pos->header, pos->private_data);
+    }
 }
