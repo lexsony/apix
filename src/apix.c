@@ -24,7 +24,7 @@
 
 static void log_hex_string(const char *buf, size_t len)
 {
-    printf("%d, ", (int)len);
+    printf("len: %d, data: ", (int)len);
     for (int i = 0; i < (int)len; i++) {
         if (isprint(buf[i]))
             printf("%c", buf[i]);

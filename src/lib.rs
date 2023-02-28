@@ -55,6 +55,30 @@ impl Apix {
         }
     }
 
+    pub fn on_fd_close(&self, fd: i32, func: unsafe extern "C" fn(i32)) {
+        unsafe {
+            ffi::apix_on_fd_close(self.ctx, fd, Some(func));
+        }
+    }
+
+    pub fn on_fd_accept(&self, fd: i32, func: unsafe extern "C" fn(i32, i32)) {
+        unsafe {
+            ffi::apix_on_fd_accept(self.ctx, fd, Some(func));
+        }
+    }
+
+    pub fn on_fd_pollin(&self, fd: i32, func: unsafe extern "C" fn(i32, *const i8, u64) -> i32) {
+        unsafe {
+            ffi::apix_on_fd_pollin(self.ctx, fd, Some(func));
+        }
+    }
+
+    pub fn on_fd_pollout(&self, fd: i32, func: unsafe extern "C" fn(i32, *const i8, u64) -> i32) {
+        unsafe {
+            ffi::apix_on_fd_pollout(self.ctx, fd, Some(func));
+        }
+    }
+
     pub fn enable_srrp_mode(&self, fd: i32, nodeid: u32) {
         unsafe {
             ffi::apix_enable_srrp_mode(self.ctx, fd, nodeid);
@@ -64,6 +88,20 @@ impl Apix {
     pub fn disable_srrp_mode(&self, fd: i32) {
         unsafe {
             ffi::apix_disable_srrp_mode(self.ctx, fd);
+        }
+    }
+
+    pub fn on_srrp_request(&self, fd: i32, func: unsafe extern "C" fn(
+        i32, *mut ffi::srrp_packet, *mut *mut ffi::srrp_packet)) {
+        unsafe {
+            ffi::apix_on_srrp_request(self.ctx, fd, Some(func));
+        }
+    }
+
+    pub fn on_srrp_response(&self, fd: i32, func: unsafe extern "C" fn(
+        i32, *mut ffi::srrp_packet)) {
+        unsafe {
+            ffi::apix_on_srrp_response(self.ctx, fd, Some(func));
         }
     }
 

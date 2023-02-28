@@ -45,14 +45,14 @@ int apix_poll(struct apix *ctx);
  * apix_on_fd_close
  * - called after fd is closed
  */
-typedef int (*fd_close_func_t)(int fd);
+typedef void (*fd_close_func_t)(int fd);
 int apix_on_fd_close(struct apix *ctx, int fd, fd_close_func_t func);
 
 /**
  * apix_on_fd_accept
  * - called after newfd is accepted
  */
-typedef int (*fd_accept_func_t)(int fd, int newfd);
+typedef void (*fd_accept_func_t)(int fd, int newfd);
 int apix_on_fd_accept(struct apix *ctx, int fd, fd_accept_func_t func);
 
 /**

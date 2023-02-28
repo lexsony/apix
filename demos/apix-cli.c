@@ -155,13 +155,12 @@ static int on_fd_pollin(int fd, const char *buf, size_t len)
     return len;
 }
 
-static int on_fd_close(int fd)
+static void on_fd_close(int fd)
 {
     close_fd(fd);
-    return 0;
 }
 
-static int on_fd_accept(int _fd, int newfd)
+static void on_fd_accept(int _fd, int newfd)
 {
     if (_fd > FD_MAX || newfd > FD_MAX) {
         perror("fd is too big");
@@ -176,7 +175,6 @@ static int on_fd_accept(int _fd, int newfd)
     fds[newfd].type = 'a';
     fds[newfd].srrp_mode = fds[_fd].srrp_mode;
     printf("accept #%d, %s(%c)\n", newfd, fds[newfd].addr, fds[newfd].type);
-    return 0;
 }
 
 static int on_can_pollin(int fd, const char *buf, size_t len)
