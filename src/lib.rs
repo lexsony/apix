@@ -28,6 +28,45 @@ impl Apix {
         }
     }
 
+    pub fn close(&self, fd: i32) {
+        unsafe {
+            ffi::apix_close(self.ctx, fd);
+        }
+    }
+
+    pub fn send(&self, fd: i32, buf: &[u8]) {
+        unsafe {
+            ffi::apix_send(self.ctx, fd, buf.as_ptr() as *const std::ffi::c_void, buf.len() as u64);
+        }
+    }
+
+    pub fn recv(&self, fd: i32, buf: &mut [u8]) {
+        unsafe {
+            ffi::apix_recv(self.ctx, fd, buf.as_ptr() as *mut std::ffi::c_void, buf.len() as u64);
+        }
+    }
+
+    pub fn poll(&self) -> Result<(), std::io::Error> {
+        unsafe {
+            match ffi::apix_poll(self.ctx) {
+                0 => Ok(()),
+                _ => Err(std::io::Error::last_os_error()),
+            }
+        }
+    }
+
+    pub fn enable_srrp_mode(&self, fd: i32, nodeid: u32) {
+        unsafe {
+            ffi::apix_enable_srrp_mode(self.ctx, fd, nodeid);
+        }
+    }
+
+    pub fn disable_srrp_mode(&self, fd: i32) {
+        unsafe {
+            ffi::apix_disable_srrp_mode(self.ctx, fd);
+        }
+    }
+
     pub fn enable_posix(&self) {
         unsafe {
             ffi::apix_enable_posix(self.ctx);
@@ -40,9 +79,25 @@ impl Apix {
         }
     }
 
-    pub fn close(&self, fd: i32) {
+    pub fn open_unix_server(&self, addr: &str) -> Result<i32, std::io::Error> {
         unsafe {
-            ffi::apix_close(self.ctx, fd);
+            let _addr = std::ffi::CString::new(addr).unwrap();
+            match ffi::apix_open(
+                self.ctx, ffi::APISINK_UNIX_S.as_ptr() as *const i8, _addr.as_ptr()) {
+                -1 => Err(std::io::Error::last_os_error()),
+                fd => Ok(fd),
+            }
+        }
+    }
+
+    pub fn open_unix_client(&self, addr: &str) -> Result<i32, std::io::Error> {
+        unsafe {
+            let _addr = std::ffi::CString::new(addr).unwrap();
+            match ffi::apix_open(
+                self.ctx, ffi::APISINK_UNIX_C.as_ptr() as *const i8, _addr.as_ptr()) {
+                -1 => Err(std::io::Error::last_os_error()),
+                fd => Ok(fd),
+            }
         }
     }
 
@@ -57,11 +112,35 @@ impl Apix {
         }
     }
 
-    pub fn poll(&self) -> Result<(), std::io::Error> {
+    pub fn open_tcp_client(&self, addr: &str) -> Result<i32, std::io::Error> {
         unsafe {
-            match ffi::apix_poll(self.ctx) {
-                0 => Ok(()),
-                _ => Err(std::io::Error::last_os_error()),
+            let _addr = std::ffi::CString::new(addr).unwrap();
+            match ffi::apix_open(
+                self.ctx, ffi::APISINK_TCP_C.as_ptr() as *const i8, _addr.as_ptr()) {
+                -1 => Err(std::io::Error::last_os_error()),
+                fd => Ok(fd),
+            }
+        }
+    }
+
+    pub fn open_com(&self, addr: &str) -> Result<i32, std::io::Error> {
+        unsafe {
+            let _addr = std::ffi::CString::new(addr).unwrap();
+            match ffi::apix_open(
+                self.ctx, ffi::APISINK_COM.as_ptr() as *const i8, _addr.as_ptr()) {
+                -1 => Err(std::io::Error::last_os_error()),
+                fd => Ok(fd),
+            }
+        }
+    }
+
+    pub fn open_can(&self, addr: &str) -> Result<i32, std::io::Error> {
+        unsafe {
+            let _addr = std::ffi::CString::new(addr).unwrap();
+            match ffi::apix_open(
+                self.ctx, ffi::APISINK_CAN.as_ptr() as *const i8, _addr.as_ptr()) {
+                -1 => Err(std::io::Error::last_os_error()),
+                fd => Ok(fd),
             }
         }
     }
