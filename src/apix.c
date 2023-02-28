@@ -297,7 +297,7 @@ static void handle_ctrl(struct apix *ctx)
         if (apimsg_is_finished(pos) || !apimsg_is_ctrl(pos))
             continue;
 
-        LOG_INFO("(%x) = %d:%s", ctx, pos->pac->srcid, pos->pac->header);
+        LOG_DEBUG("(%x) = %d:%s", ctx, pos->pac->srcid, pos->pac->header);
 
         struct sinkfd *src = find_sinkfd_in_apix(ctx, pos->fd);
         if (src == NULL) {
@@ -351,8 +351,8 @@ static void handle_request(struct apix *ctx)
             continue;
         }
 
-        LOG_INFO("(%x) > %d:%d:%s?%s", ctx, pos->pac->srcid, pos->pac->dstid,
-                 pos->pac->header, pos->pac->data);
+        LOG_DEBUG("(%x) > %d:%d:%s?%s", ctx, pos->pac->srcid, pos->pac->dstid,
+                  pos->pac->header, pos->pac->data);
 
         struct sinkfd *src = find_sinkfd_in_apix(ctx, pos->fd);
         if (src == NULL) {
@@ -403,8 +403,8 @@ static void handle_response(struct apix *ctx)
         if (apimsg_is_finished(pos) || !apimsg_is_response(pos))
             continue;
 
-        LOG_INFO("(%x) < %d:%d:%s?%s", ctx, pos->pac->srcid, pos->pac->dstid,
-                 pos->pac->header, pos->pac->data);
+        LOG_DEBUG("(%x) < %d:%d:%s?%s", ctx, pos->pac->srcid, pos->pac->dstid,
+                  pos->pac->header, pos->pac->data);
 
         struct sinkfd *dst = find_sinkfd_by_nodeid(ctx, pos->pac->dstid);
         if (dst != NULL && dst->l_nodeid == pos->pac->dstid && dst->events.on_response) {
@@ -437,13 +437,13 @@ static void handle_topic_msg(struct apix *ctx)
 
         if (pos->pac->leader == SRRP_SUBSCRIBE_LEADER) {
             topic_sub_handler(ctx, pos);
-            LOG_INFO("(%x) #sub %s?%s", ctx, pos->pac->header, pos->pac->data);
+            LOG_DEBUG("(%x) #sub %s?%s", ctx, pos->pac->header, pos->pac->data);
         } else if (pos->pac->leader == SRRP_UNSUBSCRIBE_LEADER) {
             topic_unsub_handler(ctx, pos);
-            LOG_INFO("(%x) %%unsub %s?%s", ctx, pos->pac->header, pos->pac->data);
+            LOG_DEBUG("(%x) %%unsub %s?%s", ctx, pos->pac->header, pos->pac->data);
         } else {
             topic_pub_handler(ctx, pos);
-            LOG_INFO("(%x) @pub %s?%s", ctx, pos->pac->header, pos->pac->data);
+            LOG_DEBUG("(%x) @pub %s?%s", ctx, pos->pac->header, pos->pac->data);
         }
         apimsg_finish(pos);
     }
