@@ -69,7 +69,7 @@ int apix_on_fd_accept(struct apix *ctx, int fd, fd_accept_func_t func);
  * - return n(>=0): handled, and skip n bytes
  */
 typedef int (*fd_pollin_func_t)(
-    struct apix *ctx, int fd, const char *buf, size_t len);
+    struct apix *ctx, int fd, const void *buf, size_t len);
 int apix_on_fd_pollin(struct apix *ctx, int fd, fd_pollin_func_t func);
 
 /**
@@ -77,7 +77,7 @@ int apix_on_fd_pollin(struct apix *ctx, int fd, fd_pollin_func_t func);
  * - callback not implement yet
  */
 typedef int (*fd_pollout_func_t)(
-    struct apix *ctx, int fd, const char *buf, size_t len);
+    struct apix *ctx, int fd, const void *buf, size_t len);
 int apix_on_fd_pollout(struct apix *ctx, int fd, fd_pollout_func_t func);
 
 /**

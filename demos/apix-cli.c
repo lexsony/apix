@@ -138,7 +138,7 @@ static void on_srrp_response(struct apix *ctx, int fd, struct srrp_packet *resp)
     printf("on srrp response(%d): %s\n", fd, resp->raw);
 }
 
-static int on_fd_pollin(struct apix *ctx, int fd, const char *buf, size_t len)
+static int on_fd_pollin(struct apix *ctx, int fd, const void *buf, size_t len)
 {
     if (broker_mode)
         return -1;
@@ -178,7 +178,7 @@ static void on_fd_accept(struct apix *ctx, int _fd, int newfd)
     printf("accept #%d, %s(%c)\n", newfd, fds[newfd].addr, fds[newfd].type);
 }
 
-static int on_can_pollin(struct apix *ctx, int fd, const char *buf, size_t len)
+static int on_can_pollin(struct apix *ctx, int fd, const void *buf, size_t len)
 {
     struct can_frame *frame = (struct can_frame *)buf;
 
