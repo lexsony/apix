@@ -42,11 +42,11 @@ __srrp_parse_one_ctrl(const char *buf)
     assert(buf[0] == SRRP_CTRL_LEADER);
 
     char leader, seat;
-    uint32_t seqno, len, srcid;
+    uint16_t seqno, len, srcid;
 
-    int cnt = sscanf(buf, "%c%"PRIx32",%c,%4"PRIx32",%4"PRIx32":",
-                     &leader, &seqno, &seat, &len, &srcid);
-    if (cnt != 5) return NULL;
+    if (sscanf(buf, "%c%hx,%c,%4hx,%4hx:",
+               &leader, &seqno, &seat, &len, &srcid) != 5)
+        return NULL;
 
     const char *header_delimiter = strstr(buf, ":/");
     if (header_delimiter == NULL)
@@ -79,11 +79,11 @@ __srrp_parse_one_request(const char *buf)
     assert(buf[0] == SRRP_REQUEST_LEADER);
 
     char leader, seat;
-    uint32_t seqno, len, srcid, dstid;
+    uint16_t seqno, len, srcid, dstid;
 
-    int cnt = sscanf(buf, "%c%"PRIx32",%c,%4"PRIx32",%4"PRIx32":%4"PRIx32":",
-                     &leader, &seqno, &seat, &len, &srcid, &dstid);
-    if (cnt != 6) return NULL;
+    if (sscanf(buf, "%c%hx,%c,%4hx,%4hx:%4hx:",
+               &leader, &seqno, &seat, &len, &srcid, &dstid) != 6)
+        return NULL;
 
     const char *header_delimiter = strstr(buf, ":/");
     if (header_delimiter == NULL)
@@ -117,11 +117,11 @@ __srrp_parse_one_response(const char *buf)
     assert(buf[0] == SRRP_RESPONSE_LEADER);
 
     char leader, seat;
-    uint32_t seqno, len, srcid, dstid, reqcrc16;
+    uint16_t seqno, len, srcid, dstid, reqcrc16;
 
-    int cnt = sscanf(buf, "%c%"PRIx32",%c,%4"PRIx32",%4"PRIx32":%4"PRIx32":%4"PRIx32":",
-                     &leader, &seqno, &seat, &len, &srcid, &dstid, &reqcrc16);
-    if (cnt != 7) return NULL;
+    if (sscanf(buf, "%c%hx,%c,%4hx,%4hx:%4hx:%4hx:",
+               &leader, &seqno, &seat, &len, &srcid, &dstid, &reqcrc16) != 7)
+        return NULL;
 
     const char *header_delimiter = strstr(buf, ":/");
     if (header_delimiter == NULL)
@@ -158,10 +158,10 @@ __srrp_parse_one_subpub(const char *buf)
            buf[0] == SRRP_PUBLISH_LEADER);
 
     char leader, seat;
-    uint32_t seqno, len;
+    uint16_t seqno, len;
 
-    int cnt = sscanf(buf, "%c%"PRIx32",%c,%4"PRIx32":", &leader, &seqno, &seat, &len);
-    if (cnt != 4) return NULL;
+    if (sscanf(buf, "%c%hx,%c,%4hx:", &leader, &seqno, &seat, &len) != 4)
+        return NULL;
 
     const char *header_delimiter = strstr(buf, ":/");
     if (header_delimiter == NULL)
@@ -214,11 +214,11 @@ srrp_new_ctrl(uint16_t srcid, const char *header)
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
     assert(pac);
 
-    int nr = snprintf(pac->raw, len, "%c0,$,%.4"PRIx16",%.4"PRIx16":%s",
+    int nr = snprintf(pac->raw, len, "%c0,$,%.4hx,%.4hx:%s",
                       SRRP_CTRL_LEADER, len, srcid, header) + 1;
     assert((uint16_t)nr + CRC_SIZE == len);
     uint16_t crc = calc_crc(pac->raw, len);
-    snprintf(pac->raw + nr, CRC_SIZE, "%.4"PRIx16"", crc);
+    snprintf(pac->raw + nr, CRC_SIZE, "%.4hx", crc);
 
     pac->leader = SRRP_CTRL_LEADER;
     pac->seat = '$';
@@ -245,12 +245,12 @@ srrp_new_request(uint16_t srcid, uint16_t dstid, const char *header, const char 
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
     assert(pac);
 
-    int nr = snprintf(pac->raw, len, "%c0,$,%.4"PRIx16",%.4"PRIx16":%.4"PRIx16":%s",
+    int nr = snprintf(pac->raw, len, "%c0,$,%.4hx,%.4hx:%.4hx:%s",
                       SRRP_REQUEST_LEADER, len, srcid, dstid, header) + 1;
     nr += snprintf(pac->raw + nr, len - nr, "%s", data) + 1;
     assert((uint16_t)nr + CRC_SIZE == len);
     uint16_t crc = calc_crc(pac->raw, len);
-    snprintf(pac->raw + nr, CRC_SIZE, "%.4"PRIx16"", crc);
+    snprintf(pac->raw + nr, CRC_SIZE, "%.4hx", crc);
 
     pac->leader = SRRP_REQUEST_LEADER;
     pac->seat = '$';
@@ -278,12 +278,12 @@ srrp_new_response(uint16_t srcid, uint16_t dstid, uint16_t reqcrc16,
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
     assert(pac);
 
-    int nr = snprintf(pac->raw, len, "%c0,$,%.4"PRIx16",%.4"PRIx16":%.4"PRIx16":%.4"PRIx16":%s",
+    int nr = snprintf(pac->raw, len, "%c0,$,%.4hx,%.4hx:%.4hx:%.4hx:%s",
                       SRRP_RESPONSE_LEADER, len, srcid, dstid, reqcrc16, header) + 1;
     nr += snprintf(pac->raw + nr, len - nr, "%s", data) + 1;
     assert((uint16_t)nr + CRC_SIZE == len);
     uint16_t crc = calc_crc(pac->raw, len);
-    snprintf(pac->raw + nr, CRC_SIZE, "%.4"PRIx16"", crc);
+    snprintf(pac->raw + nr, CRC_SIZE, "%.4hx", crc);
 
     pac->leader = SRRP_RESPONSE_LEADER;
     pac->seat = '$';
@@ -310,12 +310,12 @@ __srrp_new_subpub(const char *header, const char *ctrl, char leader)
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
     assert(pac);
 
-    int nr = snprintf(pac->raw, len, "%c0,$,%.4"PRIx16":%s",
+    int nr = snprintf(pac->raw, len, "%c0,$,%.4hx:%s",
                       leader, len, header) + 1;
     nr += snprintf(pac->raw + nr, len - nr, "%s", ctrl) + 1;
     assert((uint16_t)nr + CRC_SIZE == len);
     uint16_t crc = calc_crc(pac->raw, len);
-    snprintf(pac->raw + nr, CRC_SIZE, "%.4"PRIx16"", crc);
+    snprintf(pac->raw + nr, CRC_SIZE, "%.4hx", crc);
 
     pac->leader = leader;
     pac->seat = '$';
