@@ -22,7 +22,8 @@
 static int requester_finished = 0;
 static int responser_finished = 0;
 
-static void requester_on_srrp_response(int fd, struct srrp_packet *req)
+static void requester_on_srrp_response(
+    struct apix *ctx, int fd, struct srrp_packet *req)
 {
     LOG_INFO("requester on response: %s", req->raw);
     requester_finished = 1;
@@ -61,14 +62,16 @@ static void *requester_thread(void *args)
     return NULL;
 }
 
-static void responser_on_srrp_response(int fd, struct srrp_packet *resp)
+static void responser_on_srrp_response(
+    struct apix *ctx, int fd, struct srrp_packet *resp)
 {
     if (strstr(resp->header, SRRP_CTRL_ONLINE) != 0) {
         LOG_INFO("responser on response: %s", resp->raw);
     }
 }
 
-static void responser_on_srrp_request(int fd, struct srrp_packet *req, struct srrp_packet **resp)
+static void responser_on_srrp_request(
+    struct apix *ctx, int fd, struct srrp_packet *req, struct srrp_packet **resp)
 {
     LOG_INFO("responser on request: %s", req->raw);
     if (strstr(req->header, "/hello") != 0) {

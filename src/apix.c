@@ -246,7 +246,7 @@ int apix_close(struct apix *ctx, int fd)
     if (sinkfd->sink && sinkfd->sink->ops.close)
         sinkfd->sink->ops.close(sinkfd->sink, fd);
     if (sinkfd->events.on_close)
-        sinkfd->events.on_close(fd);
+        sinkfd->events.on_close(ctx, fd);
     return 0;
 }
 
@@ -382,7 +382,7 @@ static void handle_request(struct apix *ctx)
 
         if (dst->l_nodeid == pos->pac->dstid && dst->events.on_request) {
             struct srrp_packet *resp = NULL;
-            dst->events.on_request(pos->fd, pos->pac, &resp);
+            dst->events.on_request(ctx, pos->fd, pos->pac, &resp);
             if (resp) {
                 append_srrp_packet(ctx, dst, resp);
                 // should not free resp
@@ -408,7 +408,7 @@ static void handle_response(struct apix *ctx)
 
         struct sinkfd *dst = find_sinkfd_by_nodeid(ctx, pos->pac->dstid);
         if (dst != NULL && dst->l_nodeid == pos->pac->dstid && dst->events.on_response) {
-            dst->events.on_response(pos->fd, pos->pac);
+            dst->events.on_response(ctx, pos->fd, pos->pac);
         } else {
             struct apimsg *pos_req;
             list_for_each_entry(pos_req, &ctx->msgs, ln) {
@@ -481,7 +481,7 @@ int apix_poll(struct apix *ctx)
             // on_pollin prior to on_srrp_*
             if (pos_fd->events.on_pollin) {
                 int nr = pos_fd->events.on_pollin(
-                    pos_fd->fd, atbuf_read_pos(pos_fd->rxbuf),
+                    ctx, pos_fd->fd, atbuf_read_pos(pos_fd->rxbuf),
                     atbuf_used(pos_fd->rxbuf));
 
                 /*
@@ -676,7 +676,7 @@ void sinkfd_destroy(struct sinkfd *sinkfd)
     list_del_init(&sinkfd->ln_sink);
     list_del_init(&sinkfd->ln_ctx);
     if (sinkfd->events.on_close)
-        sinkfd->events.on_close(sinkfd->fd);
+        sinkfd->events.on_close(sinkfd->sink->ctx, sinkfd->fd);
     free(sinkfd);
 }
 

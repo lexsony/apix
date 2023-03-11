@@ -116,7 +116,8 @@ static void close_fd(int fd)
     }
 }
 
-static void on_srrp_request(int fd, struct srrp_packet *req, struct srrp_packet **resp)
+static void on_srrp_request(
+    struct apix *ctx, int fd, struct srrp_packet *req, struct srrp_packet **resp)
 {
     char hdr[1024];
     snprintf(hdr, sizeof(hdr), "%d:%s", req->dstid, req->header);
@@ -132,12 +133,12 @@ static void on_srrp_request(int fd, struct srrp_packet *req, struct srrp_packet 
     printf("on srrp request(%d): %s\n", fd, req->raw);
 }
 
-static void on_srrp_response(int fd, struct srrp_packet *resp)
+static void on_srrp_response(struct apix *ctx, int fd, struct srrp_packet *resp)
 {
     printf("on srrp response(%d): %s\n", fd, resp->raw);
 }
 
-static int on_fd_pollin(int fd, const char *buf, size_t len)
+static int on_fd_pollin(struct apix *ctx, int fd, const char *buf, size_t len)
 {
     if (broker_mode)
         return -1;
@@ -155,12 +156,12 @@ static int on_fd_pollin(int fd, const char *buf, size_t len)
     return len;
 }
 
-static void on_fd_close(int fd)
+static void on_fd_close(struct apix *ctx, int fd)
 {
     close_fd(fd);
 }
 
-static void on_fd_accept(int _fd, int newfd)
+static void on_fd_accept(struct apix *ctx, int _fd, int newfd)
 {
     if (_fd > FD_MAX || newfd > FD_MAX) {
         perror("fd is too big");
@@ -177,7 +178,7 @@ static void on_fd_accept(int _fd, int newfd)
     printf("accept #%d, %s(%c)\n", newfd, fds[newfd].addr, fds[newfd].type);
 }
 
-static int on_can_pollin(int fd, const char *buf, size_t len)
+static int on_can_pollin(struct apix *ctx, int fd, const char *buf, size_t len)
 {
     struct can_frame *frame = (struct can_frame *)buf;
 

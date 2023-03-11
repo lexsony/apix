@@ -165,7 +165,7 @@ static int unix_s_poll(struct apisink *sink)
             FD_SET(newfd, &ps->fds);
 
             if (pos->events.on_accept)
-                pos->events.on_accept(pos->fd, newfd);
+                pos->events.on_accept(sink->ctx, pos->fd, newfd);
         } else /* recv */ {
             int nread = recv(pos->fd, atbuf_write_pos(pos->rxbuf),
                              atbuf_spare(pos->rxbuf), 0);
