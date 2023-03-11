@@ -368,12 +368,8 @@ static void on_cmd_use(const char *cmd)
     int nr = sscanf(cmd, "use %d", &fd);
     if (nr == 1) {
         if (fd >= 0 && fd < sizeof(fds) / sizeof(fds[0])) {
-            if (fds[fd].type == 'a') {
-                printf("cannot use accept fd\n");
-            } else {
-                assert(fds[fd].fd != 0);
-                cur_fd = fds[fd].fd;
-            }
+            assert(fds[fd].fd != 0);
+            cur_fd = fds[fd].fd;
         }
     }
 }
@@ -668,6 +664,11 @@ static void on_cmd_setid(const char *cmd)
     if (cur_fd == 0)
         return;
 
+    if (fds[cur_fd].type == 'a') {
+        printf("no support on accept fd\n");
+        return;
+    }
+
     if (fds[cur_fd].srrp_mode == 1) {
         printf("cannot change nodeid when in srrpmode\n");
     }
@@ -686,6 +687,11 @@ static void on_cmd_srrpmode(const char *cmd)
 {
     if (cur_fd == 0)
         return;
+
+    if (fds[cur_fd].type == 'a') {
+        printf("no support on accept fd\n");
+        return;
+    }
 
     char msg[32] = {0};
     int nr = sscanf(cmd, "srrpmode %s", msg);
