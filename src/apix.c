@@ -9,15 +9,8 @@
 #include <sys/time.h>
 
 #include "apix-private.h"
-#include "apix.h"
 #include "unused.h"
-#include "crc16.h"
-#include "list.h"
-#include "atbuf.h"
 #include "log.h"
-#include "srrp.h"
-#include "json.h"
-#include "vec.h"
 
 /**
  * apix
@@ -174,7 +167,7 @@ static void topic_pub_handler(struct apix *ctx, struct apimsg *tmsg)
         &ctx->topics, tmsg->pac->header, tmsg->pac->header_len);
     if (topic) {
         for (int i = 0; i < topic->nfds; i++)
-            apix_send(ctx, topic->fds[i], tmsg->pac->raw, tmsg->pac->len);
+            apix_send(ctx, topic->fds[i], vraw(tmsg->pac->payload), tmsg->pac->len);
     } else {
         // do nothing, just drop this msg
         LOG_DEBUG("drop @: %s%s", tmsg->pac->header, tmsg->pac->data);
@@ -292,7 +285,7 @@ static int apix_response(struct apix *ctx, int fd, struct srrp_packet *req, cons
 {
     struct srrp_packet *resp = srrp_new_response(
         req->dstid, req->srcid, req->crc16, req->header, data);
-    int rc = apix_send(ctx, fd, resp->raw, resp->len);
+    int rc = apix_send(ctx, fd, vraw(resp->payload), resp->len);
     srrp_free(resp);
     return rc;
 }
@@ -379,15 +372,15 @@ static void handle_request(struct apix *ctx)
         }
 
         if (dst->l_nodeid == pos->pac->dstid && dst->events.on_request) {
-            struct srrp_packet *resp = NULL;
+            struct srrp_packet *resp = srrp_new_response(0, 0, 0, "", "");
             dst->events.on_request(
-                ctx, pos->fd, pos->pac, &resp, dst->events_priv.priv_on_request);
+                ctx, pos->fd, pos->pac, resp, dst->events_priv.priv_on_request);
             if (resp) {
                 append_srrp_packet(ctx, src, resp);
                 // should not free resp
             }
         } else if (dst->r_nodeid == pos->pac->dstid) {
-            apix_send(ctx, dst->fd, pos->pac->raw, pos->pac->len);
+            apix_send(ctx, dst->fd, vraw(pos->pac->payload), pos->pac->len);
         }
 
         pos->state = APIMSG_ST_FINISHED;
@@ -416,7 +409,7 @@ static void handle_response(struct apix *ctx)
                          pos->pac->header, pos->pac->data);
             }
         } else {
-            apix_send(ctx, pos->fd, pos->pac->raw, pos->pac->len);
+            apix_send(ctx, pos->fd, vraw(pos->pac->payload), pos->pac->len);
         }
 
         apimsg_finish(pos);
@@ -603,7 +596,7 @@ int apix_srrp_online(struct apix *ctx, int fd)
     assert(sinkfd->srrp_mode == 1);
 
     struct srrp_packet *pac = srrp_new_ctrl(sinkfd->l_nodeid, SRRP_CTRL_ONLINE);
-    apix_send(ctx, fd, pac->raw, pac->len);
+    apix_send(ctx, fd, vraw(pac->payload), pac->len);
     srrp_free(pac);
     return 0;
 }
@@ -616,7 +609,7 @@ int apix_srrp_offline(struct apix *ctx, int fd)
     assert(sinkfd->srrp_mode == 1);
 
     struct srrp_packet *pac = srrp_new_ctrl(sinkfd->l_nodeid, SRRP_CTRL_OFFLINE);
-    apix_send(ctx, fd, pac->raw, pac->len);
+    apix_send(ctx, fd, vraw(pac->payload), pac->len);
     srrp_free(pac);
     return 0;
 }

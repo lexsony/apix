@@ -147,7 +147,7 @@ impl Apix {
     extern "C" fn __on_srrp_request(
         _: *mut apix_sys::apix, _: i32,
         req: *mut apix_sys::srrp_packet,
-        resp: *mut *mut apix_sys::srrp_packet,
+        resp: *mut apix_sys::srrp_packet,
         priv_data: *mut std::ffi::c_void) {
         let closure: &mut Box<dyn FnMut(&SrrpPacket) -> SrrpPacket> = unsafe {
             std::mem::transmute(priv_data)
@@ -155,13 +155,14 @@ impl Apix {
         let new_req = Srrp::from_raw_packet(req);
         let new_resp = closure(&new_req);
         unsafe {
-            *resp = apix_sys::srrp_new_response(
+            let tmp = apix_sys::srrp_new_response(
                 new_resp.srcid,
                 new_resp.dstid,
                 new_resp.reqcrc16,
                 new_resp.header.as_ptr() as *const i8,
                 new_resp.data.as_ptr() as *const i8,
             );
+            apix_sys::srrp_move(tmp, resp);
         }
     }
 
@@ -289,7 +290,7 @@ pub struct SrrpPacket {
     pub header_len: u32,
     pub data: String,
     pub data_len: u32,
-    pub raw: Vec<u8>,
+    pub payload: Vec<u8>,
 }
 
 pub struct Srrp {
@@ -314,10 +315,10 @@ impl Srrp {
                     _ => std::ffi::CStr::from_ptr((*pac).data).to_str().unwrap().to_owned(),
                 },
                 data_len: (*pac).data_len,
-                raw: {
+                payload: {
                     let mut v: Vec<u8> = Vec::new();
                     for i in 0..(*pac).len {
-                        v.push(*(*pac).raw.as_ptr().offset(i as isize) as u8);
+                        v.push(*(apix_sys::vraw((*pac).payload)).offset(i as isize) as u8);
                     }
                     v
                 }

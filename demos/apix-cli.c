@@ -19,6 +19,7 @@
 #include <apix/atbuf.h>
 #include "opt.h"
 #include "cli.h"
+#include "srrp.h"
 
 #define KBYTES 1024 * 1024
 #define FD_SIZE 4096
@@ -116,25 +117,27 @@ static void close_fd(int fd)
 }
 
 static void on_srrp_request(
-    struct apix *ctx, int fd, struct srrp_packet *req, struct srrp_packet **resp, void *priv)
+    struct apix *ctx, int fd, struct srrp_packet *req, struct srrp_packet *resp, void *priv)
 {
     char hdr[1024];
     snprintf(hdr, sizeof(hdr), "%d:%s", req->dstid, req->header);
     struct service_private *_priv = svcx_get_service_private(svcx, hdr);
+    struct srrp_packet *tmp;
     if (priv) {
-        *resp = srrp_new_response(
+        tmp = srrp_new_response(
             req->dstid, req->srcid, req->crc16, req->header, _priv->msg);
     } else {
-        *resp = srrp_new_response(
+        tmp = srrp_new_response(
             req->dstid, req->srcid, req->crc16, req->header, "{msg:'...'}");
     }
+    srrp_move(tmp, resp);
 
-    printf("on srrp request(%d): %s\n", fd, req->raw);
+    printf("on srrp request(%d): %s\n", fd, (char *)vraw(req->payload));
 }
 
 static void on_srrp_response(struct apix *ctx, int fd, struct srrp_packet *resp, void *priv)
 {
-    printf("on srrp response(%d): %s\n", fd, resp->raw);
+    printf("on srrp response(%d): %s\n", fd, (char *)vraw(resp->payload));
 }
 
 static int on_fd_pollin(struct apix *ctx, int fd, const void *buf, size_t len, void *priv)
@@ -738,12 +741,12 @@ static void on_cmd_srrpget(const char *cmd)
     struct srrp_packet *pac = srrp_new_request(fds[cur_fd].node_id, dstid, hdr, msg);
     if (strcmp(cur_mode, "can") == 0) {
         struct can_frame frame = {0};
-        memcpy(frame.data, pac->raw, pac->len);
+        memcpy(frame.data, vraw(pac->payload), pac->len);
         frame.can_dlc = strlen(msg);
         frame.can_id = fds[cur_fd].can_id | CAN_EFF_FLAG;
         apix_send(ctx, cur_fd, &frame, sizeof(frame));
     } else {
-        apix_send(ctx, cur_fd, pac->raw, pac->len);
+        apix_send(ctx, cur_fd, vraw(pac->payload), pac->len);
     }
     srrp_free(pac);
 }

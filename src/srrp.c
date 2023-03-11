@@ -8,6 +8,7 @@
 #include <errno.h>
 #include "unused.h"
 #include "crc16.h"
+#include "vec.h"
 
 #define SEQNO_MAX_LEN 32
 #define LENGTH_MAX_LEN 32
@@ -21,7 +22,15 @@
 
 void srrp_free(struct srrp_packet *pac)
 {
+    vec_delete(pac->payload);
     free(pac);
+}
+
+void srrp_move(struct srrp_packet *fst, struct srrp_packet *snd)
+{
+    vec_delete(snd->payload);
+    *snd = *fst;
+    bzero(fst, sizeof(*fst));
 }
 
 static uint16_t calc_crc(const char *buf, size_t len)
@@ -57,7 +66,9 @@ __srrp_parse_one_ctrl(const char *buf)
         return NULL;
 
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
-    memcpy(pac->raw, buf, len);
+    pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
+    vpack(pac->payload, buf, len);
+
     pac->leader = leader;
     pac->seat = seat;
     pac->seqno = seqno;
@@ -65,10 +76,10 @@ __srrp_parse_one_ctrl(const char *buf)
     pac->srcid = srcid;
     pac->crc16 = crc;
 
-    pac->header = header_delimiter + 1;
+    pac->header = strstr(vraw(pac->payload), ":/") + 1;
     pac->header_len = strlen(pac->header);
-    pac->data = NULL;
-    pac->data_len = 0;
+    pac->data = vraw(pac->payload) + strlen(buf) + 1;
+    pac->data_len = strlen(pac->data);
 
     return pac;
 }
@@ -94,7 +105,9 @@ __srrp_parse_one_request(const char *buf)
         return NULL;
 
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
-    memcpy(pac->raw, buf, len);
+    pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
+    vpack(pac->payload, buf, len);
+
     pac->leader = leader;
     pac->seat = seat;
     pac->seqno = seqno;
@@ -103,9 +116,9 @@ __srrp_parse_one_request(const char *buf)
     pac->dstid = dstid;
     pac->crc16 = crc;
 
-    pac->header = header_delimiter + 1;
+    pac->header = strstr(vraw(pac->payload), ":/") + 1;
     pac->header_len = strlen(pac->header);
-    pac->data = buf + strlen(buf) + 1;
+    pac->data = vraw(pac->payload) + strlen(buf) + 1;
     pac->data_len = strlen(pac->data);
 
     return pac;
@@ -132,7 +145,9 @@ __srrp_parse_one_response(const char *buf)
         return NULL;
 
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
-    memcpy(pac->raw, buf, len);
+    pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
+    vpack(pac->payload, buf, len);
+
     pac->leader = leader;
     pac->seat = seat;
     pac->seqno = seqno;
@@ -142,9 +157,9 @@ __srrp_parse_one_response(const char *buf)
     pac->reqcrc16 = reqcrc16;
     pac->crc16 = crc;
 
-    pac->header = header_delimiter + 1;
+    pac->header = strstr(vraw(pac->payload), ":/") + 1;
     pac->header_len = strlen(pac->header);
-    pac->data = buf + strlen(buf) + 1;
+    pac->data = vraw(pac->payload) + strlen(buf) + 1;
     pac->data_len = strlen(pac->data);
 
     return pac;
@@ -172,15 +187,18 @@ __srrp_parse_one_subpub(const char *buf)
         return NULL;
 
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
-    memcpy(pac->raw, buf, len);
+    pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
+    vpack(pac->payload, buf, len);
+
     pac->leader = leader;
     pac->seat = seat;
     pac->seqno = seqno;
     pac->len = len;
     pac->crc16 = crc;
-    pac->header = header_delimiter + 1;
+
+    pac->header = strstr(vraw(pac->payload), ":/") + 1;
     pac->header_len = strlen(pac->header);
-    pac->data = buf + strlen(buf) + 1;
+    pac->data = vraw(pac->payload) + strlen(buf) + 1;
     pac->data_len = strlen(pac->data);
 
     return pac;
@@ -214,11 +232,15 @@ srrp_new_ctrl(uint16_t srcid, const char *header)
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
     assert(pac);
 
-    int nr = snprintf(pac->raw, len, "%c0,$,%.4hx,%.4hx:%s",
+    char buf[len + 1];
+    int nr = snprintf(buf, len, "%c0,$,%.4hx,%.4hx:%s",
                       SRRP_CTRL_LEADER, len, srcid, header) + 1;
     assert((uint16_t)nr + CRC_SIZE == len);
-    uint16_t crc = calc_crc(pac->raw, len);
-    snprintf(pac->raw + nr, CRC_SIZE, "%.4hx", crc);
+    uint16_t crc = calc_crc(buf, len);
+    snprintf(buf + nr, CRC_SIZE, "%.4hx", crc);
+
+    pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
+    vpack(pac->payload, buf, len);
 
     pac->leader = SRRP_CTRL_LEADER;
     pac->seat = '$';
@@ -228,10 +250,12 @@ srrp_new_ctrl(uint16_t srcid, const char *header)
     pac->dstid = 0;
     pac->reqcrc16 = 0;
     pac->crc16 = crc;
-    pac->header = strstr(pac->raw, header);
-    pac->header_len = strlen(header);
+
+    pac->header = strstr(vraw(pac->payload), header);
+    pac->header_len = strlen(pac->header);
     pac->data = NULL;
     pac->data_len = 0;
+
     return pac;
 }
 
@@ -245,12 +269,16 @@ srrp_new_request(uint16_t srcid, uint16_t dstid, const char *header, const char 
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
     assert(pac);
 
-    int nr = snprintf(pac->raw, len, "%c0,$,%.4hx,%.4hx:%.4hx:%s",
+    char buf[len + 1];
+    int nr = snprintf(buf, len, "%c0,$,%.4hx,%.4hx:%.4hx:%s",
                       SRRP_REQUEST_LEADER, len, srcid, dstid, header) + 1;
-    nr += snprintf(pac->raw + nr, len - nr, "%s", data) + 1;
+    nr += snprintf(buf + nr, len - nr, "%s", data) + 1;
     assert((uint16_t)nr + CRC_SIZE == len);
-    uint16_t crc = calc_crc(pac->raw, len);
-    snprintf(pac->raw + nr, CRC_SIZE, "%.4hx", crc);
+    uint16_t crc = calc_crc(buf, len);
+    snprintf(buf + nr, CRC_SIZE, "%.4hx", crc);
+
+    pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
+    vpack(pac->payload, buf, len);
 
     pac->leader = SRRP_REQUEST_LEADER;
     pac->seat = '$';
@@ -260,10 +288,12 @@ srrp_new_request(uint16_t srcid, uint16_t dstid, const char *header, const char 
     pac->dstid = dstid;
     pac->reqcrc16 = 0;
     pac->crc16 = crc;
-    pac->header = strstr(pac->raw, header);
-    pac->header_len = strlen(header);
-    pac->data = pac->raw + strlen(pac->raw) + 1;
-    pac->data_len = strlen(data);
+
+    pac->header = strstr(vraw(pac->payload), header);
+    pac->header_len = strlen(pac->header);
+    pac->data = vraw(pac->payload) + strlen(buf) + 1;
+    pac->data_len = strlen(pac->data);
+
     return pac;
 }
 
@@ -278,12 +308,16 @@ srrp_new_response(uint16_t srcid, uint16_t dstid, uint16_t reqcrc16,
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
     assert(pac);
 
-    int nr = snprintf(pac->raw, len, "%c0,$,%.4hx,%.4hx:%.4hx:%.4hx:%s",
+    char buf[len + 1];
+    int nr = snprintf(buf, len, "%c0,$,%.4hx,%.4hx:%.4hx:%.4hx:%s",
                       SRRP_RESPONSE_LEADER, len, srcid, dstid, reqcrc16, header) + 1;
-    nr += snprintf(pac->raw + nr, len - nr, "%s", data) + 1;
+    nr += snprintf(buf + nr, len - nr, "%s", data) + 1;
     assert((uint16_t)nr + CRC_SIZE == len);
-    uint16_t crc = calc_crc(pac->raw, len);
-    snprintf(pac->raw + nr, CRC_SIZE, "%.4hx", crc);
+    uint16_t crc = calc_crc(buf, len);
+    snprintf(buf + nr, CRC_SIZE, "%.4hx", crc);
+
+    pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
+    vpack(pac->payload, buf, len);
 
     pac->leader = SRRP_RESPONSE_LEADER;
     pac->seat = '$';
@@ -293,10 +327,12 @@ srrp_new_response(uint16_t srcid, uint16_t dstid, uint16_t reqcrc16,
     pac->dstid = dstid;
     pac->reqcrc16 = reqcrc16;
     pac->crc16 = crc;
-    pac->header = strstr(pac->raw, header);
-    pac->header_len = strlen(header);
-    pac->data = pac->raw + strlen(pac->raw) + 1;
-    pac->data_len = strlen(data);
+
+    pac->header = strstr(vraw(pac->payload), header);
+    pac->header_len = strlen(pac->header);
+    pac->data = vraw(pac->payload) + strlen(buf) + 1;
+    pac->data_len = strlen(pac->data);
+
     return pac;
 }
 
@@ -310,22 +346,28 @@ __srrp_new_subpub(const char *header, const char *ctrl, char leader)
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
     assert(pac);
 
-    int nr = snprintf(pac->raw, len, "%c0,$,%.4hx:%s",
+    char buf[len + 1];
+    int nr = snprintf(buf, len, "%c0,$,%.4hx:%s",
                       leader, len, header) + 1;
-    nr += snprintf(pac->raw + nr, len - nr, "%s", ctrl) + 1;
+    nr += snprintf(buf + nr, len - nr, "%s", ctrl) + 1;
     assert((uint16_t)nr + CRC_SIZE == len);
-    uint16_t crc = calc_crc(pac->raw, len);
-    snprintf(pac->raw + nr, CRC_SIZE, "%.4hx", crc);
+    uint16_t crc = calc_crc(buf, len);
+    snprintf(buf + nr, CRC_SIZE, "%.4hx", crc);
+
+    pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
+    vpack(pac->payload, buf, len);
 
     pac->leader = leader;
     pac->seat = '$';
     pac->seqno = 0;
     pac->len = len;
     pac->crc16 = crc;
-    pac->header = strstr(pac->raw, header);
-    pac->header_len = strlen(header);
-    pac->data = pac->raw + strlen(pac->raw) + 1;
-    pac->data_len = strlen(ctrl);
+
+    pac->header = strstr(vraw(pac->payload), header);
+    pac->header_len = strlen(pac->header);
+    pac->data = vraw(pac->payload) + strlen(buf) + 1;
+    pac->data_len = strlen(pac->data);
+
     return pac;
 }
 

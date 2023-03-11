@@ -25,7 +25,7 @@ static int responser_finished = 0;
 static void requester_on_srrp_response(
     struct apix *ctx, int fd, struct srrp_packet *req, void *priv)
 {
-    LOG_INFO("requester on response: %s", req->raw);
+    LOG_INFO("requester on response: %s", vraw(req->payload));
     requester_finished = 1;
 }
 
@@ -45,7 +45,7 @@ static void *requester_thread(void *args)
 
     struct srrp_packet *pac = srrp_new_request(
         3333, 8888, "/hello", "j:{name:'yon',age:'18',equip:['hat','shoes']}");
-    rc = send(fd, pac->raw, pac->len, 0);
+    rc = send(fd, vraw(pac->payload), pac->len, 0);
     assert_true(rc != -1);
     srrp_free(pac);
 
@@ -63,18 +63,19 @@ static void responser_on_srrp_response(
     struct apix *ctx, int fd, struct srrp_packet *resp, void *priv)
 {
     if (strstr(resp->header, SRRP_CTRL_ONLINE) != 0) {
-        LOG_INFO("responser on response: %s", resp->raw);
+        LOG_INFO("responser on response: %s", vraw(resp->payload));
     }
 }
 
 static void responser_on_srrp_request(
-    struct apix *ctx, int fd, struct srrp_packet *req, struct srrp_packet **resp, void *priv)
+    struct apix *ctx, int fd, struct srrp_packet *req, struct srrp_packet *resp, void *priv)
 {
-    LOG_INFO("responser on request: %s", req->raw);
+    LOG_INFO("responser on request: %s", vraw(req->payload));
     if (strstr(req->header, "/hello") != 0) {
-        *resp = srrp_new_response(
+        struct srrp_packet *tmp = srrp_new_response(
             req->dstid, req->srcid, req->crc16, req->header,
             "j:{err:0,errmsg:'succ',data:{msg:'world'}}");
+        srrp_move(tmp, resp);
         responser_finished = 1;
     }
 }
@@ -157,7 +158,7 @@ static void *publish_thread(void *args)
     sleep(1);
 
     struct srrp_packet *pac = srrp_new_publish("/test-topic", "{msg:'ahaa'}");
-    rc = send(fd, pac->raw, pac->len, 0);
+    rc = send(fd, vraw(pac->payload), pac->len, 0);
     srrp_free(pac);
 
     close(fd);
@@ -195,7 +196,7 @@ static void *subscribe_thread(void *args)
     char buf[256] = {0};
 
     struct srrp_packet *pac_sub = srrp_new_subscribe("/test-topic", "{}");
-    rc = send(fd, pac_sub->raw, pac_sub->len, 0);
+    rc = send(fd, vraw(pac_sub->payload), pac_sub->len, 0);
     srrp_free(pac_sub);
     memset(buf, 0, sizeof(buf));
     rc = recv(fd, buf, sizeof(buf), 0);
@@ -205,7 +206,7 @@ static void *subscribe_thread(void *args)
     LOG_INFO("responser recv pub: %s", buf);
 
     struct srrp_packet *pac_unsub = srrp_new_unsubscribe("/test-topic", "{}");
-    rc = send(fd, pac_unsub->raw, pac_unsub->len, 0);
+    rc = send(fd, vraw(pac_unsub->payload), pac_unsub->len, 0);
     srrp_free(pac_unsub);
     memset(buf, 0, sizeof(buf));
     rc = recv(fd, buf, sizeof(buf), 0);

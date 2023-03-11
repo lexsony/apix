@@ -23,9 +23,7 @@
 
 #include "apix-private.h"
 #include "apix-posix.h"
-#include "atbuf.h"
 #include "unused.h"
-#include "list.h"
 #include "log.h"
 
 struct posix_sink {

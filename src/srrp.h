@@ -2,6 +2,7 @@
 #define __SRRP_H
 
 #include <stdint.h>
+#include "vec.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -81,8 +82,7 @@ struct srrp_packet {
     const char *data;
     uint32_t data_len;
 
-    // where to store the payload
-    char raw[0];
+    vec_t *payload;
 };
 
 /**
@@ -90,6 +90,12 @@ struct srrp_packet {
  * - free packet created by srrp_parse & srrp_new_*
  */
 void srrp_free(struct srrp_packet *pac);
+
+/**
+ * srrp_move
+ * - move packet from fst to snd, then auto free fst
+ */
+void srrp_move(struct srrp_packet *fst, struct srrp_packet *snd);
 
 /**
  * srrp_parse
