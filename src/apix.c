@@ -245,8 +245,6 @@ int apix_close(struct apix *ctx, int fd)
         return -1;
     if (sinkfd->sink && sinkfd->sink->ops.close)
         sinkfd->sink->ops.close(sinkfd->sink, fd);
-    if (sinkfd->events.on_close)
-        sinkfd->events.on_close(ctx, fd, sinkfd->events_priv.priv_on_close);
     return 0;
 }
 
@@ -668,14 +666,14 @@ struct sinkfd *sinkfd_new()
 
 void sinkfd_destroy(struct sinkfd *sinkfd)
 {
+    if (sinkfd->events.on_close)
+        sinkfd->events.on_close(
+            sinkfd->sink->ctx, sinkfd->fd, sinkfd->events_priv.priv_on_close);
     //atbuf_delete(sinkfd->txbuf);
     atbuf_delete(sinkfd->rxbuf);
     sinkfd->sink = NULL;
     list_del_init(&sinkfd->ln_sink);
     list_del_init(&sinkfd->ln_ctx);
-    if (sinkfd->events.on_close)
-        sinkfd->events.on_close(
-            sinkfd->sink->ctx, sinkfd->fd, sinkfd->events_priv.priv_on_close);
     free(sinkfd);
 }
 

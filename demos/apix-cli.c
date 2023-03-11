@@ -107,7 +107,6 @@ static void close_fd(int fd)
         printf("close #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
         if (cur_fd == fd)
             cur_fd = -1;
-        apix_close(ctx, fd);
         fds[fd].fd = 0;
         if (fds[fd].msg) {
             atbuf_delete(fds[fd].msg);
