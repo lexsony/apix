@@ -73,14 +73,6 @@ typedef int (*fd_pollin_func_t)(
 int apix_on_fd_pollin(struct apix *ctx, int fd, fd_pollin_func_t func);
 
 /**
- * apix_on_fd_pollout
- * - callback not implement yet
- */
-typedef int (*fd_pollout_func_t)(
-    struct apix *ctx, int fd, const void *buf, size_t len);
-int apix_on_fd_pollout(struct apix *ctx, int fd, fd_pollout_func_t func);
-
-/**
  * apix_enable_srrp_mode
  * - enable srrp mode
  */

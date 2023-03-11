@@ -94,7 +94,7 @@ struct sinkfd {
         fd_close_func_t on_close;
         fd_accept_func_t on_accept;
         fd_pollin_func_t on_pollin;
-        fd_pollout_func_t on_pollout;
+        /* TODO: implement on_pollout & on_pollerr */
         srrp_request_func_t on_request;
         srrp_response_func_t on_response;
     } events;

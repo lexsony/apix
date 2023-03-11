@@ -564,16 +564,6 @@ int apix_on_fd_pollin(struct apix *ctx, int fd, fd_pollin_func_t func)
     return 0;
 }
 
-int apix_on_fd_pollout(struct apix *ctx, int fd, fd_pollout_func_t func)
-{
-    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
-    if (sinkfd == NULL)
-        return -EBADF;
-    assert(sinkfd->events.on_pollout == NULL);
-    sinkfd->events.on_pollout = func;
-    return 0;
-}
-
 int apix_on_srrp_request(struct apix *ctx, int fd, srrp_request_func_t func)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
