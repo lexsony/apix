@@ -39,10 +39,7 @@ static void *requester_thread(void *args)
 
     int rc = 0;
 
-    struct srrp_packet *pac_online = srrp_new_ctrl(3333, SRRP_CTRL_ONLINE);
-    rc = send(fd, pac_online->raw, pac_online->len, 0);
-    srrp_free(pac_online);
-    assert_true(rc != -1);
+    assert_true(apix_srrp_online(ctx, fd) == 0);
 
     sleep(1);
 
@@ -91,12 +88,7 @@ static void *responser_thread(void *args)
     apix_on_srrp_request(ctx, fd, responser_on_srrp_request, NULL);
     apix_on_srrp_response(ctx, fd, responser_on_srrp_response, NULL);
 
-    int rc = 0;
-
-    struct srrp_packet *pac_online = srrp_new_ctrl(8888, SRRP_CTRL_ONLINE);
-    rc = send(fd, pac_online->raw, pac_online->len, 0);
-    srrp_free(pac_online);
-    assert_true(rc != -1);
+    assert_true(apix_srrp_online(ctx, fd) == 0);
 
     while (responser_finished != 1) {
         apix_poll(ctx);
@@ -229,6 +221,7 @@ static void test_api_subscribe_publish(void **status)
     struct apix *ctx = apix_new();
     apix_enable_posix(ctx);
     int fd = apix_open_tcp_server(ctx, TCP_ADDR);
+    assert_true(fd != -1);
     apix_enable_srrp_mode(ctx, fd, 0);
 
     pthread_t subscribe_pid;

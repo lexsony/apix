@@ -600,6 +600,32 @@ int apix_disable_srrp_mode(struct apix *ctx, int fd)
     return 0;
 }
 
+int apix_srrp_online(struct apix *ctx, int fd)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -EBADF;
+    assert(sinkfd->srrp_mode == 1);
+
+    struct srrp_packet *pac = srrp_new_ctrl(sinkfd->l_nodeid, SRRP_CTRL_ONLINE);
+    apix_send(ctx, fd, pac->raw, pac->len);
+    srrp_free(pac);
+    return 0;
+}
+
+int apix_srrp_offline(struct apix *ctx, int fd)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -EBADF;
+    assert(sinkfd->srrp_mode == 1);
+
+    struct srrp_packet *pac = srrp_new_ctrl(sinkfd->l_nodeid, SRRP_CTRL_OFFLINE);
+    apix_send(ctx, fd, pac->raw, pac->len);
+    srrp_free(pac);
+    return 0;
+}
+
 /**
  * apisink
  */

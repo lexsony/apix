@@ -131,6 +131,18 @@ impl Apix {
         }
     }
 
+    pub fn srrp_online(&self, fd: i32) {
+        unsafe {
+            apix_sys::apix_srrp_online(self.ctx, fd);
+        }
+    }
+
+    pub fn srrp_offline(&self, fd: i32) {
+        unsafe {
+            apix_sys::apix_srrp_offline(self.ctx, fd);
+        }
+    }
+
     extern "C" fn __on_srrp_request(
         _: *mut apix_sys::apix, _: i32,
         req: *mut apix_sys::srrp_packet,
