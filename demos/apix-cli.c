@@ -671,6 +671,7 @@ static void on_cmd_setid(const char *cmd)
 
     if (fds[cur_fd].srrp_mode == 1) {
         printf("cannot change nodeid when in srrpmode\n");
+        return;
     }
 
     int id = 0;
@@ -703,9 +704,13 @@ static void on_cmd_srrpmode(const char *cmd)
     if (strcmp(msg, "on") == 0) {
         fds[cur_fd].srrp_mode = 1;
         apix_enable_srrp_mode(ctx, fds[cur_fd].fd, fds[cur_fd].node_id);
+        if (fds[cur_fd].type == 'c')
+            apix_srrp_online(ctx, fds[cur_fd].fd);
     } else if (strcmp(msg, "off") == 0) {
         fds[cur_fd].srrp_mode = 0;
         apix_disable_srrp_mode(ctx, fds[cur_fd].fd);
+        if (fds[cur_fd].type == 'c')
+            apix_srrp_offline(ctx, fds[cur_fd].fd);
     } else {
         printf("param error\n");
     }
@@ -839,7 +844,7 @@ static const struct cli_cmd cli_cmds[] = {
     { "send", on_cmd_send, "send msg" },
     { "setid", on_cmd_setid, "set node id" },
     { "srrpmode", on_cmd_srrpmode, "srrpmode on|off" },
-    { "srrpget", on_cmd_srrpget, "srrpget hdr?msg" },
+    { "srrpget", on_cmd_srrpget, "srrpget dstid:hdr?msg" },
     { "srrpadd", on_cmd_srrpadd, "srrpadd hdr?msg" },
     { "srrpdel", on_cmd_srrpdel, "srrpdel hdr" },
     { "srrpinfo", on_cmd_srrpinfo, "srrpinfo" },
@@ -877,9 +882,9 @@ int main(int argc, char *argv[])
     signal(SIGQUIT, signal_handler);
 
     struct opt *opt;
-    //opt = find_opt("debug", opttab);
-    //if (opt_bool(opt))
-    //    log_set_level(LOG_LV_DEBUG);
+    opt = find_opt("debug", opttab);
+    if (opt_bool(opt))
+        log_set_level(LOG_LV_DEBUG);
     opt = find_opt("mode", opttab);
     cur_mode = opt_string(opt);
     opt = find_opt("print_all", opttab);
