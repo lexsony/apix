@@ -98,8 +98,9 @@ impl Apix {
     }
 
     extern "C" fn __on_fd_pollin(
-        _: *mut apix_sys::apix, _: i32, buf: *const std::ffi::c_void, len: u64,
-            priv_data: *mut std::ffi::c_void) -> i32 {
+        _: *mut apix_sys::apix, _: i32,
+        buf: *const std::ffi::c_void, len: u64,
+        priv_data: *mut std::ffi::c_void) -> i32 {
         let closure: &mut Box<dyn FnMut(&[u8]) -> i32> = unsafe {
             std::mem::transmute(priv_data)
         };
@@ -177,13 +178,13 @@ impl Apix {
 
     extern "C" fn __on_srrp_response(
         _: *mut apix_sys::apix, _: i32,
-        req: *mut apix_sys::srrp_packet,
+        resp: *mut apix_sys::srrp_packet,
         priv_data: *mut std::ffi::c_void) {
         let closure: &mut Box<dyn FnMut(&SrrpPacket)> = unsafe {
             std::mem::transmute(priv_data)
         };
-        let req = Srrp::from_raw_packet(req);
-        closure(&req);
+        let resp = Srrp::from_raw_packet(resp);
+        closure(&resp);
     }
 
     pub fn on_srrp_response<F>(&self, fd: i32, func: F)
@@ -313,8 +314,13 @@ impl Srrp {
                     _ => std::ffi::CStr::from_ptr((*pac).data).to_str().unwrap().to_owned(),
                 },
                 data_len: (*pac).data_len,
-                raw: Vec::from_raw_parts(
-                    (*pac).raw.as_ptr() as *mut u8, (*pac).len as usize, (*pac).len as usize),
+                raw: {
+                    let mut v: Vec<u8> = Vec::new();
+                    for i in 0..(*pac).len {
+                        v.push(*(*pac).raw.as_ptr().offset(i as isize) as u8);
+                    }
+                    v
+                }
             };
         }
     }
@@ -332,6 +338,7 @@ impl Srrp {
     pub fn new_request(srcid: u16, dstid: u16, header: &str, data: &str) -> SrrpPacket {
         unsafe {
             let header = std::ffi::CString::new(header).unwrap();
+            let data = std::ffi::CString::new(data).unwrap();
             let pac = apix_sys::srrp_new_request(
                 srcid, dstid,
                 header.as_ptr() as *const i8,
@@ -346,6 +353,7 @@ impl Srrp {
                         header: &str, data: &str) -> SrrpPacket {
         unsafe {
             let header = std::ffi::CString::new(header).unwrap();
+            let data = std::ffi::CString::new(data).unwrap();
             let pac = apix_sys::srrp_new_response(
                 srcid, dstid, reqcrc16,
                 header.as_ptr() as *const i8,
