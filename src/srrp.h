@@ -23,9 +23,9 @@ extern "C" {
  *   <0,$,<len>,8888:0001:<crc16>:/echo\0j:{err:0,errmsg:'succ',data:{msg:'world'}}\0<crc16>\0
  *   <1,$,<len>,8888:0001:<crc16>:/hello/y\0j:{err:1,errmsg:'fail',data:{msg:'hell'}}\0<crc16>\0
  *
- * Data type: j:json, b:byte, t:txt
+ * Data type: j:json, b:base64, t:txt
  *   >0,$,<len>,0001:8888:/echo\0j:{name:'yon',age:18,equip:['hat','shoes']}\0<crc16>\0
- *   >0,$,<len>,0001:8888:/echo\0b:{\0\1\2\3\4\5}\0<crc16>\0
+ *   >0,$,<len>,0001:8888:/echo\0b:aGVsbG8gd29ybGQh\0<crc16>\0
  *   >0,$,<len>,0001:8888:/echo\0t:hello world!\0<crc16>\0
  *
  * Subscribe: #[0xseqno],[^|0|$],[0xlen]:[topic]\0j:{ctrl}\0<crc16>\0
