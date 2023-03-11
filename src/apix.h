@@ -37,6 +37,13 @@ int apix_send(struct apix *ctx, int fd, const void *buf, size_t len);
 int apix_recv(struct apix *ctx, int fd, void *buf, size_t size);
 
 /**
+ * apix_read_from_buffer
+ * - call this func after poll if not set on_fd_pollin and not in srrpmode,
+ * - as the inner rx buffer has no chance to reduce.
+ */
+int apix_read_from_buffer(struct apix *ctx, int fd, void *buf, size_t size);
+
+/**
  * apix is designed with poll mechanism
  */
 int apix_poll(struct apix *ctx);

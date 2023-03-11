@@ -17,6 +17,7 @@
 #include "log.h"
 #include "srrp.h"
 #include "json.h"
+#include "vec.h"
 
 /**
  * apix
@@ -82,32 +83,32 @@ static void append_srrp_packet(
 
 static void parse_packet(struct apix *ctx, struct sinkfd *sinkfd)
 {
-    while (atbuf_used(sinkfd->rxbuf)) {
+    while (vsize(sinkfd->rxbuf)) {
         uint32_t offset = srrp_next_packet_offset(
-            atbuf_read_pos(sinkfd->rxbuf), atbuf_used(sinkfd->rxbuf));
+            vraw(sinkfd->rxbuf), vsize(sinkfd->rxbuf));
         if (offset != 0) {
             LOG_WARN("broken packet:");
-            log_hex_string(atbuf_read_pos(sinkfd->rxbuf), offset);
-            atbuf_read_advance(sinkfd->rxbuf, offset);
+            log_hex_string(vraw(sinkfd->rxbuf), offset);
+            vdrop(sinkfd->rxbuf, offset);
         }
-        if (atbuf_used(sinkfd->rxbuf) == 0)
+        if (vsize(sinkfd->rxbuf) == 0)
             break;
 
-        struct srrp_packet *pac = srrp_parse(atbuf_read_pos(sinkfd->rxbuf));
+        struct srrp_packet *pac = srrp_parse(vraw(sinkfd->rxbuf));
         if (pac == NULL) {
             if (time(0) < sinkfd->ts_poll_recv.tv_sec + PARSE_PACKET_TIMEOUT / 1000)
                 break;
 
-            LOG_WARN("parse packet failed: %s", atbuf_read_pos(sinkfd->rxbuf));
+            LOG_WARN("parse packet failed: %s", vraw(sinkfd->rxbuf));
             uint32_t offset = srrp_next_packet_offset(
-                atbuf_read_pos(sinkfd->rxbuf) + 1,
-                atbuf_used(sinkfd->rxbuf) - 1) + 1;
-            atbuf_read_advance(sinkfd->rxbuf, offset);
+                vraw(sinkfd->rxbuf) + 1,
+                vsize(sinkfd->rxbuf) - 1) + 1;
+            vdrop(sinkfd->rxbuf, offset);
             break;
         }
 
         append_srrp_packet(ctx, sinkfd, pac);
-        atbuf_read_advance(sinkfd->rxbuf, pac->len);
+        vdrop(sinkfd->rxbuf, pac->len);
     }
 }
 
@@ -275,6 +276,16 @@ int apix_recv(struct apix *ctx, int fd, void *buf, size_t size)
     if (sinkfd->sink == NULL || sinkfd->sink->ops.recv == NULL)
         return -1;
     return sinkfd->sink->ops.recv(sinkfd->sink, fd, buf, size);
+}
+
+int apix_read_from_buffer(struct apix *ctx, int fd, void *buf, size_t size)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    size_t len = size < vsize(sinkfd->rxbuf) ? size : vsize(sinkfd->rxbuf);
+    if (len) vdump(sinkfd->rxbuf, buf, len);
+    return len;
 }
 
 static int apix_response(struct apix *ctx, int fd, struct srrp_packet *req, const char *data)
@@ -459,14 +470,14 @@ int apix_poll(struct apix *ctx)
     struct sinkfd *pos_fd;
     list_for_each_entry(pos_fd, &ctx->sinkfds, ln_ctx) {
         if (timercmp(&ctx->poll_ts, &pos_fd->ts_poll_recv, <)) {
-            assert(atbuf_used(pos_fd->rxbuf));
+            assert(vsize(pos_fd->rxbuf));
             ctx->poll_cnt++;
 
             // on_pollin prior to on_srrp_*
             if (pos_fd->events.on_pollin) {
                 int nr = pos_fd->events.on_pollin(
-                    ctx, pos_fd->fd, atbuf_read_pos(pos_fd->rxbuf),
-                    atbuf_used(pos_fd->rxbuf),
+                    ctx, pos_fd->fd, vraw(pos_fd->rxbuf),
+                    vsize(pos_fd->rxbuf),
                     pos_fd->events_priv.priv_on_pollin);
 
                 /*
@@ -474,9 +485,9 @@ int apix_poll(struct apix *ctx)
                  * nr > 0: handled, skip nr bytes
                  */
                 if (nr > 0) {
-                    if ((size_t)nr > atbuf_used(pos_fd->rxbuf))
-                        nr = atbuf_used(pos_fd->rxbuf);
-                    atbuf_read_advance(pos_fd->rxbuf, nr);
+                    if ((size_t)nr > vsize(pos_fd->rxbuf))
+                        nr = vsize(pos_fd->rxbuf);
+                    vdrop(pos_fd->rxbuf, nr);
                 }
             }
 
@@ -663,8 +674,7 @@ struct sinkfd *sinkfd_new()
     memset(sinkfd, 0, sizeof(*sinkfd));
     sinkfd->fd = -1;
     sinkfd->type = 0;
-    //sinkfd->txbuf = atbuf_new(0);
-    sinkfd->rxbuf = atbuf_new(0);
+    sinkfd->rxbuf = vec_new(1, 1024, VEC_ALLOC_LINEAR);
     sinkfd->srrp_mode = 0;
     sinkfd->l_nodeid = 0;
     sinkfd->r_nodeid = 0;
@@ -679,8 +689,7 @@ void sinkfd_destroy(struct sinkfd *sinkfd)
     if (sinkfd->events.on_close)
         sinkfd->events.on_close(
             sinkfd->sink->ctx, sinkfd->fd, sinkfd->events_priv.priv_on_close);
-    //atbuf_delete(sinkfd->txbuf);
-    atbuf_delete(sinkfd->rxbuf);
+    vec_delete(sinkfd->rxbuf);
     sinkfd->sink = NULL;
     list_del_init(&sinkfd->ln_sink);
     list_del_init(&sinkfd->ln_ctx);

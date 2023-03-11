@@ -8,7 +8,7 @@
 #include <sys/time.h>
 #include "apix.h"
 #include "list.h"
-#include "atbuf.h"
+#include "vec.h"
 #include "srrp.h"
 
 #define APISINK_ID_SIZE 64
@@ -80,8 +80,7 @@ struct sinkfd {
     char type; /* c: connect, l: listen, a: accept */
     char addr[SINKFD_ADDR_SIZE];
 
-    //atbuf_t *txbuf;
-    atbuf_t *rxbuf;
+    vec_t *rxbuf;
 
     int srrp_mode;
     uint32_t l_nodeid; /* local nodeid */

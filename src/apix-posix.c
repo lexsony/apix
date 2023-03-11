@@ -168,8 +168,8 @@ static int unix_s_poll(struct apisink *sink)
                 pos->events.on_accept(
                     sink->ctx, pos->fd, newfd, pos->events_priv.priv_on_accept);
         } else /* recv */ {
-            int nread = recv(pos->fd, atbuf_write_pos(pos->rxbuf),
-                             atbuf_spare(pos->rxbuf), 0);
+            char buf[1024] = {0};
+            int nread = recv(pos->fd, buf, sizeof(buf), 0);
             if (nread == -1) {
                 LOG_DEBUG("[recv] fd:%d, %s", pos->fd, strerror(errno));
                 FD_CLR(pos->fd, &ps->fds);
@@ -179,7 +179,7 @@ static int unix_s_poll(struct apisink *sink)
                 FD_CLR(pos->fd, &ps->fds);
                 sink->ops.close(sink, pos->fd);
             } else {
-                atbuf_write_advance(pos->rxbuf, nread);
+                vpack(pos->rxbuf, buf, nread);
                 gettimeofday(&pos->ts_poll_recv, NULL);
             }
         }
@@ -269,8 +269,8 @@ static int unix_c_poll(struct apisink *sink)
 
         nr_recv_fds--;
 
-        int nread = recv(pos->fd, atbuf_write_pos(pos->rxbuf),
-                            atbuf_spare(pos->rxbuf), 0);
+        char buf[1024] = {0};
+        int nread = recv(pos->fd, buf, sizeof(buf), 0);
         if (nread == -1) {
             LOG_DEBUG("[recv] fd:%d, %s", pos->fd, strerror(errno));
             FD_CLR(pos->fd, &ps->fds);
@@ -280,7 +280,7 @@ static int unix_c_poll(struct apisink *sink)
             FD_CLR(pos->fd, &ps->fds);
             sink->ops.close(sink, pos->fd);
         } else {
-            atbuf_write_advance(pos->rxbuf, nread);
+            vpack(pos->rxbuf, buf, nread);
             gettimeofday(&pos->ts_poll_recv, NULL);
         }
     }
@@ -533,8 +533,8 @@ static int com_poll(struct apisink *sink)
 
         nr_recv_fds--;
 
-        int nread = read(pos->fd, atbuf_write_pos(pos->rxbuf),
-                         atbuf_spare(pos->rxbuf));
+        char buf[1024] = {0};
+        int nread = read(pos->fd, buf, sizeof(buf));
         if (nread == -1) {
             LOG_DEBUG("[read] (%d) %s", errno, strerror(errno));
             sink->ops.close(sink, pos->fd);
@@ -542,7 +542,7 @@ static int com_poll(struct apisink *sink)
             LOG_DEBUG("[read] (%d) finished");
             sink->ops.close(sink, pos->fd);
         } else {
-            atbuf_write_advance(pos->rxbuf, nread);
+            vpack(pos->rxbuf, buf, nread);
             gettimeofday(&pos->ts_poll_recv, NULL);
         }
     }
@@ -635,8 +635,8 @@ static int can_poll(struct apisink *sink)
 
         nr_recv_fds--;
 
-        int nread = read(pos->fd, atbuf_write_pos(pos->rxbuf),
-                         sizeof(struct can_frame));
+        struct can_frame frame = {0};
+        int nread = read(pos->fd, &frame, sizeof(struct can_frame));
         if (nread == -1) {
             LOG_DEBUG("[read] (%d) %s", errno, strerror(errno));
             sink->ops.close(sink, pos->fd);
@@ -644,7 +644,7 @@ static int can_poll(struct apisink *sink)
             LOG_DEBUG("[read] (%d) finished");
             sink->ops.close(sink, pos->fd);
         } else {
-            atbuf_write_advance(pos->rxbuf, nread);
+            vpack(pos->rxbuf, &frame, sizeof(struct can_frame));
             gettimeofday(&pos->ts_poll_recv, NULL);
         }
     }

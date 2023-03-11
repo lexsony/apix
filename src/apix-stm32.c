@@ -15,9 +15,7 @@
 
 #include "apix-private.h"
 #include "apix-stm32.h"
-#include "atbuf.h"
 #include "unused.h"
-#include "list.h"
 #include "log.h"
 
 struct posix_sink {
@@ -148,8 +146,8 @@ static int tcp_s_poll(struct apisink *sink)
         //        tcp_s_sink->nfds = newfd + 1;
         //    FD_SET(newfd, &tcp_s_sink->fds);
         //} else /* recv */ {
-            int nread = recv(pos->fd, atbuf_write_pos(pos->rxbuf),
-                             atbuf_spare(pos->rxbuf), 0);
+            char buf[256] = {0};
+            int nread = recv(pos->fd, buf, sizeof(buf), 0);
             if (nread == -1) {
                 LOG_DEBUG("[recv] fd:%d, %s", pos->fd, strerror(errno));
                 FD_CLR(pos->fd, &tcp_s_sink->fds);
@@ -159,7 +157,7 @@ static int tcp_s_poll(struct apisink *sink)
                 FD_CLR(pos->fd, &tcp_s_sink->fds);
                 sink->ops.close(sink, pos->fd);
             } else {
-                atbuf_write_advance(pos->rxbuf, nread);
+                vpack(pos->rxbuf, buf, nread);
                 gettimeofday(&pos->ts_poll_recv, NULL);
             }
         //}
@@ -276,8 +274,8 @@ static int tcp_c_poll(struct apisink *sink)
 
         nr_recv_fds--;
 
-        int nread = recv(pos->fd, atbuf_write_pos(pos->rxbuf),
-                         atbuf_spare(pos->rxbuf), 0);
+        char buf[1024] = {0};
+        int nread = recv(pos->fd, buf, sizeof(buf), 0);
         if (nread == -1) {
             LOG_DEBUG("[recv] fd:%d, %s", pos->fd, strerror(errno));
             FD_CLR(pos->fd, &tcp_c_sink->fds);
@@ -287,7 +285,7 @@ static int tcp_c_poll(struct apisink *sink)
             FD_CLR(pos->fd, &tcp_c_sink->fds);
             sink->ops.close(sink, pos->fd);
         } else {
-            atbuf_write_advance(pos->rxbuf, nread);
+            vpack(pos->rxbuf, buf, nread);
             gettimeofday(&pos->ts_poll_recv, NULL);
         }
     }
@@ -357,13 +355,14 @@ static int com_poll(struct apisink *sink)
 {
     struct sinkfd *pos;
     list_for_each_entry(pos, &sink->sinkfds, ln_sink) {
-        int nr = read(pos->fd, atbuf_write_pos(pos->rxbuf), atbuf_spare(pos->rxbuf));
-        if (nr == 0) continue;
-        if (nr == -1) {
+        char buf[1024] = {0};
+        int nread = read(pos->fd, buf, sizeof(buf));
+        if (nread == 0) continue;
+        if (nread == -1) {
             LOG_ERROR("poll failed!");
             continue;
         }
-        atbuf_write_advance(pos->rxbuf, nr);
+        vpack(pos->rxbuf, buf, nread);
     }
     return 0;
 }
