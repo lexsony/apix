@@ -53,8 +53,6 @@ static void append_srrp_packet(
         msg->state = APIMSG_ST_NONE;
         msg->fd = sinkfd->fd;
         msg->pac = pac;
-        msg->ts_create = time(0);
-        msg->ts_send = 0;
         INIT_LIST_HEAD(&msg->ln);
         list_add(&msg->ln, &ctx->msgs);
     } else if (pac->leader == SRRP_RESPONSE_LEADER) {
@@ -340,15 +338,6 @@ static void handle_request(struct apix *ctx)
         if (apimsg_is_finished(pos) || !apimsg_is_request(pos))
             continue;
 
-        if (pos->state == APIMSG_ST_WAIT_RESPONSE) {
-            if (time(0) < pos->ts_send + API_REQUEST_TIMEOUT / 1000)
-                continue;
-            apix_response(ctx, pos->fd, pos->pac, "REQUEST TIMEOUT");
-            LOG_DEBUG("request timeout: %s", pos->pac->raw);
-            apimsg_finish(pos);
-            continue;
-        }
-
         LOG_DEBUG("(%x) > %d:%d:%s?%s", ctx, pos->pac->srcid, pos->pac->dstid,
                   pos->pac->header, pos->pac->data);
 
@@ -383,15 +372,14 @@ static void handle_request(struct apix *ctx)
             dst->events.on_request(
                 ctx, pos->fd, pos->pac, &resp, dst->events_priv.priv_on_request);
             if (resp) {
-                append_srrp_packet(ctx, dst, resp);
+                append_srrp_packet(ctx, src, resp);
                 // should not free resp
             }
         } else if (dst->r_nodeid == pos->pac->dstid) {
             apix_send(ctx, dst->fd, pos->pac->raw, pos->pac->len);
         }
 
-        pos->state = APIMSG_ST_WAIT_RESPONSE;
-        pos->ts_send = time(0);
+        pos->state = APIMSG_ST_FINISHED;
     }
 }
 
@@ -406,22 +394,18 @@ static void handle_response(struct apix *ctx)
                   pos->pac->header, pos->pac->data);
 
         struct sinkfd *dst = find_sinkfd_by_nodeid(ctx, pos->pac->dstid);
-        if (dst != NULL && dst->l_nodeid == pos->pac->dstid && dst->events.on_response) {
-            dst->events.on_response(
-                ctx, pos->fd, pos->pac, dst->events_priv.priv_on_response);
-        } else {
-            struct apimsg *pos_req;
-            list_for_each_entry(pos_req, &ctx->msgs, ln) {
-                if (apimsg_is_finished(pos_req) || !apimsg_is_request(pos_req))
-                    continue;
-                if (pos_req->pac->crc16 == pos->pac->reqcrc16 &&
-                    strcmp(pos_req->pac->header, pos->pac->header) == 0 &&
-                    pos_req->pac->srcid == pos->pac->dstid) {
-                    apix_send(ctx, pos_req->fd, pos->pac->raw, pos->pac->len);
-                    apimsg_finish(pos_req);
-                    break;
-                }
+        if (dst) {
+            if (dst->l_nodeid == pos->pac->dstid && dst->events.on_response) {
+                dst->events.on_response(
+                    ctx, pos->fd, pos->pac, dst->events_priv.priv_on_response);
+            } else if (dst->r_nodeid == pos->pac->dstid) {
+                apix_send(ctx, dst->fd, vraw(pos->pac->payload), pos->pac->len);
+            } else {
+                LOG_WARN("(%x) < %d:%d:%s?%s", ctx, pos->pac->srcid, pos->pac->dstid,
+                         pos->pac->header, pos->pac->data);
             }
+        } else {
+            apix_send(ctx, pos->fd, pos->pac->raw, pos->pac->len);
         }
 
         apimsg_finish(pos);

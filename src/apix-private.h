@@ -132,20 +132,15 @@ enum apimsg_type {
 
 enum apimsg_state {
     APIMSG_ST_NONE = 0,
-    APIMSG_ST_WAIT_RESPONSE,
     APIMSG_ST_FINISHED,
 };
 
 struct apimsg {
     int type; /* apimsg_type */
     int state;
-    int fd;
+    int fd /* src for req, dst for resp */;
     struct srrp_packet *pac;
     struct list_head ln;
-
-    /* only used by request */
-    time_t ts_create;
-    time_t ts_send;
 };
 
 struct api_topic {
