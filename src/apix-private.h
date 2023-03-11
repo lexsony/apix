@@ -36,6 +36,7 @@ struct apix {
     struct timeval poll_ts;
     int poll_cnt;
     uint64_t idle_usec;
+    void *private_data;
 };
 
 /**

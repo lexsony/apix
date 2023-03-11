@@ -26,6 +26,12 @@ struct apix *apix_new();
 void apix_destroy(struct apix *ctx);
 
 /**
+ * apix set & get for private data
+ */
+void apix_set_private(struct apix *ctx, void *private_data);
+void *apix_get_private(struct apix *ctx);
+
+/**
  * apix fd operations
  * - treat it as UNIX style fd operations
  */

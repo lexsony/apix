@@ -226,6 +226,16 @@ void apix_destroy(struct apix *ctx)
     free(ctx);
 }
 
+void apix_set_private(struct apix *ctx, void *private_data)
+{
+    ctx->private_data = private_data;
+}
+
+void *apix_get_private(struct apix *ctx)
+{
+    return ctx->private_data;
+}
+
 int apix_open(struct apix *ctx, const char *sinkid, const char *addr)
 {
     struct apisink *pos;
