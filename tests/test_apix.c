@@ -23,7 +23,7 @@ static int requester_finished = 0;
 static int responser_finished = 0;
 
 static void requester_on_srrp_response(
-    struct apix *ctx, int fd, struct srrp_packet *req)
+    struct apix *ctx, int fd, struct srrp_packet *req, void *priv)
 {
     LOG_INFO("requester on response: %s", req->raw);
     requester_finished = 1;
@@ -35,7 +35,7 @@ static void *requester_thread(void *args)
     apix_enable_posix(ctx);
     int fd = apix_open_unix_client(ctx, UNIX_ADDR);
     apix_enable_srrp_mode(ctx, fd, 3333);
-    apix_on_srrp_response(ctx, fd, requester_on_srrp_response);
+    apix_on_srrp_response(ctx, fd, requester_on_srrp_response, NULL);
 
     int rc = 0;
 
@@ -63,7 +63,7 @@ static void *requester_thread(void *args)
 }
 
 static void responser_on_srrp_response(
-    struct apix *ctx, int fd, struct srrp_packet *resp)
+    struct apix *ctx, int fd, struct srrp_packet *resp, void *priv)
 {
     if (strstr(resp->header, SRRP_CTRL_ONLINE) != 0) {
         LOG_INFO("responser on response: %s", resp->raw);
@@ -71,7 +71,7 @@ static void responser_on_srrp_response(
 }
 
 static void responser_on_srrp_request(
-    struct apix *ctx, int fd, struct srrp_packet *req, struct srrp_packet **resp)
+    struct apix *ctx, int fd, struct srrp_packet *req, struct srrp_packet **resp, void *priv)
 {
     LOG_INFO("responser on request: %s", req->raw);
     if (strstr(req->header, "/hello") != 0) {
@@ -88,8 +88,8 @@ static void *responser_thread(void *args)
     apix_enable_posix(ctx);
     int fd = apix_open_unix_client(ctx, UNIX_ADDR);
     apix_enable_srrp_mode(ctx, fd, 8888);
-    apix_on_srrp_request(ctx, fd, responser_on_srrp_request);
-    apix_on_srrp_response(ctx, fd, responser_on_srrp_response);
+    apix_on_srrp_request(ctx, fd, responser_on_srrp_request, NULL);
+    apix_on_srrp_response(ctx, fd, responser_on_srrp_response, NULL);
 
     int rc = 0;
 

@@ -36,7 +36,6 @@ struct apix {
     struct timeval poll_ts;
     int poll_cnt;
     uint64_t idle_usec;
-    void *private_data;
 };
 
 /**
@@ -98,6 +97,14 @@ struct sinkfd {
         srrp_request_func_t on_request;
         srrp_response_func_t on_response;
     } events;
+
+    struct apix_events_priv {
+        void *priv_on_close;
+        void *priv_on_accept;
+        void *priv_on_pollin;
+        void *priv_on_request;
+        void *priv_on_response;
+    } events_priv;
 
     struct apisink *sink;
     struct list_head ln_sink;

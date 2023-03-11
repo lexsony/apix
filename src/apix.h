@@ -26,12 +26,6 @@ struct apix *apix_new();
 void apix_destroy(struct apix *ctx);
 
 /**
- * apix set & get for private data
- */
-void apix_set_private(struct apix *ctx, void *private_data);
-void *apix_get_private(struct apix *ctx);
-
-/**
  * apix fd operations
  * - treat it as UNIX style fd operations
  */
@@ -51,16 +45,16 @@ int apix_poll(struct apix *ctx);
  * apix_on_fd_close
  * - called after fd is closed
  */
-typedef void (*fd_close_func_t)(struct apix *ctx, int fd);
-int apix_on_fd_close(struct apix *ctx, int fd, fd_close_func_t func);
+typedef void (*fd_close_func_t)(struct apix *ctx, int fd, void *priv);
+int apix_on_fd_close(struct apix *ctx, int fd, fd_close_func_t func, void *priv);
 
 /**
  * apix_on_fd_accept
  * - called after newfd is accepted
  */
 typedef void (*fd_accept_func_t)(
-    struct apix *ctx, int fd, int newfd);
-int apix_on_fd_accept(struct apix *ctx, int fd, fd_accept_func_t func);
+    struct apix *ctx, int fd, int newfd, void *priv);
+int apix_on_fd_accept(struct apix *ctx, int fd, fd_accept_func_t func, void *priv);
 
 /**
  * apix_on_fd_pollin
@@ -69,8 +63,8 @@ int apix_on_fd_accept(struct apix *ctx, int fd, fd_accept_func_t func);
  * - return n(>=0): handled, and skip n bytes
  */
 typedef int (*fd_pollin_func_t)(
-    struct apix *ctx, int fd, const void *buf, size_t len);
-int apix_on_fd_pollin(struct apix *ctx, int fd, fd_pollin_func_t func);
+    struct apix *ctx, int fd, const void *buf, size_t len, void *priv);
+int apix_on_fd_pollin(struct apix *ctx, int fd, fd_pollin_func_t func, void *priv);
 
 /**
  * apix_enable_srrp_mode
@@ -89,16 +83,16 @@ int apix_disable_srrp_mode(struct apix *ctx, int fd);
  * - called when received srrp requests
  */
 typedef void (*srrp_request_func_t)(
-    struct apix *ctx, int fd, struct srrp_packet *req, struct srrp_packet **resp);
-int apix_on_srrp_request(struct apix *ctx, int fd, srrp_request_func_t func);
+    struct apix *ctx, int fd, struct srrp_packet *req, struct srrp_packet **resp, void *priv);
+int apix_on_srrp_request(struct apix *ctx, int fd, srrp_request_func_t func, void *priv);
 
 /**
  * apix_on_srrp_response
  * - called when received srrp responses
  */
 typedef void (*srrp_response_func_t)(
-    struct apix *ctx, int fd, struct srrp_packet *resp);
-int apix_on_srrp_response(struct apix *ctx, int fd, srrp_response_func_t func);
+    struct apix *ctx, int fd, struct srrp_packet *resp, void *priv);
+int apix_on_srrp_response(struct apix *ctx, int fd, srrp_response_func_t func, void *priv);
 
 #ifdef __cplusplus
 }

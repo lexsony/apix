@@ -226,16 +226,6 @@ void apix_destroy(struct apix *ctx)
     free(ctx);
 }
 
-void apix_set_private(struct apix *ctx, void *private_data)
-{
-    ctx->private_data = private_data;
-}
-
-void *apix_get_private(struct apix *ctx)
-{
-    return ctx->private_data;
-}
-
 int apix_open(struct apix *ctx, const char *sinkid, const char *addr)
 {
     struct apisink *pos;
@@ -256,7 +246,7 @@ int apix_close(struct apix *ctx, int fd)
     if (sinkfd->sink && sinkfd->sink->ops.close)
         sinkfd->sink->ops.close(sinkfd->sink, fd);
     if (sinkfd->events.on_close)
-        sinkfd->events.on_close(ctx, fd);
+        sinkfd->events.on_close(ctx, fd, sinkfd->events_priv.priv_on_close);
     return 0;
 }
 
@@ -392,7 +382,8 @@ static void handle_request(struct apix *ctx)
 
         if (dst->l_nodeid == pos->pac->dstid && dst->events.on_request) {
             struct srrp_packet *resp = NULL;
-            dst->events.on_request(ctx, pos->fd, pos->pac, &resp);
+            dst->events.on_request(
+                ctx, pos->fd, pos->pac, &resp, dst->events_priv.priv_on_request);
             if (resp) {
                 append_srrp_packet(ctx, dst, resp);
                 // should not free resp
@@ -418,7 +409,8 @@ static void handle_response(struct apix *ctx)
 
         struct sinkfd *dst = find_sinkfd_by_nodeid(ctx, pos->pac->dstid);
         if (dst != NULL && dst->l_nodeid == pos->pac->dstid && dst->events.on_response) {
-            dst->events.on_response(ctx, pos->fd, pos->pac);
+            dst->events.on_response(
+                ctx, pos->fd, pos->pac, dst->events_priv.priv_on_response);
         } else {
             struct apimsg *pos_req;
             list_for_each_entry(pos_req, &ctx->msgs, ln) {
@@ -492,7 +484,8 @@ int apix_poll(struct apix *ctx)
             if (pos_fd->events.on_pollin) {
                 int nr = pos_fd->events.on_pollin(
                     ctx, pos_fd->fd, atbuf_read_pos(pos_fd->rxbuf),
-                    atbuf_used(pos_fd->rxbuf));
+                    atbuf_used(pos_fd->rxbuf),
+                    pos_fd->events_priv.priv_on_pollin);
 
                 /*
                  * nr <= 0: unhandled
@@ -534,53 +527,58 @@ int apix_poll(struct apix *ctx)
     return 0;
 }
 
-int apix_on_fd_close(struct apix *ctx, int fd, fd_close_func_t func)
+int apix_on_fd_close(struct apix *ctx, int fd, fd_close_func_t func, void *priv)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
         return -EBADF;
     assert(sinkfd->events.on_close == NULL);
     sinkfd->events.on_close = func;
+    sinkfd->events_priv.priv_on_close = priv;
     return 0;
 }
 
-int apix_on_fd_accept(struct apix *ctx, int fd, fd_accept_func_t func)
+int apix_on_fd_accept(struct apix *ctx, int fd, fd_accept_func_t func, void *priv)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
         return -EBADF;
     assert(sinkfd->events.on_accept == NULL);
     sinkfd->events.on_accept = func;
+    sinkfd->events_priv.priv_on_accept = priv;
     return 0;
 }
 
-int apix_on_fd_pollin(struct apix *ctx, int fd, fd_pollin_func_t func)
+int apix_on_fd_pollin(struct apix *ctx, int fd, fd_pollin_func_t func, void *priv)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
         return -EBADF;
     assert(sinkfd->events.on_pollin == NULL);
     sinkfd->events.on_pollin = func;
+    sinkfd->events_priv.priv_on_pollin = priv;
     return 0;
 }
 
-int apix_on_srrp_request(struct apix *ctx, int fd, srrp_request_func_t func)
+int apix_on_srrp_request(struct apix *ctx, int fd, srrp_request_func_t func, void *priv)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
         return -EBADF;
     assert(sinkfd->events.on_request == NULL);
     sinkfd->events.on_request = func;
+    sinkfd->events_priv.priv_on_request = priv;
     return 0;
 }
 
-int apix_on_srrp_response(struct apix *ctx, int fd, srrp_response_func_t func)
+int apix_on_srrp_response(struct apix *ctx, int fd, srrp_response_func_t func, void *priv)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
         return -EBADF;
     assert(sinkfd->events.on_response == NULL);
     sinkfd->events.on_response = func;
+    sinkfd->events_priv.priv_on_response = priv;
     return 0;
 }
 
@@ -676,7 +674,8 @@ void sinkfd_destroy(struct sinkfd *sinkfd)
     list_del_init(&sinkfd->ln_sink);
     list_del_init(&sinkfd->ln_ctx);
     if (sinkfd->events.on_close)
-        sinkfd->events.on_close(sinkfd->sink->ctx, sinkfd->fd);
+        sinkfd->events.on_close(
+            sinkfd->sink->ctx, sinkfd->fd, sinkfd->events_priv.priv_on_close);
     free(sinkfd);
 }
 
