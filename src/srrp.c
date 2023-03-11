@@ -24,6 +24,18 @@ void srrp_free(struct srrp_packet *pac)
     free(pac);
 }
 
+static uint16_t calc_crc(const char *buf, size_t len)
+{
+    return crc16(buf, len - CRC_SIZE);
+}
+
+static uint16_t parse_crc(const char *buf, size_t len)
+{
+    uint16_t crc;
+    assert(sscanf(buf + len - CRC_SIZE, "%4hx", &crc) == 1);
+    return crc;
+}
+
 static struct srrp_packet *
 __srrp_parse_one_ctrl(const char *buf)
 {
@@ -40,8 +52,8 @@ __srrp_parse_one_ctrl(const char *buf)
     if (header_delimiter == NULL)
         return NULL;
 
-    uint16_t crc = crc16(buf, len - CRC_SIZE);
-    if (memcmp(&crc, buf + len - CRC_SIZE, sizeof(crc)) != 0)
+    uint16_t crc = calc_crc(buf, len);
+    if (parse_crc(buf, len) != crc)
         return NULL;
 
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
@@ -77,8 +89,8 @@ __srrp_parse_one_request(const char *buf)
     if (header_delimiter == NULL)
         return NULL;
 
-    uint16_t crc = crc16(buf, len - CRC_SIZE);
-    if (memcmp(&crc, buf + len - CRC_SIZE, sizeof(crc)) != 0)
+    uint16_t crc = calc_crc(buf, len);
+    if (parse_crc(buf, len) != crc)
         return NULL;
 
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
@@ -115,8 +127,8 @@ __srrp_parse_one_response(const char *buf)
     if (header_delimiter == NULL)
         return NULL;
 
-    uint16_t crc = crc16(buf, len - CRC_SIZE);
-    if (memcmp(&crc, buf + len - CRC_SIZE, sizeof(crc)) != 0)
+    uint16_t crc = calc_crc(buf, len);
+    if (parse_crc(buf, len) != crc)
         return NULL;
 
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
@@ -155,8 +167,8 @@ __srrp_parse_one_subpub(const char *buf)
     if (header_delimiter == NULL)
         return NULL;
 
-    uint16_t crc = crc16(buf, len - CRC_SIZE);
-    if (memcmp(&crc, buf + len - CRC_SIZE, sizeof(crc)) != 0)
+    uint16_t crc = calc_crc(buf, len);
+    if (parse_crc(buf, len) != crc)
         return NULL;
 
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
@@ -192,11 +204,6 @@ struct srrp_packet *srrp_parse(const char *buf)
     return NULL;
 }
 
-uint16_t srrp_crc(struct srrp_packet *pac)
-{
-    return crc16(pac->raw, pac->len - CRC_SIZE);
-}
-
 struct srrp_packet *
 srrp_new_ctrl(uint16_t srcid, const char *header)
 {
@@ -210,6 +217,8 @@ srrp_new_ctrl(uint16_t srcid, const char *header)
     int nr = snprintf(pac->raw, len, "%c0,$,%.4"PRIx16",%.4"PRIx16":%s",
                       SRRP_CTRL_LEADER, len, srcid, header) + 1;
     assert((uint16_t)nr + CRC_SIZE == len);
+    uint16_t crc = calc_crc(pac->raw, len);
+    snprintf(pac->raw + nr, CRC_SIZE, "%.4"PRIx16"", crc);
 
     pac->leader = SRRP_CTRL_LEADER;
     pac->seat = '$';
@@ -218,8 +227,7 @@ srrp_new_ctrl(uint16_t srcid, const char *header)
     pac->srcid = srcid;
     pac->dstid = 0;
     pac->reqcrc16 = 0;
-    pac->crc16 = srrp_crc(pac);
-    memcpy(pac->raw + len - CRC_SIZE, &pac->crc16, sizeof(pac->crc16));
+    pac->crc16 = crc;
     pac->header = strstr(pac->raw, header);
     pac->header_len = strlen(header);
     pac->data = NULL;
@@ -241,8 +249,8 @@ srrp_new_request(uint16_t srcid, uint16_t dstid, const char *header, const char 
                       SRRP_REQUEST_LEADER, len, srcid, dstid, header) + 1;
     nr += snprintf(pac->raw + nr, len - nr, "%s", data) + 1;
     assert((uint16_t)nr + CRC_SIZE == len);
-    uint16_t crc = crc16(pac->raw, nr);
-    memcpy(pac->raw + nr, &crc, sizeof(crc));
+    uint16_t crc = calc_crc(pac->raw, len);
+    snprintf(pac->raw + nr, CRC_SIZE, "%.4"PRIx16"", crc);
 
     pac->leader = SRRP_REQUEST_LEADER;
     pac->seat = '$';
@@ -265,7 +273,7 @@ srrp_new_response(uint16_t srcid, uint16_t dstid, uint16_t reqcrc16,
 {
     uint16_t len = LEADER_SEQNO_SIZE + LENGTH_SIZE + SRCID_SIZE + DSTID_SIZE +
         CRC_SIZE + strlen(header) + 1/*\0*/ + strlen(data) + 1/*\0*/ + CRC_SIZE;
-    assert(len < SRRP_LENGTH_MAX - 4/*crc16*/);
+    assert(len < SRRP_LENGTH_MAX);
 
     struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
     assert(pac);
@@ -274,8 +282,8 @@ srrp_new_response(uint16_t srcid, uint16_t dstid, uint16_t reqcrc16,
                       SRRP_RESPONSE_LEADER, len, srcid, dstid, reqcrc16, header) + 1;
     nr += snprintf(pac->raw + nr, len - nr, "%s", data) + 1;
     assert((uint16_t)nr + CRC_SIZE == len);
-    uint16_t crc = crc16(pac->raw, nr);
-    memcpy(pac->raw + nr, &crc, sizeof(crc));
+    uint16_t crc = calc_crc(pac->raw, len);
+    snprintf(pac->raw + nr, CRC_SIZE, "%.4"PRIx16"", crc);
 
     pac->leader = SRRP_RESPONSE_LEADER;
     pac->seat = '$';
@@ -306,8 +314,8 @@ __srrp_new_subpub(const char *header, const char *ctrl, char leader)
                       leader, len, header) + 1;
     nr += snprintf(pac->raw + nr, len - nr, "%s", ctrl) + 1;
     assert((uint16_t)nr + CRC_SIZE == len);
-    uint16_t crc = crc16(pac->raw, nr);
-    memcpy(pac->raw + nr, &crc, sizeof(crc));
+    uint16_t crc = calc_crc(pac->raw, len);
+    snprintf(pac->raw + nr, CRC_SIZE, "%.4"PRIx16"", crc);
 
     pac->leader = leader;
     pac->seat = '$';

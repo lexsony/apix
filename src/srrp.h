@@ -98,11 +98,6 @@ void srrp_free(struct srrp_packet *pac);
 struct srrp_packet *srrp_parse(const char *buf);
 
 /**
- * srrp_crc
- */
-uint16_t srrp_crc(struct srrp_packet *pac);
-
-/**
  * srrp_new_ctrl
  * - create new ctrl packet
  */

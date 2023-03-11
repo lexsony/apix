@@ -73,7 +73,7 @@ static void responser_on_srrp_request(int fd, struct srrp_packet *req, struct sr
     LOG_INFO("responser on request: %s", req->raw);
     if (strstr(req->header, "/hello") != 0) {
         *resp = srrp_new_response(
-            req->dstid, req->srcid, srrp_crc(req), req->header,
+            req->dstid, req->srcid, req->crc16, req->header,
             "j:{err:0,errmsg:'succ',data:{msg:'world'}}");
         responser_finished = 1;
     }

@@ -284,7 +284,7 @@ int apix_recv(struct apix *ctx, int fd, void *buf, size_t size)
 static int apix_response(struct apix *ctx, int fd, struct srrp_packet *req, const char *data)
 {
     struct srrp_packet *resp = srrp_new_response(
-        req->dstid, req->srcid, srrp_crc(req), req->header, data);
+        req->dstid, req->srcid, req->crc16, req->header, data);
     int rc = apix_send(ctx, fd, resp->raw, resp->len);
     srrp_free(resp);
     return rc;
