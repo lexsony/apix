@@ -56,12 +56,12 @@ static int vec_check_cap(vec_t *self, uint32_t cnt)
 {
     if (self->offset + self->size + cnt > self->cap) {
         if (self->offset) {
-            void *offset = self->rawbuf + (self->offset + self->size) * self->type_size;
-            memmove(self->rawbuf, offset, (self->offset + self->size) * self->type_size);
+            void *offset = self->rawbuf + self->offset * self->type_size;
+            memmove(self->rawbuf, offset, self->size * self->type_size);
             self->offset = 0;
         }
         if (self->offset + self->size + cnt > self->cap) {
-            uint32_t new_cap = (self->size + cnt) << 1;
+            uint32_t new_cap = (self->cap + cnt) << 1;
             return vec_realloc(self, new_cap);
         }
     }

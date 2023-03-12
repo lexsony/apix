@@ -31,6 +31,7 @@ void srrp_move(struct srrp_packet *fst, struct srrp_packet *snd)
     vec_delete(snd->payload);
     *snd = *fst;
     bzero(fst, sizeof(*fst));
+    free(fst);
 }
 
 static uint16_t calc_crc(const char *buf, size_t len)

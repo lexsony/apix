@@ -803,6 +803,11 @@ static void on_cmd_srrpdel(const char *cmd)
     svcx_del_service(svcx, tmp);
 }
 
+static void clean_srrp_service(const char *header, void *private_data)
+{
+    free(private_data);
+}
+
 static void print_srrp_service(const char *header, void *private_data)
 {
     struct service_private *priv = private_data;
@@ -915,6 +920,7 @@ int main(int argc, char *argv[])
 
     pthread_join(apix_pid, NULL);
     pthread_join(cli_pid, NULL);
+    svcx_foreach(svcx, clean_srrp_service);
     svcx_destroy(svcx);
     return 0;
 }
