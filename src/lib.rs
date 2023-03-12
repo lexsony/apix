@@ -80,8 +80,9 @@ impl Apix {
     {
         let obj: Box<Box<dyn FnMut()>> = Box::new(Box::new(func));
         unsafe {
-            apix_sys::apix_on_fd_close(self.ctx, fd, Some(Apix::__on_fd_close),
-                                       Box::into_raw(obj) as *mut std::ffi::c_void);
+            apix_sys::apix_on_fd_close(
+                self.ctx, fd, Some(Apix::__on_fd_close),
+                Box::into_raw(obj) as *mut std::ffi::c_void);
         }
     }
 
@@ -99,8 +100,9 @@ impl Apix {
     {
         let obj: Box<Box<dyn FnMut(i32)>> = Box::new(Box::new(func));
         unsafe {
-            apix_sys::apix_on_fd_accept(self.ctx, fd, Some(Apix::__on_fd_accept),
-                                        Box::into_raw(obj) as *mut std::ffi::c_void);
+            apix_sys::apix_on_fd_accept(
+                self.ctx, fd, Some(Apix::__on_fd_accept),
+                Box::into_raw(obj) as *mut std::ffi::c_void);
         }
     }
 
@@ -111,7 +113,7 @@ impl Apix {
             std::mem::transmute(priv_data)
         };
         unsafe {
-            return closure(std::slice::from_raw_parts(buf as *const u8, len as usize));
+            closure(std::slice::from_raw_parts(buf as *const u8, len as usize))
         }
     }
 
@@ -121,8 +123,9 @@ impl Apix {
     {
         let obj: Box<Box<dyn FnMut(&[u8]) -> i32>> = Box::new(Box::new(func));
         unsafe {
-            apix_sys::apix_on_fd_pollin(self.ctx, fd, Some(Apix::__on_fd_pollin),
-                                        Box::into_raw(obj) as *mut std::ffi::c_void);
+            apix_sys::apix_on_fd_pollin(
+                self.ctx, fd, Some(Apix::__on_fd_pollin),
+                Box::into_raw(obj) as *mut std::ffi::c_void);
         }
     }
 
@@ -155,30 +158,36 @@ impl Apix {
         req: *mut apix_sys::srrp_packet,
         resp: *mut apix_sys::srrp_packet,
         priv_data: *mut std::ffi::c_void) {
-        let closure: &mut Box<dyn FnMut(&SrrpPacket) -> SrrpPacket> = unsafe {
+        let closure: &mut Box<dyn FnMut(&SrrpPacket) -> Option<SrrpPacket>> = unsafe {
             std::mem::transmute(priv_data)
         };
         let new_req = Srrp::from_raw_packet(req);
-        let new_resp = closure(&new_req);
-        unsafe {
-            let header = std::ffi::CString::new(new_resp.header).unwrap();
-            let data = std::ffi::CString::new(new_resp.data).unwrap();
-            let tmp = apix_sys::srrp_new_response(
-                new_resp.srcid,
-                new_resp.dstid,
-                new_resp.reqcrc16,
-                header.as_ptr() as *const i8,
-                data.as_ptr() as *const i8,
-            );
-            apix_sys::srrp_move(tmp, resp);
-        }
+        match closure(&new_req) {
+            Some(new_resp) => {
+                unsafe {
+                    let header = std::ffi::CString::new(new_resp.header).unwrap();
+                    let data = std::ffi::CString::new(new_resp.data).unwrap();
+                    let tmp = apix_sys::srrp_new_response(
+                        new_resp.srcid,
+                        new_resp.dstid,
+                        new_resp.reqcrc16,
+                        header.as_ptr() as *const i8,
+                        data.as_ptr() as *const i8,
+                    );
+                    apix_sys::srrp_move(tmp, resp);
+                }
+                true
+            },
+            None => false
+        };
     }
 
     pub fn on_srrp_request<F>(&self, fd: i32, func: F)
-    where F: FnMut(&SrrpPacket) -> SrrpPacket,
+    where F: FnMut(&SrrpPacket) -> Option<SrrpPacket>,
           F: 'static
     {
-        let obj: Box<Box<dyn FnMut(&SrrpPacket) -> SrrpPacket>> = Box::new(Box::new(func));
+        let obj: Box<Box<dyn FnMut(&SrrpPacket) -> Option<SrrpPacket>>> =
+            Box::new(Box::new(func));
         unsafe {
             apix_sys::apix_on_srrp_request(self.ctx, fd, Some(Apix::__on_srrp_request),
                                            Box::into_raw(obj) as *mut std::ffi::c_void);
@@ -285,6 +294,7 @@ impl Apix {
     }
 }
 
+#[derive(Default)]
 pub struct SrrpPacket {
     pub leader: i8,
     pub seat: i8,
@@ -304,7 +314,7 @@ pub struct Srrp {}
 impl Srrp {
     fn from_raw_packet(pac: *const apix_sys::srrp_packet) -> SrrpPacket {
         unsafe {
-            return SrrpPacket {
+            SrrpPacket {
                 leader: (*pac).leader,
                 seat: (*pac).seat,
                 seqno: (*pac).seqno,
@@ -325,37 +335,45 @@ impl Srrp {
                     }
                     v
                 }
-            };
+            }
         }
     }
 
     pub fn next_packet_offset(buf: &[u8]) -> u32 {
         unsafe {
-            return apix_sys::srrp_next_packet_offset(
-                buf.as_ptr() as *const u8, buf.len() as u32);
+            apix_sys::srrp_next_packet_offset(
+                buf.as_ptr() as *const u8, buf.len() as u32)
         }
     }
 
-    pub fn parse(buf: &[u8]) -> SrrpPacket {
+    pub fn parse(buf: &[u8]) -> Option<SrrpPacket> {
         unsafe {
             let pac = apix_sys::srrp_parse(buf.as_ptr() as *const u8, buf.len() as u32);
-            let sp = Srrp::from_raw_packet(pac);
-            apix_sys::srrp_free(pac);
-            return sp;
+            if pac.is_null() {
+                None
+            } else {
+                let sp = Srrp::from_raw_packet(pac);
+                apix_sys::srrp_free(pac);
+                Some(sp)
+            }
         }
     }
 
-    pub fn new_ctrl(srcid: u16, header: &str) -> SrrpPacket {
+    pub fn new_ctrl(srcid: u16, header: &str) -> Option<SrrpPacket> {
         unsafe {
             let header = std::ffi::CString::new(header).unwrap();
             let pac = apix_sys::srrp_new_ctrl(srcid, header.as_ptr() as *const i8);
-            let sp = Srrp::from_raw_packet(pac);
-            apix_sys::srrp_free(pac);
-            return sp;
+            if pac.is_null() {
+                None
+            } else {
+                let sp = Srrp::from_raw_packet(pac);
+                apix_sys::srrp_free(pac);
+                Some(sp)
+            }
         }
     }
 
-    pub fn new_request(srcid: u16, dstid: u16, header: &str, data: &str) -> SrrpPacket {
+    pub fn new_request(srcid: u16, dstid: u16, header: &str, data: &str) -> Option<SrrpPacket> {
         unsafe {
             let header = std::ffi::CString::new(header).unwrap();
             let data = std::ffi::CString::new(data).unwrap();
@@ -363,14 +381,18 @@ impl Srrp {
                 srcid, dstid,
                 header.as_ptr() as *const i8,
                 data.as_ptr() as *const i8);
-            let sp = Srrp::from_raw_packet(pac);
-            apix_sys::srrp_free(pac);
-            return sp;
+            if pac.is_null() {
+                None
+            } else {
+                let sp = Srrp::from_raw_packet(pac);
+                apix_sys::srrp_free(pac);
+                Some(sp)
+            }
         }
     }
 
     pub fn new_response(
-        srcid: u16, dstid: u16, reqcrc16: u16, header: &str, data: &str) -> SrrpPacket {
+        srcid: u16, dstid: u16, reqcrc16: u16, header: &str, data: &str) -> Option<SrrpPacket> {
         unsafe {
             let header = std::ffi::CString::new(header).unwrap();
             let data = std::ffi::CString::new(data).unwrap();
@@ -378,9 +400,13 @@ impl Srrp {
                 srcid, dstid, reqcrc16,
                 header.as_ptr() as *const i8,
                 data.as_ptr() as *const i8);
-            let sp = Srrp::from_raw_packet(pac);
-            apix_sys::srrp_free(pac);
-            return sp;
+            if pac.is_null() {
+                None
+            } else {
+                let sp = Srrp::from_raw_packet(pac);
+                apix_sys::srrp_free(pac);
+                Some(sp)
+            }
         }
     }
 }
