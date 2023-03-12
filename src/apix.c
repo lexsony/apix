@@ -479,7 +479,7 @@ int apix_poll(struct apix *ctx)
                  * nr > 0: handled, skip nr bytes
                  */
                 if (nr > 0) {
-                    if (nr > vsize(pos_fd->rxbuf))
+                    if ((uint32_t)nr > vsize(pos_fd->rxbuf))
                         nr = vsize(pos_fd->rxbuf);
                     vdrop(pos_fd->rxbuf, nr);
                 }

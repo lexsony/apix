@@ -78,6 +78,9 @@ __srrp_parse_one_ctrl(const uint8_t *buf, uint32_t size)
                &leader, &seqno, &seat, &len, &srcid) != 5)
         return NULL;
 
+    if (len > size)
+        return NULL;
+
     const char *header_delimiter = strstr((char *)buf, ":/");
     if (header_delimiter == NULL)
         return NULL;
@@ -115,6 +118,9 @@ __srrp_parse_one_request(const uint8_t *buf, uint32_t size)
 
     if (sscanf((char *)buf, "%c%hx,%c,%4hx,%4hx:%4hx:",
                &leader, &seqno, &seat, &len, &srcid, &dstid) != 6)
+        return NULL;
+
+    if (len > size)
         return NULL;
 
     const char *header_delimiter = strstr((char *)buf, ":/");
@@ -155,6 +161,9 @@ __srrp_parse_one_response(const uint8_t *buf, uint32_t size)
 
     if (sscanf((char *)buf, "%c%hx,%c,%4hx,%4hx:%4hx:%4hx:",
                &leader, &seqno, &seat, &len, &srcid, &dstid, &reqcrc16) != 7)
+        return NULL;
+
+    if (len > size)
         return NULL;
 
     const char *header_delimiter = strstr((char *)buf, ":/");
@@ -198,6 +207,9 @@ __srrp_parse_one_subpub(const uint8_t *buf, uint32_t size)
 
     if (sscanf((char *)buf, "%c%hx,%c,%4hx:",
                &leader, &seqno, &seat, &len) != 4)
+        return NULL;
+
+    if (len > size)
         return NULL;
 
     const char *header_delimiter = strstr((char *)buf, ":/");

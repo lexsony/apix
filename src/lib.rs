@@ -331,7 +331,8 @@ impl Srrp {
                 payload: {
                     let mut v: Vec<u8> = Vec::new();
                     for i in 0..(*pac).len {
-                        v.push(*(apix_sys::vraw((*pac).payload)).offset(i as isize) as u8);
+                        v.push(*(apix_sys::vraw((*pac).payload) as *mut u8)
+                               .offset(i as isize) as u8);
                     }
                     v
                 }
