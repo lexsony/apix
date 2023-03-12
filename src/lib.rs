@@ -155,12 +155,14 @@ impl Apix {
         let new_req = Srrp::from_raw_packet(req);
         let new_resp = closure(&new_req);
         unsafe {
+            let header = std::ffi::CString::new(new_resp.header).unwrap();
+            let data = std::ffi::CString::new(new_resp.data).unwrap();
             let tmp = apix_sys::srrp_new_response(
                 new_resp.srcid,
                 new_resp.dstid,
                 new_resp.reqcrc16,
-                new_resp.header.as_ptr() as *const i8,
-                new_resp.data.as_ptr() as *const i8,
+                header.as_ptr() as *const i8,
+                data.as_ptr() as *const i8,
             );
             apix_sys::srrp_move(tmp, resp);
         }

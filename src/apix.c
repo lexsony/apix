@@ -364,7 +364,7 @@ static void handle_request(struct apix *ctx)
             continue;
         }
 
-       struct sinkfd *dst = find_sinkfd_by_nodeid(ctx, pos->pac->dstid);
+        struct sinkfd *dst = find_sinkfd_by_nodeid(ctx, pos->pac->dstid);
         if (dst == NULL) {
             apix_response(ctx, pos->fd, pos->pac, "DESTINATION NOT FOUND");
             apimsg_finish(pos);

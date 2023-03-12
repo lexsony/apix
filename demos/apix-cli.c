@@ -132,12 +132,12 @@ static void on_srrp_request(
     }
     srrp_move(tmp, resp);
 
-    printf("on srrp request(%d): %s\n", fd, (char *)vraw(req->payload));
+    printf("on srrp request(%d): %s?%s\n", fd, (char *)vraw(req->payload), req->data);
 }
 
 static void on_srrp_response(struct apix *ctx, int fd, struct srrp_packet *resp, void *priv)
 {
-    printf("on srrp response(%d): %s\n", fd, (char *)vraw(resp->payload));
+    printf("on srrp response(%d): %s?%s\n", fd, (char *)vraw(resp->payload), resp->data);
 }
 
 static int on_fd_pollin(struct apix *ctx, int fd, const void *buf, size_t len, void *priv)
