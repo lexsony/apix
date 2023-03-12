@@ -14,8 +14,8 @@ typedef int (*srrp_request_handle_func_t)(
 
 int on_echo(struct srrp_packet *req, struct srrp_packet *resp, void *private_data)
 {
-    uint16_t crc = crc16(req->header, req->header_len);
-    crc = crc16_crc(crc, req->data, req->data_len);
+    uint16_t crc = crc16((uint8_t *)req->header, req->header_len);
+    crc = crc16_crc(crc, (uint8_t *)req->data, req->data_len);
     struct srrp_packet *tmp = srrp_new_response(
         req->dstid, req->srcid, crc, req->header, "t:{msg:'world'}");
     srrp_move(tmp, resp);

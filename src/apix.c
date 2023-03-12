@@ -16,7 +16,7 @@
  * apix
  */
 
-static void log_hex_string(const char *buf, size_t len)
+static void log_hex_string(const char *buf, uint32_t len)
 {
     printf("len: %d, data: ", (int)len);
     for (int i = 0; i < (int)len; i++) {
@@ -87,7 +87,8 @@ static void parse_packet(struct apix *ctx, struct sinkfd *sinkfd)
         if (vsize(sinkfd->rxbuf) == 0)
             break;
 
-        struct srrp_packet *pac = srrp_parse(vraw(sinkfd->rxbuf));
+        struct srrp_packet *pac = srrp_parse(
+            vraw(sinkfd->rxbuf), vsize(sinkfd->rxbuf));
         if (pac == NULL) {
             if (time(0) < sinkfd->ts_poll_recv.tv_sec + PARSE_PACKET_TIMEOUT / 1000)
                 break;
@@ -106,7 +107,7 @@ static void parse_packet(struct apix *ctx, struct sinkfd *sinkfd)
 }
 
 static struct api_topic *
-find_topic(struct list_head *topics, const void *header, size_t len)
+find_topic(struct list_head *topics, const void *header, uint32_t len)
 {
     struct api_topic *pos;
     list_for_each_entry(pos, topics, ln) {
@@ -138,7 +139,7 @@ static void topic_sub_handler(struct apix *ctx, struct apimsg *tmsg)
     topic->fds[topic->nfds] = tmsg->fd;
     topic->nfds++;
 
-    apix_send(ctx, tmsg->fd, "Sub OK", 6);
+    apix_send(ctx, tmsg->fd, (uint8_t *)"Sub OK", 6);
 }
 
 static void topic_unsub_handler(struct apix *ctx, struct apimsg *tmsg)
@@ -158,7 +159,7 @@ static void topic_unsub_handler(struct apix *ctx, struct apimsg *tmsg)
         }
     }
 
-    apix_send(ctx, tmsg->fd, "Unsub OK", 8);
+    apix_send(ctx, tmsg->fd, (uint8_t *)"Unsub OK", 8);
 }
 
 static void topic_pub_handler(struct apix *ctx, struct apimsg *tmsg)
@@ -250,7 +251,7 @@ int apix_ioctl(struct apix *ctx, int fd, unsigned int cmd, unsigned long arg)
     return sinkfd->sink->ops.ioctl(sinkfd->sink, fd, cmd, arg);
 }
 
-int apix_send(struct apix *ctx, int fd, const void *buf, size_t len)
+int apix_send(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
@@ -261,24 +262,24 @@ int apix_send(struct apix *ctx, int fd, const void *buf, size_t len)
     return sinkfd->sink->ops.send(sinkfd->sink, fd, buf, len);
 }
 
-int apix_recv(struct apix *ctx, int fd, void *buf, size_t size)
+int apix_recv(struct apix *ctx, int fd, uint8_t *buf, uint32_t len)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
         return -1;
     if (sinkfd->sink == NULL || sinkfd->sink->ops.recv == NULL)
         return -1;
-    return sinkfd->sink->ops.recv(sinkfd->sink, fd, buf, size);
+    return sinkfd->sink->ops.recv(sinkfd->sink, fd, buf, len);
 }
 
-int apix_read_from_buffer(struct apix *ctx, int fd, void *buf, size_t size)
+int apix_read_from_buffer(struct apix *ctx, int fd, uint8_t *buf, uint32_t len)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
         return -1;
-    size_t len = size < vsize(sinkfd->rxbuf) ? size : vsize(sinkfd->rxbuf);
-    if (len) vdump(sinkfd->rxbuf, buf, len);
-    return len;
+    uint32_t less = len < vsize(sinkfd->rxbuf) ? len : vsize(sinkfd->rxbuf);
+    if (less) vdump(sinkfd->rxbuf, buf, less);
+    return less;
 }
 
 static int apix_response(struct apix *ctx, int fd, struct srrp_packet *req, const char *data)
@@ -478,7 +479,7 @@ int apix_poll(struct apix *ctx)
                  * nr > 0: handled, skip nr bytes
                  */
                 if (nr > 0) {
-                    if ((size_t)nr > vsize(pos_fd->rxbuf))
+                    if (nr > vsize(pos_fd->rxbuf))
                         nr = vsize(pos_fd->rxbuf);
                     vdrop(pos_fd->rxbuf, nr);
                 }

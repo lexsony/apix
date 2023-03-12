@@ -39,14 +39,14 @@ impl Apix {
     pub fn send(&self, fd: i32, buf: &[u8]) {
         unsafe {
             apix_sys::apix_send(
-                self.ctx, fd, buf.as_ptr() as *const std::ffi::c_void, buf.len() as u64);
+                self.ctx, fd, buf.as_ptr() as *const u8, buf.len() as u32);
         }
     }
 
     pub fn recv(&self, fd: i32, buf: &mut [u8]) {
         unsafe {
             apix_sys::apix_recv(
-                self.ctx, fd, buf.as_ptr() as *mut std::ffi::c_void, buf.len() as u64);
+                self.ctx, fd, buf.as_ptr() as *mut u8, buf.len() as u32);
         }
     }
 
@@ -99,8 +99,7 @@ impl Apix {
 
     extern "C" fn __on_fd_pollin(
         _: *mut apix_sys::apix, _: i32,
-        buf: *const std::ffi::c_void, len: u64,
-        priv_data: *mut std::ffi::c_void) -> i32 {
+        buf: *const u8, len: u32, priv_data: *mut std::ffi::c_void) -> i32 {
         let closure: &mut Box<dyn FnMut(&[u8]) -> i32> = unsafe {
             std::mem::transmute(priv_data)
         };
@@ -295,11 +294,10 @@ pub struct SrrpPacket {
     pub payload: Vec<u8>,
 }
 
-pub struct Srrp {
-}
+pub struct Srrp {}
 
 impl Srrp {
-    pub fn from_raw_packet(pac: *const apix_sys::srrp_packet) -> SrrpPacket {
+    fn from_raw_packet(pac: *const apix_sys::srrp_packet) -> SrrpPacket {
         unsafe {
             return SrrpPacket {
                 leader: (*pac).leader,
@@ -352,8 +350,8 @@ impl Srrp {
         }
     }
 
-    pub fn new_response(srcid: u16, dstid: u16, reqcrc16: u16,
-                        header: &str, data: &str) -> SrrpPacket {
+    pub fn new_response(
+        srcid: u16, dstid: u16, reqcrc16: u16, header: &str, data: &str) -> SrrpPacket {
         unsafe {
             let header = std::ffi::CString::new(header).unwrap();
             let data = std::ffi::CString::new(data).unwrap();

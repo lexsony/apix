@@ -1,5 +1,4 @@
 #include <assert.h>
-#include <stddef.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -66,7 +65,7 @@ static struct opt opttab[] = {
     INIT_OPT_NONE(),
 };
 
-static size_t transfer_hex_string(char *buf, size_t len)
+static uint32_t transfer_hex_string(char *buf, uint32_t len)
 {
     int idx = 0;
     char tmp[3] = {0};
@@ -91,7 +90,7 @@ static size_t transfer_hex_string(char *buf, size_t len)
     return idx; // new len
 }
 
-static void log_hex_string(const char *buf, size_t len)
+static void log_hex_string(const char *buf, uint32_t len)
 {
     for (int i = 0; i < (int)len; i++) {
         if (isprint(buf[i]))
@@ -140,7 +139,7 @@ static void on_srrp_response(struct apix *ctx, int fd, struct srrp_packet *resp,
     printf("on srrp response(%d): %s?%s\n", fd, (char *)vraw(resp->payload), resp->data);
 }
 
-static int on_fd_pollin(struct apix *ctx, int fd, const void *buf, size_t len, void *priv)
+static int on_fd_pollin(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len, void *priv)
 {
     if (broker_mode)
         return -1;
@@ -180,7 +179,7 @@ static void on_fd_accept(struct apix *ctx, int _fd, int newfd, void *priv)
     printf("accept #%d, %s(%c)\n", newfd, fds[newfd].addr, fds[newfd].type);
 }
 
-static int on_can_pollin(struct apix *ctx, int fd, const void *buf, size_t len, void *priv)
+static int on_can_pollin(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len, void *priv)
 {
     struct can_frame *frame = (struct can_frame *)buf;
 
@@ -221,7 +220,7 @@ static void print_cur_msg(void)
     if (cur_fd != -1 && fds[cur_fd].msg && atbuf_used(fds[cur_fd].msg)) {
         printf("[%s(%c)]:\n", fds[cur_fd].addr, fds[cur_fd].type);
         char msg[256] = {0};
-        size_t len = 0;
+        uint32_t len = 0;
         while (1) {
             bzero(msg, sizeof(msg));
             len = atbuf_read(fds[cur_fd].msg, msg, sizeof(msg));
@@ -259,7 +258,7 @@ static void print_all_msg(void)
         if (fds[i].msg && atbuf_used(fds[i].msg)) {
             printf("[%s(%c)]:\n", fds[i].addr, fds[i].type);
             char msg[256] = {0};
-            size_t len = 0;
+            uint32_t len = 0;
             while (1) {
                 bzero(msg, sizeof(msg));
                 len = atbuf_read(fds[i].msg, msg, sizeof(msg));
@@ -656,9 +655,9 @@ static void on_cmd_send(const char *cmd)
         memcpy(frame.data, msg, len);
         frame.can_dlc = strlen(msg);
         frame.can_id = fds[cur_fd].can_id | CAN_EFF_FLAG;
-        apix_send(ctx, cur_fd, &frame, sizeof(frame));
+        apix_send(ctx, cur_fd, (uint8_t *)&frame, sizeof(frame));
     } else {
-        apix_send(ctx, cur_fd, msg, len);
+        apix_send(ctx, cur_fd, (uint8_t *)msg, len);
     }
 }
 
@@ -748,7 +747,7 @@ static void on_cmd_srrpget(const char *cmd)
         memcpy(frame.data, vraw(pac->payload), pac->len);
         frame.can_dlc = strlen(msg);
         frame.can_id = fds[cur_fd].can_id | CAN_EFF_FLAG;
-        apix_send(ctx, cur_fd, &frame, sizeof(frame));
+        apix_send(ctx, cur_fd, (uint8_t *)&frame, sizeof(frame));
     } else {
         apix_send(ctx, cur_fd, vraw(pac->payload), pac->len);
     }

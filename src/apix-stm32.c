@@ -9,6 +9,7 @@
 #include <time.h>
 
 #include <unistd.h>
+
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <fcntl.h>
@@ -89,16 +90,16 @@ static int tcp_s_close(struct apisink *sink, int fd)
     return 0;
 }
 
-static int tcp_s_send(struct apisink *sink, int fd, const void *buf, size_t len)
+static int tcp_s_send(struct apisink *sink, int fd, const uint8_t *buf, uint32_t len)
 {
     UNUSED(sink);
     return send(fd, buf, len, 0);
 }
 
-static int tcp_s_recv(struct apisink *sink, int fd, void *buf, size_t size)
+static int tcp_s_recv(struct apisink *sink, int fd, uint8_t *buf, uint32_t len)
 {
     UNUSED(sink);
-    return recv(fd, buf, size, 0);
+    return recv(fd, buf, len, 0);
 }
 
 static int tcp_s_poll(struct apisink *sink)
@@ -236,16 +237,16 @@ static int tcp_c_close(struct apisink *sink, int fd)
     return 0;
 }
 
-static int tcp_c_send(struct apisink *sink, int fd, const void *buf, size_t len)
+static int tcp_c_send(struct apisink *sink, int fd, const uint8_t *buf, uint32_t len)
 {
     UNUSED(sink);
     return send(fd, buf, len, 0);
 }
 
-static int tcp_c_recv(struct apisink *sink, int fd, void *buf, size_t size)
+static int tcp_c_recv(struct apisink *sink, int fd, uint8_t *buf, uint32_t len)
 {
     UNUSED(sink);
-    return recv(fd, buf, size, 0);
+    return recv(fd, buf, len, 0);
 }
 
 static int tcp_c_poll(struct apisink *sink)
@@ -339,16 +340,16 @@ com_ioctl(struct apisink *sink, int fd, unsigned int cmd, unsigned long arg)
     return 0;
 }
 
-static int com_send(struct apisink *sink, int fd, const void *buf, size_t len)
+static int com_send(struct apisink *sink, int fd, const uint8_t *buf, uint32_t len)
 {
     UNUSED(sink);
     return write(fd, buf, len);
 }
 
-static int com_recv(struct apisink *sink, int fd, void *buf, size_t size)
+static int com_recv(struct apisink *sink, int fd, uint8_t *buf, uint32_t len)
 {
     UNUSED(sink);
-    return read(fd, buf, size);
+    return read(fd, buf, len);
 }
 
 static int com_poll(struct apisink *sink)

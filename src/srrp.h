@@ -98,10 +98,17 @@ void srrp_free(struct srrp_packet *pac);
 void srrp_move(struct srrp_packet *fst, struct srrp_packet *snd);
 
 /**
+ * srrp_next_packet_offset
+ * - find offset of start position of next packet
+ * - call it before srrp_parse
+ */
+uint32_t srrp_next_packet_offset(const uint8_t *buf, uint32_t len);
+
+/**
  * srrp_parse
  * - read one packet from buffer
  */
-struct srrp_packet *srrp_parse(const char *buf);
+struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len);
 
 /**
  * srrp_new_ctrl
@@ -145,8 +152,6 @@ srrp_new_unsubscribe(const char *header, const char *ctrl);
  */
 struct srrp_packet *
 srrp_new_publish(const char *header, const char *data);
-
-uint32_t srrp_next_packet_offset(const char *buf, uint32_t size);
 
 #ifdef __cplusplus
 }

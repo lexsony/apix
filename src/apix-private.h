@@ -50,8 +50,8 @@ struct apisink_operations {
     int (*open)(struct apisink *sink, const char *addr);
     int (*close)(struct apisink *sink, int fd);
     int (*ioctl)(struct apisink *sink, int fd, unsigned int cmd, unsigned long arg);
-    int (*send)(struct apisink *sink, int fd, const void *buf, size_t len);
-    int (*recv)(struct apisink *sink, int fd, void *buf, size_t size);
+    int (*send)(struct apisink *sink, int fd, const uint8_t *buf, uint32_t len);
+    int (*recv)(struct apisink *sink, int fd, uint8_t *buf, uint32_t size);
     int (*poll)(struct apisink *sink);
 };
 

@@ -1,7 +1,7 @@
 #ifndef __APIX_H
 #define __APIX_H
 
-#include <stddef.h>
+#include <stdint.h>
 #include "srrp.h"
 
 #if defined __arm__ && !defined __unix__
@@ -33,15 +33,15 @@ void apix_destroy(struct apix *ctx);
 int /*fd*/ apix_open(struct apix *ctx, const char *sinkid, const char *addr);
 int apix_close(struct apix *ctx, int fd);
 int apix_ioctl(struct apix *ctx, int fd, unsigned int cmd, unsigned long arg);
-int apix_send(struct apix *ctx, int fd, const void *buf, size_t len);
-int apix_recv(struct apix *ctx, int fd, void *buf, size_t size);
+int apix_send(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len);
+int apix_recv(struct apix *ctx, int fd, uint8_t *buf, uint32_t len);
 
 /**
  * apix_read_from_buffer
  * - call this func after poll if not set on_fd_pollin and not in srrpmode,
  * - as the inner rx buffer has no chance to reduce.
  */
-int apix_read_from_buffer(struct apix *ctx, int fd, void *buf, size_t size);
+int apix_read_from_buffer(struct apix *ctx, int fd, uint8_t *buf, uint32_t len);
 
 /**
  * apix is designed with poll mechanism
@@ -70,7 +70,7 @@ int apix_on_fd_accept(struct apix *ctx, int fd, fd_accept_func_t func, void *pri
  * - return n(>=0): handled, and skip n bytes
  */
 typedef int (*fd_pollin_func_t)(
-    struct apix *ctx, int fd, const void *buf, size_t len, void *priv);
+    struct apix *ctx, int fd, const uint8_t *buf, uint32_t len, void *priv);
 int apix_on_fd_pollin(struct apix *ctx, int fd, fd_pollin_func_t func, void *priv);
 
 /**

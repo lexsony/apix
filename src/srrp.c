@@ -34,31 +34,51 @@ void srrp_move(struct srrp_packet *fst, struct srrp_packet *snd)
     free(fst);
 }
 
-static uint16_t calc_crc(const char *buf, size_t len)
+uint32_t srrp_next_packet_offset(const uint8_t *buf, uint32_t len)
+{
+    for (uint32_t i = 0; i < len; i++) {
+        if (isdigit(buf[i + 1])) {
+            if (buf[i] == SRRP_CTRL_LEADER)
+                return i;
+            else if (buf[i] == SRRP_REQUEST_LEADER)
+                return i;
+            else if (buf[i] == SRRP_RESPONSE_LEADER)
+                return i;
+            else if (buf[i] == SRRP_SUBSCRIBE_LEADER ||
+                     buf[i] == SRRP_UNSUBSCRIBE_LEADER ||
+                     buf[i] == SRRP_PUBLISH_LEADER)
+                return i;
+        }
+    }
+
+    return len;
+}
+
+static uint16_t calc_crc(const uint8_t *buf, uint32_t len)
 {
     return crc16(buf, len - CRC_SIZE);
 }
 
-static uint16_t parse_crc(const char *buf, size_t len)
+static uint16_t parse_crc(const uint8_t *buf, uint32_t len)
 {
     uint16_t crc;
-    assert(sscanf(buf + len - CRC_SIZE, "%4hx", &crc) == 1);
+    assert(sscanf((const char *)buf + len - CRC_SIZE, "%4hx", &crc) == 1);
     return crc;
 }
 
 static struct srrp_packet *
-__srrp_parse_one_ctrl(const char *buf)
+__srrp_parse_one_ctrl(const uint8_t *buf, uint32_t size)
 {
     assert(buf[0] == SRRP_CTRL_LEADER);
 
     char leader, seat;
     uint16_t seqno, len, srcid;
 
-    if (sscanf(buf, "%c%hx,%c,%4hx,%4hx:",
+    if (sscanf((char *)buf, "%c%hx,%c,%4hx,%4hx:",
                &leader, &seqno, &seat, &len, &srcid) != 5)
         return NULL;
 
-    const char *header_delimiter = strstr(buf, ":/");
+    const char *header_delimiter = strstr((char *)buf, ":/");
     if (header_delimiter == NULL)
         return NULL;
 
@@ -79,25 +99,25 @@ __srrp_parse_one_ctrl(const char *buf)
 
     pac->header = strstr(vraw(pac->payload), ":/") + 1;
     pac->header_len = strlen(pac->header);
-    pac->data = vraw(pac->payload) + strlen(buf) + 1;
+    pac->data = vraw(pac->payload) + strlen((char *)buf) + 1;
     pac->data_len = strlen(pac->data);
 
     return pac;
 }
 
 static struct srrp_packet *
-__srrp_parse_one_request(const char *buf)
+__srrp_parse_one_request(const uint8_t *buf, uint32_t size)
 {
     assert(buf[0] == SRRP_REQUEST_LEADER);
 
     char leader, seat;
     uint16_t seqno, len, srcid, dstid;
 
-    if (sscanf(buf, "%c%hx,%c,%4hx,%4hx:%4hx:",
+    if (sscanf((char *)buf, "%c%hx,%c,%4hx,%4hx:%4hx:",
                &leader, &seqno, &seat, &len, &srcid, &dstid) != 6)
         return NULL;
 
-    const char *header_delimiter = strstr(buf, ":/");
+    const char *header_delimiter = strstr((char *)buf, ":/");
     if (header_delimiter == NULL)
         return NULL;
 
@@ -119,25 +139,25 @@ __srrp_parse_one_request(const char *buf)
 
     pac->header = strstr(vraw(pac->payload), ":/") + 1;
     pac->header_len = strlen(pac->header);
-    pac->data = vraw(pac->payload) + strlen(buf) + 1;
+    pac->data = vraw(pac->payload) + strlen((char *)buf) + 1;
     pac->data_len = strlen(pac->data);
 
     return pac;
 }
 
 static struct srrp_packet *
-__srrp_parse_one_response(const char *buf)
+__srrp_parse_one_response(const uint8_t *buf, uint32_t size)
 {
     assert(buf[0] == SRRP_RESPONSE_LEADER);
 
     char leader, seat;
     uint16_t seqno, len, srcid, dstid, reqcrc16;
 
-    if (sscanf(buf, "%c%hx,%c,%4hx,%4hx:%4hx:%4hx:",
+    if (sscanf((char *)buf, "%c%hx,%c,%4hx,%4hx:%4hx:%4hx:",
                &leader, &seqno, &seat, &len, &srcid, &dstid, &reqcrc16) != 7)
         return NULL;
 
-    const char *header_delimiter = strstr(buf, ":/");
+    const char *header_delimiter = strstr((char *)buf, ":/");
     if (header_delimiter == NULL)
         return NULL;
 
@@ -160,14 +180,14 @@ __srrp_parse_one_response(const char *buf)
 
     pac->header = strstr(vraw(pac->payload), ":/") + 1;
     pac->header_len = strlen(pac->header);
-    pac->data = vraw(pac->payload) + strlen(buf) + 1;
+    pac->data = vraw(pac->payload) + strlen((char *)buf) + 1;
     pac->data_len = strlen(pac->data);
 
     return pac;
 }
 
 static struct srrp_packet *
-__srrp_parse_one_subpub(const char *buf)
+__srrp_parse_one_subpub(const uint8_t *buf, uint32_t size)
 {
     assert(buf[0] == SRRP_SUBSCRIBE_LEADER ||
            buf[0] == SRRP_UNSUBSCRIBE_LEADER ||
@@ -176,10 +196,11 @@ __srrp_parse_one_subpub(const char *buf)
     char leader, seat;
     uint16_t seqno, len;
 
-    if (sscanf(buf, "%c%hx,%c,%4hx:", &leader, &seqno, &seat, &len) != 4)
+    if (sscanf((char *)buf, "%c%hx,%c,%4hx:",
+               &leader, &seqno, &seat, &len) != 4)
         return NULL;
 
-    const char *header_delimiter = strstr(buf, ":/");
+    const char *header_delimiter = strstr((char *)buf, ":/");
     if (header_delimiter == NULL)
         return NULL;
 
@@ -199,26 +220,28 @@ __srrp_parse_one_subpub(const char *buf)
 
     pac->header = strstr(vraw(pac->payload), ":/") + 1;
     pac->header_len = strlen(pac->header);
-    pac->data = vraw(pac->payload) + strlen(buf) + 1;
+    pac->data = vraw(pac->payload) + strlen((char *)buf) + 1;
     pac->data_len = strlen(pac->data);
 
     return pac;
 }
 
-struct srrp_packet *srrp_parse(const char *buf)
+struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len)
 {
-    const char *leader = buf;
+    assert(len > 0);
 
-    if (*leader == SRRP_CTRL_LEADER)
-        return __srrp_parse_one_ctrl(buf);
-    else if (*leader == SRRP_REQUEST_LEADER)
-        return __srrp_parse_one_request(buf);
-    else if (*leader == SRRP_RESPONSE_LEADER)
-        return __srrp_parse_one_response(buf);
-    else if (*leader == SRRP_SUBSCRIBE_LEADER ||
-             *leader == SRRP_UNSUBSCRIBE_LEADER ||
-             *leader == SRRP_PUBLISH_LEADER)
-        return __srrp_parse_one_subpub(buf);
+    const char leader = *(char *)buf;
+
+    if (leader == SRRP_CTRL_LEADER)
+        return __srrp_parse_one_ctrl(buf, len);
+    else if (leader == SRRP_REQUEST_LEADER)
+        return __srrp_parse_one_request(buf, len);
+    else if (leader == SRRP_RESPONSE_LEADER)
+        return __srrp_parse_one_response(buf, len);
+    else if (leader == SRRP_SUBSCRIBE_LEADER ||
+             leader == SRRP_UNSUBSCRIBE_LEADER ||
+             leader == SRRP_PUBLISH_LEADER)
+        return __srrp_parse_one_subpub(buf, len);
 
     return NULL;
 }
@@ -237,7 +260,7 @@ srrp_new_ctrl(uint16_t srcid, const char *header)
     int nr = snprintf(buf, len, "%c0,$,%.4hx,%.4hx:%s",
                       SRRP_CTRL_LEADER, len, srcid, header) + 1;
     assert((uint16_t)nr + CRC_SIZE == len);
-    uint16_t crc = calc_crc(buf, len);
+    uint16_t crc = calc_crc((uint8_t *)buf, len);
     snprintf(buf + nr, CRC_SIZE, "%.4hx", crc);
 
     pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
@@ -275,7 +298,7 @@ srrp_new_request(uint16_t srcid, uint16_t dstid, const char *header, const char 
                       SRRP_REQUEST_LEADER, len, srcid, dstid, header) + 1;
     nr += snprintf(buf + nr, len - nr, "%s", data) + 1;
     assert((uint16_t)nr + CRC_SIZE == len);
-    uint16_t crc = calc_crc(buf, len);
+    uint16_t crc = calc_crc((uint8_t *)buf, len);
     snprintf(buf + nr, CRC_SIZE, "%.4hx", crc);
 
     pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
@@ -314,7 +337,7 @@ srrp_new_response(uint16_t srcid, uint16_t dstid, uint16_t reqcrc16,
                       SRRP_RESPONSE_LEADER, len, srcid, dstid, reqcrc16, header) + 1;
     nr += snprintf(buf + nr, len - nr, "%s", data) + 1;
     assert((uint16_t)nr + CRC_SIZE == len);
-    uint16_t crc = calc_crc(buf, len);
+    uint16_t crc = calc_crc((uint8_t *)buf, len);
     snprintf(buf + nr, CRC_SIZE, "%.4hx", crc);
 
     pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
@@ -352,7 +375,7 @@ __srrp_new_subpub(const char *header, const char *ctrl, char leader)
                       leader, len, header) + 1;
     nr += snprintf(buf + nr, len - nr, "%s", ctrl) + 1;
     assert((uint16_t)nr + CRC_SIZE == len);
-    uint16_t crc = calc_crc(buf, len);
+    uint16_t crc = calc_crc((uint8_t *)buf, len);
     snprintf(buf + nr, CRC_SIZE, "%.4hx", crc);
 
     pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
@@ -388,24 +411,4 @@ struct srrp_packet *
 srrp_new_publish(const char *header, const char *data)
 {
     return __srrp_new_subpub(header, data, SRRP_PUBLISH_LEADER);
-}
-
-uint32_t srrp_next_packet_offset(const char *buf, uint32_t size)
-{
-    for (size_t i = 0; i < size; i++) {
-        if (isdigit((uint8_t)buf[i + 1])) {
-            if (buf[i] == SRRP_CTRL_LEADER)
-                return i;
-            else if (buf[i] == SRRP_REQUEST_LEADER)
-                return i;
-            else if (buf[i] == SRRP_RESPONSE_LEADER)
-                return i;
-            else if (buf[i] == SRRP_SUBSCRIBE_LEADER ||
-                     buf[i] == SRRP_UNSUBSCRIBE_LEADER ||
-                     buf[i] == SRRP_PUBLISH_LEADER)
-                return i;
-        }
-    }
-
-    return size;
 }
