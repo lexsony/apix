@@ -50,6 +50,13 @@ impl Apix {
         }
     }
 
+    pub fn read_from_buffer(&self, fd: i32, buf: &mut [u8]) {
+        unsafe {
+            apix_sys::apix_read_from_buffer(
+                self.ctx, fd, buf.as_ptr() as *mut u8, buf.len() as u32);
+        }
+    }
+
     pub fn poll(&self) -> Result<(), std::io::Error> {
         unsafe {
             match apix_sys::apix_poll(self.ctx) {
@@ -288,9 +295,7 @@ pub struct SrrpPacket {
     pub reqcrc16: u16,
     pub crc16: u16,
     pub header: String,
-    pub header_len: u32,
     pub data: String,
-    pub data_len: u32,
     pub payload: Vec<u8>,
 }
 
@@ -309,12 +314,10 @@ impl Srrp {
                 reqcrc16: (*pac).reqcrc16,
                 crc16: (*pac).crc16,
                 header: std::ffi::CStr::from_ptr((*pac).header).to_str().unwrap().to_owned(),
-                header_len: (*pac).header_len,
                 data: match (*pac).data.is_null() {
                     true => String::from(""),
                     _ => std::ffi::CStr::from_ptr((*pac).data).to_str().unwrap().to_owned(),
                 },
-                data_len: (*pac).data_len,
                 payload: {
                     let mut v: Vec<u8> = Vec::new();
                     for i in 0..(*pac).len {
@@ -323,6 +326,22 @@ impl Srrp {
                     v
                 }
             };
+        }
+    }
+
+    pub fn next_packet_offset(buf: &[u8]) -> u32 {
+        unsafe {
+            return apix_sys::srrp_next_packet_offset(
+                buf.as_ptr() as *const u8, buf.len() as u32);
+        }
+    }
+
+    pub fn parse(buf: &[u8]) -> SrrpPacket {
+        unsafe {
+            let pac = apix_sys::srrp_parse(buf.as_ptr() as *const u8, buf.len() as u32);
+            let sp = Srrp::from_raw_packet(pac);
+            apix_sys::srrp_free(pac);
+            return sp;
         }
     }
 
