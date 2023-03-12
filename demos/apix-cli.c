@@ -121,11 +121,11 @@ static void on_srrp_request(
 {
     char hdr[1024];
     snprintf(hdr, sizeof(hdr), "%d:%s", req->dstid, req->header);
-    struct service_private *_priv = svcx_get_service_private(svcx, hdr);
+    struct service_private *svc_priv = svcx_get_service_private(svcx, hdr);
     struct srrp_packet *tmp;
-    if (priv) {
+    if (svc_priv) {
         tmp = srrp_new_response(
-            req->dstid, req->srcid, req->crc16, req->header, _priv->msg);
+            req->dstid, req->srcid, req->crc16, req->header, svc_priv->msg);
     } else {
         tmp = srrp_new_response(
             req->dstid, req->srcid, req->crc16, req->header, "{msg:'...'}");
@@ -705,15 +705,19 @@ static void on_cmd_srrpmode(const char *cmd)
     }
 
     if (strcmp(msg, "on") == 0) {
-        fds[cur_fd].srrp_mode = 1;
-        apix_enable_srrp_mode(ctx, fds[cur_fd].fd, fds[cur_fd].node_id);
-        if (fds[cur_fd].type == 'c')
-            apix_srrp_online(ctx, fds[cur_fd].fd);
+        if (fds[cur_fd].srrp_mode == 0) {
+            fds[cur_fd].srrp_mode = 1;
+            apix_enable_srrp_mode(ctx, fds[cur_fd].fd, fds[cur_fd].node_id);
+            if (fds[cur_fd].type == 'c')
+                apix_srrp_online(ctx, fds[cur_fd].fd);
+        }
     } else if (strcmp(msg, "off") == 0) {
-        fds[cur_fd].srrp_mode = 0;
-        apix_disable_srrp_mode(ctx, fds[cur_fd].fd);
-        if (fds[cur_fd].type == 'c')
-            apix_srrp_offline(ctx, fds[cur_fd].fd);
+        if (fds[cur_fd].srrp_mode == 1) {
+            fds[cur_fd].srrp_mode = 0;
+            apix_disable_srrp_mode(ctx, fds[cur_fd].fd);
+            if (fds[cur_fd].type == 'c')
+                apix_srrp_offline(ctx, fds[cur_fd].fd);
+        }
     } else {
         printf("param error\n");
     }
