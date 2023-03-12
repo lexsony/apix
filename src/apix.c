@@ -447,7 +447,7 @@ static void clear_finished_msg(struct apix *ctx)
     }
 }
 
-int apix_poll(struct apix *ctx)
+int apix_poll(struct apix *ctx, uint64_t usec)
 {
     ctx->poll_cnt = 0;
     gettimeofday(&ctx->poll_ts, NULL);
@@ -494,12 +494,16 @@ int apix_poll(struct apix *ctx)
 
     LOG_DEBUG("poll_cnt: %d", ctx->poll_cnt);
     if (ctx->poll_cnt == 0) {
-        if (ctx->idle_usec != APIX_IDLE_MAX) {
-            ctx->idle_usec += APIX_IDLE_MAX / 10;
-            if (ctx->idle_usec > APIX_IDLE_MAX)
-                ctx->idle_usec = APIX_IDLE_MAX;
+        if (usec != 0) {
+            usleep(usec);
+        } else {
+            if (ctx->idle_usec != APIX_IDLE_MAX) {
+                ctx->idle_usec += APIX_IDLE_MAX / 10;
+                if (ctx->idle_usec > APIX_IDLE_MAX)
+                    ctx->idle_usec = APIX_IDLE_MAX;
+            }
+            usleep(ctx->idle_usec);
         }
-        usleep(ctx->idle_usec);
     } else {
         ctx->idle_usec = APIX_IDLE_MAX / 10;
     }

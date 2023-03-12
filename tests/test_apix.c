@@ -50,7 +50,7 @@ static void *requester_thread(void *args)
     srrp_free(pac);
 
     while (requester_finished != 1)
-        apix_poll(ctx);
+        apix_poll(ctx, 0);
 
     apix_close(ctx, fd);
     apix_disable_posix(ctx);
@@ -92,7 +92,7 @@ static void *responser_thread(void *args)
     assert_true(apix_srrp_online(ctx, fd) == 0);
 
     while (responser_finished != 1) {
-        apix_poll(ctx);
+        apix_poll(ctx, 0);
     }
 
     apix_close(ctx, fd);
@@ -115,7 +115,7 @@ static void test_api_request_response(void **status)
     pthread_create(&requester_pid, NULL, requester_thread, NULL);
 
     while (requester_finished == 0 || responser_finished == 0)
-        apix_poll(ctx);
+        apix_poll(ctx, 0);
 
     pthread_join(requester_pid, NULL);
     pthread_join(responser_pid, NULL);
@@ -231,7 +231,7 @@ static void test_api_subscribe_publish(void **status)
     pthread_create(&publish_pid, NULL, publish_thread, NULL);
 
     while (publish_finished == 0 || subscribe_finished == 0)
-        apix_poll(ctx);
+        apix_poll(ctx, 0);
 
     pthread_join(publish_pid, NULL);
     pthread_join(subscribe_pid, NULL);

@@ -49,8 +49,8 @@ func (self *Apix) ReadFromBuffer(fd int, buf []byte) (int) {
         (*C.uchar)(unsafe.Pointer(&buf[0])), C.uint(len(buf))))
 }
 
-func (self *Apix) Poll() (int) {
-    return int(C.apix_poll(self.ctx))
+func (self *Apix) Poll(usec uint64) (int) {
+    return int(C.apix_poll(self.ctx, C.ulong(usec)))
 }
 
 func (self *Apix) EnablePosix() {

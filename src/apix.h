@@ -45,8 +45,9 @@ int apix_read_from_buffer(struct apix *ctx, int fd, uint8_t *buf, uint32_t len);
 
 /**
  * apix is designed with poll mechanism
+ * - usec: if > 0, sleelp usec while idle. if = 0, sleep less than 1s while idle
  */
-int apix_poll(struct apix *ctx);
+int apix_poll(struct apix *ctx, uint64_t usec);
 
 /**
  * apix_on_fd_close

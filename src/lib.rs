@@ -57,9 +57,9 @@ impl Apix {
         }
     }
 
-    pub fn poll(&self) -> Result<(), std::io::Error> {
+    pub fn poll(&self, usec: u64) -> Result<(), std::io::Error> {
         unsafe {
-            match apix_sys::apix_poll(self.ctx) {
+            match apix_sys::apix_poll(self.ctx, usec) {
                 0 => Ok(()),
                 _ => Err(std::io::Error::last_os_error()),
             }

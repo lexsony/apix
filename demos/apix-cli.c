@@ -289,7 +289,7 @@ static void *apix_thread(void *arg)
             print_all_msg();
         else
             print_cur_msg();
-        apix_poll(ctx);
+        apix_poll(ctx, 0);
     }
 
     apix_disable_posix(ctx);

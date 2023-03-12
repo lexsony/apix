@@ -16,7 +16,7 @@ func TestBase(T *testing.T) {
     ctx.Send(fd, pac.Payload)
 
     for true {
-        ctx.Poll()
+        ctx.Poll(0)
 
         buf := make([]byte, 256)
         nr := ctx.ReadFromBuffer(fd, buf)
