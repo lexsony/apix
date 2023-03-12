@@ -61,7 +61,7 @@ extern "C" {
 #define SRRP_CTRL_OFFLINE "/offline"
 
 #define SRRP_SEQNO_HIGH 966
-#define SRRP_LENGTH_MAX 4096
+#define SRRP_LENGTH_MAX 65535
 #define SRRP_SUBSCRIBE_CACHE_MAX 1024
 
 struct srrp_packet {
