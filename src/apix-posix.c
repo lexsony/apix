@@ -107,7 +107,7 @@ static int unix_s_close(struct apisink *sink, int fd)
 static int unix_s_send(struct apisink *sink, int fd, const void *buf, size_t len)
 {
     UNUSED(sink);
-    return send(fd, buf, len, 0);
+    return send(fd, buf, len, MSG_NOSIGNAL);
 }
 
 static int unix_s_recv(struct apisink *sink, int fd, void *buf, size_t size)
@@ -233,7 +233,7 @@ static int unix_c_open(struct apisink *sink, const char *addr)
 static int unix_c_send(struct apisink *sink, int fd, const void *buf, size_t len)
 {
     UNUSED(sink);
-    return send(fd, buf, len, 0);
+    return send(fd, buf, len, MSG_NOSIGNAL);
 }
 
 static int unix_c_recv(struct apisink *sink, int fd, void *buf, size_t size)
