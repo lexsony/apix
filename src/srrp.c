@@ -6,29 +6,26 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include "str.h"
 #include "unused.h"
 #include "crc16.h"
 #include "vec.h"
 
-#define SEQNO_MAX_LEN 32
-#define LENGTH_MAX_LEN 32
-#define SRCID_MAX_LEN 32
-
-#define LEADER_SEQNO_SIZE 5 /* >0,$, */
-#define LENGTH_SIZE 5       /* <len>, */
-#define SRCID_SIZE 5        /* 0001: */
-#define DSTID_SIZE 5        /* 8888: */
-#define CRC_SIZE 5          /* <crc16>\0 */
+#define CRC_SIZE 5 /* <crc16>\0 */
 
 void srrp_free(struct srrp_packet *pac)
 {
-    vec_delete(pac->payload);
+    str_delete(pac->anchor);
+    vec_delete(pac->raw);
+
     free(pac);
 }
 
 void srrp_move(struct srrp_packet *fst, struct srrp_packet *snd)
 {
-    vec_delete(snd->payload);
+    // should not call srrp_free as it will free snd ...
+    str_delete(snd->anchor);
+    vec_delete(snd->raw);
     *snd = *fst;
     bzero(fst, sizeof(*fst));
     free(fst);
@@ -54,373 +51,214 @@ uint32_t srrp_next_packet_offset(const uint8_t *buf, uint32_t len)
     return len;
 }
 
-static uint16_t calc_crc(const uint8_t *buf, uint32_t len)
-{
-    return crc16(buf, len - CRC_SIZE);
-}
-
-static uint16_t parse_crc(const uint8_t *buf, uint32_t len)
-{
-    uint16_t crc;
-    assert(sscanf((const char *)buf + len - CRC_SIZE, "%4hx", &crc) == 1);
-    return crc;
-}
-
-static struct srrp_packet *
-__srrp_parse_one_ctrl(const uint8_t *buf, uint32_t size)
-{
-    assert(buf[0] == SRRP_CTRL_LEADER);
-
-    char leader, seat;
-    uint16_t seqno, len, srcid;
-
-    if (sscanf((char *)buf, "%c%hx,%c,%4hx,%4hx:",
-               &leader, &seqno, &seat, &len, &srcid) != 5)
-        return NULL;
-
-    if (len > size)
-        return NULL;
-
-    const char *header_delimiter = strstr((char *)buf, ":/");
-    if (header_delimiter == NULL)
-        return NULL;
-
-    uint16_t crc = calc_crc(buf, len);
-    if (parse_crc(buf, len) != crc)
-        return NULL;
-
-    struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
-    pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
-    vpack(pac->payload, buf, len);
-
-    pac->leader = leader;
-    pac->seat = seat;
-    pac->seqno = seqno;
-    pac->len = len;
-    pac->srcid = srcid;
-    pac->crc16 = crc;
-
-    pac->header = strstr(vraw(pac->payload), ":/") + 1;
-    pac->header_len = strlen(pac->header);
-    pac->data = vraw(pac->payload) + strlen((char *)buf) + 1;
-    pac->data_len = strlen(pac->data);
-
-    return pac;
-}
-
-static struct srrp_packet *
-__srrp_parse_one_request(const uint8_t *buf, uint32_t size)
-{
-    assert(buf[0] == SRRP_REQUEST_LEADER);
-
-    char leader, seat;
-    uint16_t seqno, len, srcid, dstid;
-
-    if (sscanf((char *)buf, "%c%hx,%c,%4hx,%4hx:%4hx:",
-               &leader, &seqno, &seat, &len, &srcid, &dstid) != 6)
-        return NULL;
-
-    if (len > size)
-        return NULL;
-
-    const char *header_delimiter = strstr((char *)buf, ":/");
-    if (header_delimiter == NULL)
-        return NULL;
-
-    uint16_t crc = calc_crc(buf, len);
-    if (parse_crc(buf, len) != crc)
-        return NULL;
-
-    struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
-    pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
-    vpack(pac->payload, buf, len);
-
-    pac->leader = leader;
-    pac->seat = seat;
-    pac->seqno = seqno;
-    pac->len = len;
-    pac->srcid = srcid;
-    pac->dstid = dstid;
-    pac->crc16 = crc;
-
-    pac->header = strstr(vraw(pac->payload), ":/") + 1;
-    pac->header_len = strlen(pac->header);
-    pac->data = vraw(pac->payload) + strlen((char *)buf) + 1;
-    pac->data_len = strlen(pac->data);
-
-    return pac;
-}
-
-static struct srrp_packet *
-__srrp_parse_one_response(const uint8_t *buf, uint32_t size)
-{
-    assert(buf[0] == SRRP_RESPONSE_LEADER);
-
-    char leader, seat;
-    uint16_t seqno, len, srcid, dstid, reqcrc16;
-
-    if (sscanf((char *)buf, "%c%hx,%c,%4hx,%4hx:%4hx:%4hx:",
-               &leader, &seqno, &seat, &len, &srcid, &dstid, &reqcrc16) != 7)
-        return NULL;
-
-    if (len > size)
-        return NULL;
-
-    const char *header_delimiter = strstr((char *)buf, ":/");
-    if (header_delimiter == NULL)
-        return NULL;
-
-    uint16_t crc = calc_crc(buf, len);
-    if (parse_crc(buf, len) != crc)
-        return NULL;
-
-    struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
-    pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
-    vpack(pac->payload, buf, len);
-
-    pac->leader = leader;
-    pac->seat = seat;
-    pac->seqno = seqno;
-    pac->len = len;
-    pac->srcid = srcid;
-    pac->dstid = dstid;
-    pac->reqcrc16 = reqcrc16;
-    pac->crc16 = crc;
-
-    pac->header = strstr(vraw(pac->payload), ":/") + 1;
-    pac->header_len = strlen(pac->header);
-    pac->data = vraw(pac->payload) + strlen((char *)buf) + 1;
-    pac->data_len = strlen(pac->data);
-
-    return pac;
-}
-
-static struct srrp_packet *
-__srrp_parse_one_subpub(const uint8_t *buf, uint32_t size)
-{
-    assert(buf[0] == SRRP_SUBSCRIBE_LEADER ||
-           buf[0] == SRRP_UNSUBSCRIBE_LEADER ||
-           buf[0] == SRRP_PUBLISH_LEADER);
-
-    char leader, seat;
-    uint16_t seqno, len;
-
-    if (sscanf((char *)buf, "%c%hx,%c,%4hx:",
-               &leader, &seqno, &seat, &len) != 4)
-        return NULL;
-
-    if (len > size)
-        return NULL;
-
-    const char *header_delimiter = strstr((char *)buf, ":/");
-    if (header_delimiter == NULL)
-        return NULL;
-
-    uint16_t crc = calc_crc(buf, len);
-    if (parse_crc(buf, len) != crc)
-        return NULL;
-
-    struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
-    pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
-    vpack(pac->payload, buf, len);
-
-    pac->leader = leader;
-    pac->seat = seat;
-    pac->seqno = seqno;
-    pac->len = len;
-    pac->crc16 = crc;
-
-    pac->header = strstr(vraw(pac->payload), ":/") + 1;
-    pac->header_len = strlen(pac->header);
-    pac->data = vraw(pac->payload) + strlen((char *)buf) + 1;
-    pac->data_len = strlen(pac->data);
-
-    return pac;
-}
-
 struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len)
 {
-    assert(len > 0);
+    char leader;
+    uint16_t packet_len;
+    uint32_t payload_offset, payload_len, srcid, dstid;
+    char anchor[SRRP_ANCHOR_MAX] = {0};
 
-    const char leader = *(char *)buf;
+    leader = buf[0];
 
-    if (leader == SRRP_CTRL_LEADER)
-        return __srrp_parse_one_ctrl(buf, len);
-    else if (leader == SRRP_REQUEST_LEADER)
-        return __srrp_parse_one_request(buf, len);
-    else if (leader == SRRP_RESPONSE_LEADER)
-        return __srrp_parse_one_response(buf, len);
-    else if (leader == SRRP_SUBSCRIBE_LEADER ||
-             leader == SRRP_UNSUBSCRIBE_LEADER ||
-             leader == SRRP_PUBLISH_LEADER)
-        return __srrp_parse_one_subpub(buf, len);
+    if (leader == SRRP_CTRL_LEADER ||
+        leader == SRRP_REQUEST_LEADER ||
+        leader == SRRP_RESPONSE_LEADER) {
+        if (sscanf((char *)buf + 1, "%hx,%x,%x,#%x,#%x:%[^?]",
+                   &packet_len, &payload_offset, &payload_len,
+                   &srcid, &dstid, anchor) != 6)
+            return NULL;
+    } else if (leader == SRRP_SUBSCRIBE_LEADER ||
+               leader == SRRP_UNSUBSCRIBE_LEADER ||
+               leader == SRRP_PUBLISH_LEADER) {
+        if (sscanf((char *)buf + 1, "%hx,%x,%x:%[^?]",
+                   &packet_len, &payload_offset, &payload_len, anchor) != 4)
+            return NULL;
+    } else {
+        return NULL;
+    }
 
-    return NULL;
-}
+    if (packet_len > len)
+        return NULL;
 
-struct srrp_packet *
-srrp_new_ctrl(uint16_t srcid, const char *header)
-{
-    uint16_t len = LEADER_SEQNO_SIZE + LENGTH_SIZE + SRCID_SIZE +
-        strlen(header) + 1/*\0*/ + CRC_SIZE;
-    assert(len < SRRP_LENGTH_MAX);
+    if (packet_len > SRRP_PACKET_MAX)
+        return NULL;
 
-    struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
+    uint16_t crc = 0;
+    uint16_t reqcrc = 0;
+
+    if (sscanf((char *)buf + packet_len - CRC_SIZE, "%4hx", &crc) != 1)
+        return NULL;
+
+    if (crc != crc16(buf, packet_len - CRC_SIZE))
+        return NULL;
+
+    if (leader == SRRP_RESPONSE_LEADER) {
+        if (sscanf((char *)buf + packet_len - CRC_SIZE * 2, "%4hx", &reqcrc) != 1)
+            return NULL;
+    }
+
+    struct srrp_packet *pac = calloc(1, sizeof(*pac));
     assert(pac);
 
-    char buf[len + 1];
-    int nr = snprintf(buf, len, "%c0,$,%.4hx,%.4hx:%s",
-                      SRRP_CTRL_LEADER, len, srcid, header) + 1;
-    assert((uint16_t)nr + CRC_SIZE == len);
-    uint16_t crc = calc_crc((uint8_t *)buf, len);
-    snprintf(buf + nr, CRC_SIZE, "%.4hx", crc);
+    pac->raw = vec_new(1, packet_len);
+    assert(pac->raw);
+    vpack(pac->raw, buf, packet_len);
 
-    pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
-    vpack(pac->payload, buf, len);
+    pac->leader = leader;
+    pac->packet_len = packet_len;
+    pac->payload_offset = payload_offset;
+    pac->payload_len = payload_len;
 
-    pac->leader = SRRP_CTRL_LEADER;
-    pac->seat = '$';
-    pac->seqno = 0;
-    pac->len = len;
+    pac->srcid = srcid;
+    pac->dstid = dstid;
+
+    pac->anchor = str_new(anchor);
+    assert(pac->anchor);
+    pac->payload = (uint8_t *)strstr(vraw(pac->raw), "?") + 1;
+
+    pac->reqcrc16 = reqcrc;
+    pac->crc16 = crc;
+    return pac;
+}
+
+static struct srrp_packet *__srrp_new(
+    char leader, uint32_t srcid, uint32_t dstid,
+    const char *anchor, const char *payload, uint16_t reqcrc16)
+{
+    vec_t *v = vec_new(1, 0);
+    assert(v);
+
+    // leader
+    vpush(v, &leader);
+
+#ifndef VINSERT
+    // packet_len
+    vpack(v, "____", 4);
+#endif
+
+    // payload_offset
+    vpack(v, ",0", 2);
+
+    char tmp[32] = {0};
+
+    // payload_len
+    snprintf(tmp, sizeof(tmp), ",%x", (uint32_t)strlen(payload));
+    vpack(v, tmp, strlen(tmp));
+
+    if (leader == SRRP_CTRL_LEADER ||
+        leader == SRRP_REQUEST_LEADER ||
+        leader == SRRP_RESPONSE_LEADER) {
+        // srcid
+        snprintf(tmp, sizeof(tmp), ",#%x", srcid);
+        vpack(v, tmp, strlen(tmp));
+        // dstid
+        snprintf(tmp, sizeof(tmp), ",#%x", dstid);
+        vpack(v, tmp, strlen(tmp));
+    }
+
+    // anchor
+    vpack(v, ":", 1);
+    vpack(v, anchor, strlen(anchor));
+
+    // payload
+    if (strlen(payload)) {
+        vpack(v, "?", 1);
+        vpack(v, payload, strlen(payload));
+    }
+
+    // stop flag
+    vpack(v, "\0", 1);
+
+    // reqcrc16
+    if (leader == SRRP_RESPONSE_LEADER) {
+        snprintf(tmp, sizeof(tmp), "%.4x", reqcrc16);
+        assert(strlen(tmp) == 4);
+        vpack(v, tmp, strlen(tmp));
+        vpack(v, "\0", 1);
+    }
+
+    // packet_len
+#ifndef VINSERT
+    uint16_t packet_len = vsize(v) + CRC_SIZE;
+    assert(packet_len < SRRP_PACKET_MAX);
+    snprintf(tmp, sizeof(tmp), "%.4x", packet_len);
+    assert(strlen(tmp) == 4);
+    memcpy((char *)vraw(v) + 1, tmp, 4);
+#else
+    uint16_t packet_len = vsize(v) + CRC_SIZE + 4;
+    assert(packet_len < SRRP_PACKET_MAX);
+    snprintf(tmp, sizeof(tmp), "%.4x", packet_len);
+    assert(strlen(tmp) == 4);
+    vinsert(v, 1, tmp, 4);
+#endif
+
+    // crc16
+    uint16_t crc = crc16(vraw(v), vsize(v));
+    snprintf(tmp, sizeof(tmp), "%.4x", crc);
+    assert(strlen(tmp) == 4);
+    vpack(v, tmp, strlen(tmp));
+    vpack(v, "\0", 1);
+
+    vshrink(v);
+
+    struct srrp_packet *pac = calloc(1, sizeof(*pac));
+    assert(pac);
+    pac->raw = v;
+
+    pac->leader = leader;
+    pac->packet_len = packet_len;
+    pac->payload_offset = 0;
+    pac->payload_len = strlen(payload);
+
     pac->srcid = srcid;
     pac->dstid = 0;
-    pac->reqcrc16 = 0;
-    pac->crc16 = crc;
 
-    pac->header = strstr(vraw(pac->payload), header);
-    pac->header_len = strlen(pac->header);
-    pac->data = NULL;
-    pac->data_len = 0;
+    pac->anchor = str_new(anchor);
+    assert(pac->anchor);
+    if (pac->payload_len == 0)
+        pac->payload = vraw(pac->raw) + strlen(vraw(pac->raw));
+    else
+        pac->payload = (uint8_t *)strstr(vraw(pac->raw), "?") + 1;
 
-    return pac;
-}
-
-struct srrp_packet *
-srrp_new_request(uint16_t srcid, uint16_t dstid, const char *header, const char *data)
-{
-    uint16_t len = LEADER_SEQNO_SIZE + LENGTH_SIZE + SRCID_SIZE + DSTID_SIZE +
-        strlen(header) + 1/*\0*/ + strlen(data) + 1/*\0*/ + CRC_SIZE;
-    assert(len < SRRP_LENGTH_MAX);
-
-    struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
-    assert(pac);
-
-    char buf[len + 1];
-    int nr = snprintf(buf, len, "%c0,$,%.4hx,%.4hx:%.4hx:%s",
-                      SRRP_REQUEST_LEADER, len, srcid, dstid, header) + 1;
-    nr += snprintf(buf + nr, len - nr, "%s", data) + 1;
-    assert((uint16_t)nr + CRC_SIZE == len);
-    uint16_t crc = calc_crc((uint8_t *)buf, len);
-    snprintf(buf + nr, CRC_SIZE, "%.4hx", crc);
-
-    pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
-    vpack(pac->payload, buf, len);
-
-    pac->leader = SRRP_REQUEST_LEADER;
-    pac->seat = '$';
-    pac->seqno = 0;
-    pac->len = len;
-    pac->srcid = srcid;
-    pac->dstid = dstid;
-    pac->reqcrc16 = 0;
-    pac->crc16 = crc;
-
-    pac->header = strstr(vraw(pac->payload), header);
-    pac->header_len = strlen(pac->header);
-    pac->data = vraw(pac->payload) + strlen(buf) + 1;
-    pac->data_len = strlen(pac->data);
-
-    return pac;
-}
-
-struct srrp_packet *
-srrp_new_response(uint16_t srcid, uint16_t dstid, uint16_t reqcrc16,
-                  const char *header, const char *data)
-{
-    uint16_t len = LEADER_SEQNO_SIZE + LENGTH_SIZE + SRCID_SIZE + DSTID_SIZE +
-        CRC_SIZE + strlen(header) + 1/*\0*/ + strlen(data) + 1/*\0*/ + CRC_SIZE;
-    assert(len < SRRP_LENGTH_MAX);
-
-    struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
-    assert(pac);
-
-    char buf[len + 1];
-    int nr = snprintf(buf, len, "%c0,$,%.4hx,%.4hx:%.4hx:%.4hx:%s",
-                      SRRP_RESPONSE_LEADER, len, srcid, dstid, reqcrc16, header) + 1;
-    nr += snprintf(buf + nr, len - nr, "%s", data) + 1;
-    assert((uint16_t)nr + CRC_SIZE == len);
-    uint16_t crc = calc_crc((uint8_t *)buf, len);
-    snprintf(buf + nr, CRC_SIZE, "%.4hx", crc);
-
-    pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
-    vpack(pac->payload, buf, len);
-
-    pac->leader = SRRP_RESPONSE_LEADER;
-    pac->seat = '$';
-    pac->seqno = 0;
-    pac->len = len;
-    pac->srcid = srcid;
-    pac->dstid = dstid;
     pac->reqcrc16 = reqcrc16;
     pac->crc16 = crc;
 
-    pac->header = strstr(vraw(pac->payload), header);
-    pac->header_len = strlen(pac->header);
-    pac->data = vraw(pac->payload) + strlen(buf) + 1;
-    pac->data_len = strlen(pac->data);
-
-    return pac;
-}
-
-static struct srrp_packet *
-__srrp_new_subpub(const char *header, const char *ctrl, char leader)
-{
-    uint16_t len = LEADER_SEQNO_SIZE + LENGTH_SIZE +
-        strlen(header) + 1/*\0*/ + strlen(ctrl) + 1/*\0*/ + CRC_SIZE;
-    assert(len < SRRP_LENGTH_MAX);
-
-    struct srrp_packet *pac = calloc(1, sizeof(*pac) + len);
-    assert(pac);
-
-    char buf[len + 1];
-    int nr = snprintf(buf, len, "%c0,$,%.4hx:%s",
-                      leader, len, header) + 1;
-    nr += snprintf(buf + nr, len - nr, "%s", ctrl) + 1;
-    assert((uint16_t)nr + CRC_SIZE == len);
-    uint16_t crc = calc_crc((uint8_t *)buf, len);
-    snprintf(buf + nr, CRC_SIZE, "%.4hx", crc);
-
-    pac->payload = vec_new(1, len, VEC_ALLOC_LINEAR);
-    vpack(pac->payload, buf, len);
-
-    pac->leader = leader;
-    pac->seat = '$';
-    pac->seqno = 0;
-    pac->len = len;
-    pac->crc16 = crc;
-
-    pac->header = strstr(vraw(pac->payload), header);
-    pac->header_len = strlen(pac->header);
-    pac->data = vraw(pac->payload) + strlen(buf) + 1;
-    pac->data_len = strlen(pac->data);
-
     return pac;
 }
 
 struct srrp_packet *
-srrp_new_subscribe(const char *header, const char *ctrl)
+srrp_new_ctrl(uint32_t srcid, const char *anchor, const char *payload)
 {
-    return __srrp_new_subpub(header, ctrl, SRRP_SUBSCRIBE_LEADER);
+    return __srrp_new(SRRP_CTRL_LEADER, srcid, 0, anchor, payload, 0);
+}
+
+struct srrp_packet *srrp_new_request(
+    uint32_t srcid, uint32_t dstid, const char *anchor, const char *payload)
+{
+    return __srrp_new(SRRP_REQUEST_LEADER, srcid, dstid, anchor, payload, 0);
+}
+
+struct srrp_packet *srrp_new_response(
+    uint32_t srcid, uint32_t dstid,
+    const char *anchor, const char *payload, uint16_t reqcrc16)
+{
+    return __srrp_new(SRRP_RESPONSE_LEADER, srcid, dstid, anchor, payload, reqcrc16);
 }
 
 struct srrp_packet *
-srrp_new_unsubscribe(const char *header, const char *ctrl)
+srrp_new_subscribe(const char *anchor, const char *payload)
 {
-    return __srrp_new_subpub(header, ctrl, SRRP_UNSUBSCRIBE_LEADER);
+    return __srrp_new(SRRP_SUBSCRIBE_LEADER, 0, 0, anchor, payload, 0);
 }
 
 struct srrp_packet *
-srrp_new_publish(const char *header, const char *data)
+srrp_new_unsubscribe(const char *anchor, const char *payload)
 {
-    return __srrp_new_subpub(header, data, SRRP_PUBLISH_LEADER);
+    return __srrp_new(SRRP_UNSUBSCRIBE_LEADER, 0, 0, anchor, payload, 0);
+}
+
+struct srrp_packet *
+srrp_new_publish(const char *anchor, const char *payload)
+{
+    return __srrp_new(SRRP_PUBLISH_LEADER, 0, 0, anchor, payload, 0);
 }

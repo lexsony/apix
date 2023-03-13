@@ -3,43 +3,40 @@
 
 #include <stdint.h>
 #include "vec.h"
+#include "str.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- * Ctrl: =[0xseqno],[^|0|$],[0xlen],[0xsrcid]:header\0<crc16>\0
- *   =0,$,<len>,0001:/online\0<crc16>\0
- *   =0,$,<len>,0001:/offline\0<crc16>\0
- *   =0,$,<len>,0001:/alive\0<crc16>\0
+ * Data type:
+ *   ascii hex: packet_len, payload_offset, payload_len, srcid, dstid, reqcrc16, crc16
+ *   acsii str: anchor
  *
- * Request: >[0xseqno],[^|0|$],[0xlen],[0xsrcid]:[0xdstid]:header\0[j|b|t]:data\0<crc16>\0
- *   >0,$,<len>,0001:8888:/echo\0j:{name:'yon',age:18,equip:['hat','shoes']}\0<crc16>\0
- *   >1,^,<len>,0001:8888:/he\0<crc16>\0
- *   >2,0,<len>,0001:8888:llo/y\0<crc16>\0
- *   >3,$,<len>,0001:8888:\0j:{name:'myu',age:12,equip:['gun','bomb']}\0<crc16>\0
+ * Payload type:
+ *   b: binary
+ *   t: txt
+ *   j: json
  *
- * Response: <[0xseqno],[^|0|$],[0xlen],[0xsrcid]:[0xdstid]:[reqcrc16]:header\0[j|b|t]:data\0<crc16>\0
- *   <0,$,<len>,8888:0001:<crc16>:/echo\0j:{err:0,errmsg:'succ',data:{msg:'world'}}\0<crc16>\0
- *   <1,$,<len>,8888:0001:<crc16>:/hello/y\0j:{err:1,errmsg:'fail',data:{msg:'hell'}}\0<crc16>\0
+ * Ctrl: =[packet_len],[payload_offset],[payload_len],#[srcid],#0:[/anchor]?[payload_type]:[payload]\0<crc16>\0
+ *   =[packet_len],0,[payload_len],#F1,#0:/online?j:{"alias":["google.com","a.google.com","b.google.com"]}\0<crc16>\0
  *
- * Data type: j:json, b:base64, t:txt
- *   >0,$,<len>,0001:8888:/echo\0j:{name:'yon',age:18,equip:['hat','shoes']}\0<crc16>\0
- *   >0,$,<len>,0001:8888:/echo\0b:aGVsbG8gd29ybGQh\0<crc16>\0
- *   >0,$,<len>,0001:8888:/echo\0t:hello world!\0<crc16>\0
+ * Request: >[packet_len],[payload_offset],[payload_len],#[srcid],<#[dstid]|@[dst]>:[/anchor]?[payload_type]:[payload]\0<crc16>\0
+ *   >[packet_len],0,[payload_len],#F1,#8A8F:/echo?j:{"v": "good news"}\0<crc16>\0
+ *   >[packet_len],0,[payload_len],#F1,@google.com:/echo?j:{"v":"good news"}\0<crc16>\0
  *
- * Subscribe: #[0xseqno],[^|0|$],[0xlen]:[topic]\0j:{ctrl}\0<crc16>\0
- *   #0,$,0038:/motor/speed\0j:{ack:0,cache:100}\0<crc16>\0
- * ctrl:
- *   - ack: 0/1, if subscriber should acknology or not each msg
- *   - cahce: 0~1024, cache msg if subscriber offline
+ * Response: <[packet_len],[payload_offset],[payload_len],#[srcid],#[dstid]:[/anchor]?[payload_type]:[payload]\0<reqcrc16>:<crc16>\0
+ *   <[packet_len],0,[payload_len],#8A8F,#F1:/echo?j:{"err":0,"msg":"succ","v":"good news"}\0<crc16>\0
  *
- * UnSubscribe: %[0xseqno],[^|0|$],[0xlen]:[topic]\0j:{ctrl}\0<crc16>\0
- *   %0,$,0024:/motor/speed\0j:{}\0<crc16>\0
+ * Subscribe: <[packet_len],[payload_offset],[payload_len]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
+ *   #[packet_len],0,[payload_len]:/motor/speed?_:\0<crc16>\0
  *
- * Publish: @[0xseqno],[^|0|$],[0xlen]:[topic]\0[j|b|t]:{data}\0<crc16>\0
- *   @0,$,0043:/motor/speed\0j:{speed:12,voltage:24}\0<crc16>\0
+ * UnSubscribe: <[packet_len],[payload_offset],[payload_len]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
+ *   %[packet_len],0,[payload_len]:/motor/speed?_:\0<crc16>\0
+ *
+ * Publish: <[packet_len],[payload_offset],[payload_len]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
+ *   @[packet_len],0,[payload_len]:/motor/speed?j:{"speed":12,"voltage":24}\0<crc16>\0
  */
 
 #define SRRP_CTRL_LEADER '='
@@ -49,40 +46,29 @@ extern "C" {
 #define SRRP_UNSUBSCRIBE_LEADER '%'
 #define SRRP_PUBLISH_LEADER '@'
 
-#define SRRP_BEGIN_PACKET '^'
-#define SRRP_MID_PACKET '0'
-#define SRRP_END_PACKET '$'
-#define SRRP_NODEID_SUBFIX ':'
-#define SRRP_HEADER_SUBFIX '\0'
-#define SRRP_DATA_SUBFIX '\0'
-#define SRRP_CRC16_SUBFIX '\0'
+#define SRRP_PACKET_MAX 65535
+#define SRRP_DST_ALIAS_MAX 64
+#define SRRP_ANCHOR_MAX 1024
 
 #define SRRP_CTRL_ONLINE "/online"
 #define SRRP_CTRL_OFFLINE "/offline"
 
-#define SRRP_SEQNO_HIGH 966
-#define SRRP_LENGTH_MAX 65535
-#define SRRP_SUBSCRIBE_CACHE_MAX 1024
-
 struct srrp_packet {
     char leader;
-    char seat;
-    uint16_t seqno;
-    uint16_t len;
+    uint16_t packet_len;
+    uint32_t payload_offset;
+    uint32_t payload_len;
 
-    uint16_t srcid;
-    uint16_t dstid;
+    uint32_t srcid;
+    uint32_t dstid;
+
+    str_t *anchor;
+    const uint8_t *payload;
 
     uint16_t reqcrc16; /* only used by response */
     uint16_t crc16;
 
-    const char *header;
-    uint32_t header_len;
-
-    const char *data;
-    uint32_t data_len;
-
-    vec_t *payload;
+    vec_t *raw;
 };
 
 /**
@@ -115,43 +101,43 @@ struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len);
  * - create new ctrl packet
  */
 struct srrp_packet *
-srrp_new_ctrl(uint16_t srcid, const char *header);
+srrp_new_ctrl(uint32_t srcid, const char *anchor, const char *payload);
 
 /**
  * srrp_new_request
  * - create new request packet
  */
-struct srrp_packet *
-srrp_new_request(uint16_t srcid, uint16_t dstid, const char *header, const char *data);
+struct srrp_packet *srrp_new_request(
+    uint32_t srcid, uint32_t dstid, const char *anchor, const char *payload);
 
 /**
  * srrp_new_response
  * - create new response packet
  */
-struct srrp_packet *
-srrp_new_response(uint16_t srcid, uint16_t dstid, uint16_t reqcrc16,
-                  const char *header, const char *data);
+struct srrp_packet *srrp_new_response(
+    uint32_t srcid, uint32_t dstid,
+    const char *anchor, const char *payload, uint16_t reqcrc16);
 
 /**
  * srrp_new_subscribe
  * - create new subscribe packet
  */
 struct srrp_packet *
-srrp_new_subscribe(const char *header, const char *ctrl);
+srrp_new_subscribe(const char *anchor, const char *payload);
 
 /**
  * srrp_new_unsubscribe
  * - create new unsubscribe packet
  */
 struct srrp_packet *
-srrp_new_unsubscribe(const char *header, const char *ctrl);
+srrp_new_unsubscribe(const char *anchor, const char *payload);
 
 /**
  * srrp_new_publish
  * - create new publish packet
  */
 struct srrp_packet *
-srrp_new_publish(const char *header, const char *data);
+srrp_new_publish(const char *anchor, const char *payload);
 
 #ifdef __cplusplus
 }

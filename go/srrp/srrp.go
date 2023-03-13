@@ -7,16 +7,16 @@ import "errors"
 
 type SrrpPacket struct {
     Leader int8
-    Seat int8
-    Seqno uint16
-    Len uint16
-    Srcid uint16
-    Dstid uint16
+    PacketLen uint16
+    PayloadOffset uint32
+    PayloadLen uint32
+    Srcid uint32
+    Dstid uint32
+    Anchor string
+    Payload string
     Reqcrc16 uint16
     Crc16 uint16
-    Header string
-    Data string
-    Payload []byte
+    Raw []byte
 }
 
 type Srrp struct {}
@@ -25,18 +25,19 @@ func from_raw_packet(pac *C.struct_srrp_packet) (SrrpPacket) {
     if pac == nil {
         panic("raw point of srrp_packet is null")
     }
+
     return SrrpPacket {
         Leader: int8(pac.leader),
-        Seat: int8(pac.seat),
-        Seqno: uint16(pac.seqno),
-        Len: uint16(pac.len),
-        Srcid: uint16(pac.srcid),
-        Dstid: uint16(pac.dstid),
+        PacketLen: uint16(pac.packet_len),
+        PayloadOffset: uint32(pac.payload_offset),
+        PayloadLen: uint32(pac.payload_len),
+        Srcid: uint32(pac.srcid),
+        Dstid: uint32(pac.dstid),
+        Anchor: C.GoString(C.sget(pac.anchor)),
+        Payload: C.GoString((*C.char)(unsafe.Pointer(pac.payload))),
         Reqcrc16: uint16(pac.reqcrc16),
         Crc16: uint16(pac.crc16),
-        Header: C.GoString(pac.header),
-        Data: C.GoString(pac.data),
-        Payload: C.GoBytes(C.vraw(pac.payload), (C.int)(C.vsize(pac.payload))),
+        Raw: C.GoBytes(C.vraw(pac.raw), (C.int)(C.vsize(pac.raw))),
     }
 }
 
@@ -55,8 +56,8 @@ func Parse(buf []byte) (SrrpPacket, error) {
     }
 }
 
-func NewCtrl(srcid uint16, header string) (SrrpPacket, error) {
-    pac := C.srrp_new_ctrl(C.ushort(srcid), C.CString(header))
+func NewCtrl(srcid uint32, anchor string, payload string) (SrrpPacket, error) {
+    pac := C.srrp_new_ctrl(C.uint(srcid), C.CString(anchor), C.CString(payload))
 
     if pac == nil {
         return SrrpPacket {}, errors.New("srrp parse failed")
@@ -65,10 +66,10 @@ func NewCtrl(srcid uint16, header string) (SrrpPacket, error) {
     }
 }
 
-func NewRequest(srcid uint16, dstid uint16,
-    header string, data string) (SrrpPacket, error) {
-    pac := C.srrp_new_request(C.ushort(srcid), C.ushort(dstid),
-        C.CString(header), C.CString(data))
+func NewRequest(srcid uint32, dstid uint32,
+    anchor string, payload string) (SrrpPacket, error) {
+    pac := C.srrp_new_request(C.uint(srcid), C.uint(dstid),
+        C.CString(anchor), C.CString(payload))
 
     if pac == nil {
         return SrrpPacket {}, errors.New("srrp parse failed")
@@ -77,10 +78,10 @@ func NewRequest(srcid uint16, dstid uint16,
     }
 }
 
-func NewResponse(srcid uint16, dstid uint16, reqcrc16 uint16,
-    header string, data string) (SrrpPacket, error) {
-    pac := C.srrp_new_response(C.ushort(srcid), C.ushort(dstid),
-        C.ushort(reqcrc16), C.CString(header), C.CString(data))
+func NewResponse(srcid uint32, dstid uint32,
+        anchor string, payload string, reqcrc16 uint16) (SrrpPacket, error) {
+    pac := C.srrp_new_response(C.uint(srcid), C.uint(dstid),
+        C.CString(anchor), C.CString(payload), C.ushort(reqcrc16))
 
     if pac == nil {
         return SrrpPacket {}, errors.New("srrp parse failed")

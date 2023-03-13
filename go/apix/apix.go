@@ -8,15 +8,6 @@ package apix
 import "C"
 import "unsafe"
 
-/**
- * log
- */
-
-
-/**
- * apix
- */
-
 type Apix struct {
     ctx *C.struct_apix
 }

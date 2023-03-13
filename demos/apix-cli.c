@@ -119,24 +119,26 @@ static void on_srrp_request(
     struct apix *ctx, int fd, struct srrp_packet *req, struct srrp_packet *resp, void *priv)
 {
     char hdr[1024];
-    snprintf(hdr, sizeof(hdr), "%d:%s", req->dstid, req->header);
+    snprintf(hdr, sizeof(hdr), "%d:%s", req->dstid, sget(req->anchor));
     struct service_private *svc_priv = svcx_get_service_private(svcx, hdr);
     struct srrp_packet *tmp;
     if (svc_priv) {
         tmp = srrp_new_response(
-            req->dstid, req->srcid, req->crc16, req->header, svc_priv->msg);
+            req->dstid, req->srcid, sget(req->anchor),
+            svc_priv->msg, req->crc16);
     } else {
         tmp = srrp_new_response(
-            req->dstid, req->srcid, req->crc16, req->header, "{msg:'...'}");
+            req->dstid, req->srcid, sget(req->anchor),
+            "{msg:'...'}", req->crc16);
     }
     srrp_move(tmp, resp);
 
-    printf("on srrp request(%d): %s?%s\n", fd, (char *)vraw(req->payload), req->data);
+    printf("request(%d): %s\n", fd, (char *)vraw(req->raw));
 }
 
 static void on_srrp_response(struct apix *ctx, int fd, struct srrp_packet *resp, void *priv)
 {
-    printf("on srrp response(%d): %s?%s\n", fd, (char *)vraw(resp->payload), resp->data);
+    printf("response(%d): %s\n", fd, (char *)vraw(resp->raw));
 }
 
 static int on_fd_pollin(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len, void *priv)
@@ -744,12 +746,12 @@ static void on_cmd_srrpget(const char *cmd)
     struct srrp_packet *pac = srrp_new_request(fds[cur_fd].node_id, dstid, hdr, msg);
     if (strcmp(cur_mode, "can") == 0) {
         struct can_frame frame = {0};
-        memcpy(frame.data, vraw(pac->payload), pac->len);
+        memcpy(frame.data, vraw(pac->raw), pac->packet_len);
         frame.can_dlc = strlen(msg);
         frame.can_id = fds[cur_fd].can_id | CAN_EFF_FLAG;
         apix_send(ctx, cur_fd, (uint8_t *)&frame, sizeof(frame));
     } else {
-        apix_send(ctx, cur_fd, vraw(pac->payload), pac->len);
+        apix_send(ctx, cur_fd, vraw(pac->raw), pac->packet_len);
     }
     srrp_free(pac);
 }

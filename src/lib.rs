@@ -165,14 +165,14 @@ impl Apix {
         match closure(&new_req) {
             Some(new_resp) => {
                 unsafe {
-                    let header = std::ffi::CString::new(new_resp.header).unwrap();
-                    let data = std::ffi::CString::new(new_resp.data).unwrap();
+                    let anchor = std::ffi::CString::new(new_resp.anchor).unwrap();
+                    let payload = std::ffi::CString::new(new_resp.payload).unwrap();
                     let tmp = apix_sys::srrp_new_response(
                         new_resp.srcid,
                         new_resp.dstid,
+                        anchor.as_ptr() as *const i8,
+                        payload.as_ptr() as *const i8,
                         new_resp.reqcrc16,
-                        header.as_ptr() as *const i8,
-                        data.as_ptr() as *const i8,
                     );
                     apix_sys::srrp_move(tmp, resp);
                 }
@@ -189,8 +189,9 @@ impl Apix {
         let obj: Box<Box<dyn FnMut(&SrrpPacket) -> Option<SrrpPacket>>> =
             Box::new(Box::new(func));
         unsafe {
-            apix_sys::apix_on_srrp_request(self.ctx, fd, Some(Apix::__on_srrp_request),
-                                           Box::into_raw(obj) as *mut std::ffi::c_void);
+            apix_sys::apix_on_srrp_request(
+                self.ctx, fd, Some(Apix::__on_srrp_request),
+                Box::into_raw(obj) as *mut std::ffi::c_void);
         }
     }
 
@@ -297,16 +298,16 @@ impl Apix {
 #[derive(Default)]
 pub struct SrrpPacket {
     pub leader: i8,
-    pub seat: i8,
-    pub seqno: u16,
-    pub len: u16,
-    pub srcid: u16,
-    pub dstid: u16,
+    pub packet_len: u16,
+    pub payload_offset: u32,
+    pub payload_len: u32,
+    pub srcid: u32,
+    pub dstid: u32,
+    pub anchor: String,
+    pub payload: String,
     pub reqcrc16: u16,
     pub crc16: u16,
-    pub header: String,
-    pub data: String,
-    pub payload: Vec<u8>,
+    pub raw: Vec<u8>,
 }
 
 pub struct Srrp {}
@@ -314,24 +315,26 @@ pub struct Srrp {}
 impl Srrp {
     fn from_raw_packet(pac: *const apix_sys::srrp_packet) -> SrrpPacket {
         unsafe {
+            let anchor = apix_sys::sget((*pac).anchor);
             SrrpPacket {
                 leader: (*pac).leader,
-                seat: (*pac).seat,
-                seqno: (*pac).seqno,
-                len: (*pac).len,
+                packet_len: (*pac).packet_len,
+                payload_offset: (*pac).payload_offset,
+                payload_len: (*pac).payload_len,
                 srcid: (*pac).srcid,
                 dstid: (*pac).dstid,
+                anchor: std::ffi::CStr::from_ptr(anchor).to_str().unwrap().to_owned(),
+                payload: match (*pac).payload.is_null() {
+                    true => String::from(""),
+                    _ => std::ffi::CStr::from_ptr((*pac).payload as *const i8)
+                        .to_str().unwrap().to_owned(),
+                },
                 reqcrc16: (*pac).reqcrc16,
                 crc16: (*pac).crc16,
-                header: std::ffi::CStr::from_ptr((*pac).header).to_str().unwrap().to_owned(),
-                data: match (*pac).data.is_null() {
-                    true => String::from(""),
-                    _ => std::ffi::CStr::from_ptr((*pac).data).to_str().unwrap().to_owned(),
-                },
-                payload: {
+                raw: {
                     let mut v: Vec<u8> = Vec::new();
-                    for i in 0..(*pac).len {
-                        v.push(*(apix_sys::vraw((*pac).payload) as *mut u8)
+                    for i in 0..(*pac).packet_len {
+                        v.push(*(apix_sys::vraw((*pac).raw) as *mut u8)
                                .offset(i as isize) as u8);
                     }
                     v
@@ -360,10 +363,11 @@ impl Srrp {
         }
     }
 
-    pub fn new_ctrl(srcid: u16, header: &str) -> Option<SrrpPacket> {
+    pub fn new_ctrl(srcid: u32, anchor: &str, payload: &str) -> Option<SrrpPacket> {
         unsafe {
-            let header = std::ffi::CString::new(header).unwrap();
-            let pac = apix_sys::srrp_new_ctrl(srcid, header.as_ptr() as *const i8);
+            let anchor = std::ffi::CString::new(anchor).unwrap();
+            let pac = apix_sys::srrp_new_ctrl(
+                srcid, anchor.as_ptr() as *const i8, payload.as_ptr() as *const i8);
             if pac.is_null() {
                 None
             } else {
@@ -374,14 +378,15 @@ impl Srrp {
         }
     }
 
-    pub fn new_request(srcid: u16, dstid: u16, header: &str, data: &str) -> Option<SrrpPacket> {
+    pub fn new_request(srcid: u32, dstid: u32,
+                       anchor: &str, payload: &str) -> Option<SrrpPacket> {
         unsafe {
-            let header = std::ffi::CString::new(header).unwrap();
-            let data = std::ffi::CString::new(data).unwrap();
+            let anchor = std::ffi::CString::new(anchor).unwrap();
+            let payload = std::ffi::CString::new(payload).unwrap();
             let pac = apix_sys::srrp_new_request(
                 srcid, dstid,
-                header.as_ptr() as *const i8,
-                data.as_ptr() as *const i8);
+                anchor.as_ptr() as *const i8,
+                payload.as_ptr() as *const i8);
             if pac.is_null() {
                 None
             } else {
@@ -392,15 +397,17 @@ impl Srrp {
         }
     }
 
-    pub fn new_response(
-        srcid: u16, dstid: u16, reqcrc16: u16, header: &str, data: &str) -> Option<SrrpPacket> {
+    pub fn new_response(srcid: u32, dstid: u32, anchor: &str, payload: &str,
+                        reqcrc16: u16) -> Option<SrrpPacket> {
         unsafe {
-            let header = std::ffi::CString::new(header).unwrap();
-            let data = std::ffi::CString::new(data).unwrap();
+            let anchor = std::ffi::CString::new(anchor).unwrap();
+            let payload = std::ffi::CString::new(payload).unwrap();
             let pac = apix_sys::srrp_new_response(
-                srcid, dstid, reqcrc16,
-                header.as_ptr() as *const i8,
-                data.as_ptr() as *const i8);
+                srcid, dstid,
+                anchor.as_ptr() as *const i8,
+                payload.as_ptr() as *const i8,
+                reqcrc16,
+            );
             if pac.is_null() {
                 None
             } else {

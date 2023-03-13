@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 
 file(GLOB SRC *.c)
-file(GLOB INC apix.h apix-posix.h srrp.h svcx.h log.h vec.h)
+file(GLOB INC apix.h apix-posix.h srrp.h svcx.h log.h vec.h str.h)
 
 if (BUILD_STATIC)
     add_library(apix-static STATIC ${SRC} ${SRC_POSIX})

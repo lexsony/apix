@@ -12,8 +12,8 @@ func TestBase(T *testing.T) {
     ctx.EnablePosix()
     fd := ctx.OpenTcpClient("127.0.0.1:8080")
 
-    pac, _ := srrp.NewCtrl(1111, "/online")
-    ctx.Send(fd, pac.Payload)
+    pac, _ := srrp.NewCtrl(0x1111, "/online", "")
+    ctx.Send(fd, pac.Raw)
 
     for true {
         ctx.Poll(0)
@@ -23,7 +23,7 @@ func TestBase(T *testing.T) {
         if nr > 0 {
             pac, err := srrp.Parse(buf)
             if err == nil {
-                fmt.Println("recv srrp: " + string(pac.Payload))
+                fmt.Println("recv srrp: " + string(pac.Raw))
             } else {
                 fmt.Println("recv raw: " + string(buf))
             }

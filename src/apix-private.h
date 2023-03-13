@@ -14,7 +14,7 @@
 
 #define APISINK_ID_SIZE 64
 #define SINKFD_ADDR_SIZE 64
-#define API_HEADER_SIZE 256
+#define API_TOPIC_SIZE 256
 #define API_TOPIC_SUBSCRIBE_MAX 32
 
 #define API_REQUEST_TIMEOUT 3000 /*ms*/
@@ -144,7 +144,7 @@ struct apimsg {
 };
 
 struct api_topic {
-    char header[API_HEADER_SIZE];
+    char topic[API_TOPIC_SIZE];
     int fds[API_TOPIC_SUBSCRIBE_MAX];
     int nfds;
     struct list_head ln;
