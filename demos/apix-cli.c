@@ -49,7 +49,6 @@ static struct fd_struct fds[FD_SIZE];
 static const char *cur_mode = CUR_MODE_NONE;
 static int cur_fd = -1;
 static int print_all = 0;
-static int broker_mode = 0;
 
 static void signal_handler(int sig)
 {
@@ -61,7 +60,6 @@ static struct opt opttab[] = {
     INIT_OPT_BOOL("-D", "debug", false, "enable debug [defaut: false]"),
     INIT_OPT_STRING("-m:", "mode", CUR_MODE_NONE, "current mode"),
     INIT_OPT_BOOL("-p", "print_all", false, "enable print all"),
-    INIT_OPT_BOOL("-b", "broker_mode", false, "enable broker mode"),
     INIT_OPT_NONE(),
 };
 
@@ -138,14 +136,33 @@ static void on_srrp_request(
 
 static void on_srrp_response(struct apix *ctx, int fd, struct srrp_packet *resp, void *priv)
 {
-    printf("response(%d): %s\n", fd, (char *)vraw(resp->raw));
+    int need_hack = (rl_readline_state & RL_STATE_READCMD) > 0;
+    char *saved_line;
+    int saved_point;
+
+    if (need_hack) {
+        saved_point = rl_point;
+        saved_line = rl_copy_text(0, rl_end);
+        rl_save_prompt();
+        rl_replace_line("", 0);
+        rl_redisplay();
+    }
+
+    printf("[%s(%c) response]:\n", fds[fd].addr, fds[fd].type);
+    printf("%s", (char *)vraw(resp->raw));
+    printf("\n---------------------------\n");
+
+    if (need_hack) {
+        rl_restore_prompt();
+        rl_replace_line(saved_line, 0);
+        rl_point = saved_point;
+        rl_redisplay();
+        free(saved_line);
+    }
 }
 
 static int on_fd_pollin(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len, void *priv)
 {
-    if (broker_mode)
-        return -1;
-
     if (fds[fd].srrp_mode == 1)
         return -1;
 
@@ -220,7 +237,7 @@ static void print_cur_msg(void)
     }
 
     if (cur_fd != -1 && fds[cur_fd].msg && atbuf_used(fds[cur_fd].msg)) {
-        printf("[%s(%c)]:\n", fds[cur_fd].addr, fds[cur_fd].type);
+        printf("[%s(%c) pollin]:\n", fds[cur_fd].addr, fds[cur_fd].type);
         char msg[256] = {0};
         uint32_t len = 0;
         while (1) {
@@ -258,7 +275,7 @@ static void print_all_msg(void)
 
     for (int i = 0; i < sizeof(fds) / sizeof(fds[0]); i++) {
         if (fds[i].msg && atbuf_used(fds[i].msg)) {
-            printf("[%s(%c)]:\n", fds[i].addr, fds[i].type);
+            printf("[%s(%c) pollin]:\n", fds[i].addr, fds[i].type);
             char msg[256] = {0};
             uint32_t len = 0;
             while (1) {
@@ -327,24 +344,11 @@ static void on_cmd_print(const char *cmd)
     }
 }
 
-static void on_cmd_broker(const char *cmd)
-{
-    char param[64] = {0};
-    int nr = sscanf(cmd, "broker %s", param);
-    if (nr == 1) {
-        if (strcmp(param, "on") == 0)
-            broker_mode = 1;
-        else if (strcmp(param, "off") == 0)
-            broker_mode = 0;
-    }
-}
-
 static void on_cmd_env(const char *cmd)
 {
     printf("cur_mode: %s\n", cur_mode);
     printf("cur_fd: %d\n", cur_fd);
     printf("print: %s\n", print_all ? "all" : "cur");
-    printf("broker: %s\n", broker_mode ? "on" : "off");
 }
 
 static void on_cmd_fds(const char *cmd)
@@ -356,9 +360,9 @@ static void on_cmd_fds(const char *cmd)
             printf("fd: %d, type: %c, addr: %s\n",
                    fds[i].fd, fds[i].type, fds[i].addr);
         } else {
-            printf("fd: %d, type: %c, addr: %s, nodeid: %d, srrpmode: %d\n",
-                   fds[i].fd, fds[i].type, fds[i].addr,
-                   fds[i].node_id, fds[i].srrp_mode);
+            printf("fd:%d, mode:%s, type:%c, addr:%s, nodeid:0x%x, srrpmode:%s\n",
+                   fds[i].fd, fds[i].mode, fds[i].type, fds[i].addr,
+                   fds[i].node_id, fds[i].srrp_mode ? "on" : "off");
         }
     }
 }
@@ -373,6 +377,10 @@ static void on_cmd_use(const char *cmd)
     if (nr == 1) {
         if (fd >= 0 && fd < sizeof(fds) / sizeof(fds[0])) {
             assert(fds[fd].fd != 0);
+            if (strcmp(fds[fd].mode, cur_mode) != 0) {
+                printf("cur_mode is %s, please switch to right mode first\n", cur_mode);
+                return;
+            }
             cur_fd = fds[fd].fd;
         }
     }
@@ -594,7 +602,7 @@ static void on_cmd_can_open(const char *cmd)
         return;
     }
 
-    printf("can_id = %x\n", can_id);
+    printf("can_id = 0x%x\n", can_id);
     int fd = apix_open_can(ctx, addr);
     if (fd == -1) {
         perror("open_can");
@@ -679,10 +687,18 @@ static void on_cmd_setid(const char *cmd)
     }
 
     int id = 0;
-    int nr = sscanf(cmd, "setid %d", &id);
-    if (nr != 1) {
-        printf("param error\n");
-        return;
+    if (strstr(cmd, "0x")) {
+        int nr = sscanf(cmd, "setid 0x%x", &id);
+        if (nr != 1) {
+            printf("param error\n");
+            return;
+        }
+    } else {
+        int nr = sscanf(cmd, "setid %d", &id);
+        if (nr != 1) {
+            printf("param error\n");
+            return;
+        }
     }
 
     fds[cur_fd].node_id = id;
@@ -715,9 +731,9 @@ static void on_cmd_srrpmode(const char *cmd)
     } else if (strcmp(msg, "off") == 0) {
         if (fds[cur_fd].srrp_mode == 1) {
             fds[cur_fd].srrp_mode = 0;
-            apix_disable_srrp_mode(ctx, fds[cur_fd].fd);
             if (fds[cur_fd].type == 'c')
                 apix_srrp_offline(ctx, fds[cur_fd].fd);
+            apix_disable_srrp_mode(ctx, fds[cur_fd].fd);
         }
     } else {
         printf("param error\n");
@@ -842,7 +858,6 @@ static const struct cli_cmd cli_cmds[] = {
     { "quit", on_cmd_quit, "quit cli" },
     { "exit", on_cmd_exit, "exit cur_mode or quit cli" },
     { "print", on_cmd_print, "print all|cur" },
-    { "broker", on_cmd_broker, "broker on|off" },
     { "env", on_cmd_env, "display environments" },
     { "ll", on_cmd_fds, "list fds" },
     { "fds", on_cmd_fds, "list fds" },
@@ -903,9 +918,6 @@ int main(int argc, char *argv[])
     opt = find_opt("print_all", opttab);
     if (opt_bool(opt))
         print_all = 1;;
-    opt = find_opt("broker_mode", opttab);
-    if (opt_bool(opt))
-        broker_mode = 1;;
 
     svcx = svcx_new();
     on_cmd_env("");
