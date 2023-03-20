@@ -27,17 +27,18 @@ func from_raw_packet(pac *C.struct_srrp_packet) (SrrpPacket) {
     }
 
     return SrrpPacket {
-        Leader: int8(pac.leader),
-        PacketLen: uint16(pac.packet_len),
-        PayloadOffset: uint32(pac.payload_offset),
-        PayloadLen: uint32(pac.payload_len),
-        Srcid: uint32(pac.srcid),
-        Dstid: uint32(pac.dstid),
-        Anchor: C.GoString(C.sget(pac.anchor)),
-        Payload: C.GoString((*C.char)(unsafe.Pointer(pac.payload))),
-        Reqcrc16: uint16(pac.reqcrc16),
-        Crc16: uint16(pac.crc16),
-        Raw: C.GoBytes(C.vraw(pac.raw), (C.int)(C.vsize(pac.raw))),
+        Leader: int8(C.srrp_get_leader(pac)),
+        PacketLen: uint16(C.srrp_get_packet_len(pac)),
+        PayloadOffset: uint32(C.srrp_get_payload_offset(pac)),
+        PayloadLen: uint32(C.srrp_get_payload_len(pac)),
+        Srcid: uint32(C.srrp_get_srcid(pac)),
+        Dstid: uint32(C.srrp_get_dstid(pac)),
+        Anchor: C.GoString(C.srrp_get_anchor(pac)),
+        Payload: C.GoString((*C.char)(unsafe.Pointer(C.srrp_get_payload(pac)))),
+        Reqcrc16: uint16(C.srrp_get_reqcrc16(pac)),
+        Crc16: uint16(C.srrp_get_crc16(pac)),
+        Raw: C.GoBytes(unsafe.Pointer(C.srrp_get_raw(pac)),
+            (C.int)(C.srrp_get_packet_len(pac))),
     }
 }
 

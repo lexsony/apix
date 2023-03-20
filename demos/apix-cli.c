@@ -117,21 +117,21 @@ static void on_srrp_request(
     struct apix *ctx, int fd, struct srrp_packet *req, struct srrp_packet *resp, void *priv)
 {
     char hdr[1024];
-    snprintf(hdr, sizeof(hdr), "%d:%s", req->dstid, sget(req->anchor));
+    snprintf(hdr, sizeof(hdr), "%d:%s", srrp_get_dstid(req), srrp_get_anchor(req));
     struct service_private *svc_priv = svcx_get_service_private(svcx, hdr);
     struct srrp_packet *tmp;
     if (svc_priv) {
         tmp = srrp_new_response(
-            req->dstid, req->srcid, sget(req->anchor),
-            svc_priv->msg, req->crc16);
+            srrp_get_dstid(req), srrp_get_srcid(req), srrp_get_anchor(req),
+            svc_priv->msg, srrp_get_crc16(req));
     } else {
         tmp = srrp_new_response(
-            req->dstid, req->srcid, sget(req->anchor),
-            "{msg:'...'}", req->crc16);
+            srrp_get_dstid(req), srrp_get_srcid(req), srrp_get_anchor(req),
+            "{msg:'...'}", srrp_get_crc16(req));
     }
     srrp_move(tmp, resp);
 
-    printf("request(%d): %s\n", fd, (char *)vraw(req->raw));
+    printf("request(%d): %s\n", fd, (char *)srrp_get_raw(req));
 }
 
 static void on_srrp_response(struct apix *ctx, int fd, struct srrp_packet *resp, void *priv)
@@ -149,7 +149,7 @@ static void on_srrp_response(struct apix *ctx, int fd, struct srrp_packet *resp,
     }
 
     printf("[%s(%c) response]:\n", fds[fd].addr, fds[fd].type);
-    printf("%s", (char *)vraw(resp->raw));
+    printf("%s", (char *)srrp_get_raw(resp));
     printf("\n---------------------------\n");
 
     if (need_hack) {
@@ -194,6 +194,7 @@ static void on_fd_accept(struct apix *ctx, int _fd, int newfd, void *priv)
     fds[newfd].fd = newfd;
     strcpy(fds[newfd].addr, fds[_fd].addr);
     fds[newfd].type = 'a';
+    fds[newfd].mode = fds[_fd].mode;
     fds[newfd].srrp_mode = fds[_fd].srrp_mode;
     printf("accept #%d, %s(%c)\n", newfd, fds[newfd].addr, fds[newfd].type);
 }
@@ -356,14 +357,9 @@ static void on_cmd_fds(const char *cmd)
     for (int i = 0; i < sizeof(fds) / sizeof(fds[0]); i++) {
         if (fds[i].fd == 0)
             continue;
-        if (fds[i].type == 'a') {
-            printf("fd: %d, type: %c, addr: %s\n",
-                   fds[i].fd, fds[i].type, fds[i].addr);
-        } else {
-            printf("fd:%d, mode:%s, type:%c, addr:%s, nodeid:0x%x, srrpmode:%s\n",
-                   fds[i].fd, fds[i].mode, fds[i].type, fds[i].addr,
-                   fds[i].node_id, fds[i].srrp_mode ? "on" : "off");
-        }
+        printf("fd:%d, mode:%s, type:%c, addr:%s, nodeid:0x%x, srrpmode:%s\n",
+               fds[i].fd, fds[i].mode, fds[i].type, fds[i].addr,
+               fds[i].node_id, fds[i].srrp_mode ? "on" : "off");
     }
 }
 
@@ -762,12 +758,12 @@ static void on_cmd_srrpget(const char *cmd)
     struct srrp_packet *pac = srrp_new_request(fds[cur_fd].node_id, dstid, hdr, msg);
     if (strcmp(cur_mode, "can") == 0) {
         struct can_frame frame = {0};
-        memcpy(frame.data, vraw(pac->raw), pac->packet_len);
+        memcpy(frame.data, srrp_get_raw(pac), srrp_get_packet_len(pac));
         frame.can_dlc = strlen(msg);
         frame.can_id = fds[cur_fd].can_id | CAN_EFF_FLAG;
         apix_send(ctx, cur_fd, (uint8_t *)&frame, sizeof(frame));
     } else {
-        apix_send(ctx, cur_fd, vraw(pac->raw), pac->packet_len);
+        apix_send(ctx, cur_fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
     }
     srrp_free(pac);
 }

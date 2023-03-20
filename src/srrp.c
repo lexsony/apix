@@ -6,12 +6,85 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
-#include "str.h"
 #include "unused.h"
 #include "crc16.h"
+#include "str.h"
 #include "vec.h"
 
 #define CRC_SIZE 5 /* <crc16>\0 */
+
+struct srrp_packet {
+    char leader;
+    uint16_t packet_len;
+    uint32_t payload_offset;
+    uint32_t payload_len;
+
+    uint32_t srcid;
+    uint32_t dstid;
+
+    str_t *anchor;
+    const uint8_t *payload;
+
+    uint16_t reqcrc16; /* only used by response */
+    uint16_t crc16;
+
+    vec_t *raw;
+};
+
+char srrp_get_leader(const struct srrp_packet *pac)
+{
+    return pac->leader;
+}
+
+uint16_t srrp_get_packet_len(const struct srrp_packet *pac)
+{
+    return pac->packet_len;
+}
+
+uint32_t srrp_get_payload_offset(const struct srrp_packet *pac)
+{
+    return pac->payload_offset;
+}
+
+uint32_t srrp_get_payload_len(const struct srrp_packet *pac)
+{
+    return pac->payload_len;
+}
+
+uint32_t srrp_get_srcid(const struct srrp_packet *pac)
+{
+    return pac->srcid;
+}
+
+uint32_t srrp_get_dstid(const struct srrp_packet *pac)
+{
+    return pac->dstid;
+}
+
+const char *srrp_get_anchor(const struct srrp_packet *pac)
+{
+    return sget(pac->anchor);
+}
+
+const uint8_t *srrp_get_payload(const struct srrp_packet *pac)
+{
+    return pac->payload;
+}
+
+uint16_t srrp_get_reqcrc16(const struct srrp_packet *pac)
+{
+    return pac->reqcrc16;
+}
+
+uint16_t srrp_get_crc16(const struct srrp_packet *pac)
+{
+    return pac->crc16;
+}
+
+const uint8_t *srrp_get_raw(const struct srrp_packet *pac)
+{
+    return vraw(pac->raw);
+}
 
 void srrp_free(struct srrp_packet *pac)
 {
@@ -78,9 +151,6 @@ struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len)
     }
 
     if (packet_len > len)
-        return NULL;
-
-    if (packet_len > SRRP_PACKET_MAX)
         return NULL;
 
     uint16_t crc = 0;

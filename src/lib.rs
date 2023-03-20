@@ -315,27 +315,29 @@ pub struct Srrp {}
 impl Srrp {
     fn from_raw_packet(pac: *const apix_sys::srrp_packet) -> SrrpPacket {
         unsafe {
-            let anchor = apix_sys::sget((*pac).anchor);
+            let packet_len = apix_sys::srrp_get_packet_len(pac);
+            let anchor = apix_sys::srrp_get_anchor(pac);
+            let payload = apix_sys::srrp_get_payload(pac);
+            let raw = apix_sys::srrp_get_raw(pac);
             SrrpPacket {
-                leader: (*pac).leader,
-                packet_len: (*pac).packet_len,
-                payload_offset: (*pac).payload_offset,
-                payload_len: (*pac).payload_len,
-                srcid: (*pac).srcid,
-                dstid: (*pac).dstid,
+                leader: apix_sys::srrp_get_leader(pac),
+                packet_len: packet_len,
+                payload_offset: apix_sys::srrp_get_payload_offset(pac),
+                payload_len: apix_sys::srrp_get_payload_len(pac),
+                srcid: apix_sys::srrp_get_srcid(pac),
+                dstid: apix_sys::srrp_get_dstid(pac),
                 anchor: std::ffi::CStr::from_ptr(anchor).to_str().unwrap().to_owned(),
-                payload: match (*pac).payload.is_null() {
+                payload: match payload.is_null() {
                     true => String::from(""),
-                    _ => std::ffi::CStr::from_ptr((*pac).payload as *const i8)
+                    _ => std::ffi::CStr::from_ptr(payload as *const i8)
                         .to_str().unwrap().to_owned(),
                 },
-                reqcrc16: (*pac).reqcrc16,
-                crc16: (*pac).crc16,
+                reqcrc16: apix_sys::srrp_get_reqcrc16(pac),
+                crc16: apix_sys::srrp_get_crc16(pac),
                 raw: {
                     let mut v: Vec<u8> = Vec::new();
-                    for i in 0..(*pac).packet_len {
-                        v.push(*(apix_sys::vraw((*pac).raw) as *mut u8)
-                               .offset(i as isize) as u8);
+                    for i in 0..packet_len {
+                        v.push(*(raw).offset(i as isize));
                     }
                     v
                 }

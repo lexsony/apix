@@ -15,7 +15,8 @@ typedef int (*srrp_request_handle_func_t)(
 int on_echo(struct srrp_packet *req, struct srrp_packet *resp, void *private_data)
 {
     struct srrp_packet *tmp = srrp_new_response(
-        req->dstid, req->srcid, sget(req->anchor), "t:{msg:'world'}", req->reqcrc16);
+        srrp_get_dstid(req), srrp_get_srcid(req), srrp_get_anchor(req),
+        "t:{msg:'world'}", srrp_get_reqcrc16(req));
     srrp_move(tmp, resp);
     return 0;
 }
@@ -28,7 +29,7 @@ static void test_svc(void **status)
     struct srrp_packet *req = srrp_new_request(3333, 8888, "/echo", "{msg:'hello'}");
     struct srrp_packet *resp = srrp_new_response(0, 0, "", "", 0);
     ((srrp_request_handle_func_t)(svcx_get_service_private(svcx, "8888:/echo")))(req, resp);
-    assert_true(strcmp((char *)resp->payload, "t:{msg:'world'}") == 0);
+    assert_true(strcmp((char *)srrp_get_payload(resp), "t:{msg:'world'}") == 0);
     srrp_free(req);
     if (resp) srrp_free(resp);
 
