@@ -109,6 +109,20 @@ static void parse_packet(struct apix *ctx, struct sinkfd *sinkfd)
     }
 }
 
+static int apix_response(
+    struct apix *ctx, int fd, struct srrp_packet *req, const char *data)
+{
+    struct srrp_packet *resp = srrp_new_response(
+        srrp_get_dstid(req),
+        srrp_get_srcid(req),
+        srrp_get_anchor(req),
+        data,
+        srrp_get_crc16(req));
+    int rc = apix_send(ctx, fd, srrp_get_raw(resp), srrp_get_packet_len(resp));
+    srrp_free(resp);
+    return rc;
+}
+
 static struct api_topic *
 find_topic(struct list_head *topics, const char *topic)
 {
@@ -142,7 +156,7 @@ static void topic_sub_handler(struct apix *ctx, struct apimsg *tmsg)
     topic->fds[topic->nfds] = tmsg->fd;
     topic->nfds++;
 
-    apix_send(ctx, tmsg->fd, (uint8_t *)"Sub OK", 6);
+    apix_response(ctx, tmsg->fd, tmsg->pac, "j:{\"err\":0}");
 }
 
 static void topic_unsub_handler(struct apix *ctx, struct apimsg *tmsg)
@@ -162,7 +176,7 @@ static void topic_unsub_handler(struct apix *ctx, struct apimsg *tmsg)
         }
     }
 
-    apix_send(ctx, tmsg->fd, (uint8_t *)"Unsub OK", 8);
+    apix_response(ctx, tmsg->fd, tmsg->pac, "j:{\"err\":0}");
 }
 
 static void topic_pub_handler(struct apix *ctx, struct apimsg *tmsg)
@@ -285,19 +299,6 @@ int apix_read_from_buffer(struct apix *ctx, int fd, uint8_t *buf, uint32_t len)
     return less;
 }
 
-static int apix_response(struct apix *ctx, int fd, struct srrp_packet *req, const char *data)
-{
-    struct srrp_packet *resp = srrp_new_response(
-        srrp_get_dstid(req),
-        srrp_get_srcid(req),
-        srrp_get_anchor(req),
-        data,
-        srrp_get_crc16(req));
-    int rc = apix_send(ctx, fd, srrp_get_raw(resp), srrp_get_packet_len(resp));
-    srrp_free(resp);
-    return rc;
-}
-
 static void handle_ctrl(struct apix *ctx)
 {
     struct apimsg *pos;
@@ -305,7 +306,8 @@ static void handle_ctrl(struct apix *ctx)
         if (apimsg_is_finished(pos) || !apimsg_is_ctrl(pos))
             continue;
 
-        LOG_DEBUG("(%x) = %d:%s", ctx, srrp_get_srcid(pos->pac), srrp_get_anchor(pos->pac));
+        LOG_DEBUG("(%x) = %d:%s", ctx, srrp_get_srcid(pos->pac),
+                  srrp_get_anchor(pos->pac));
 
         struct sinkfd *src = find_sinkfd_in_apix(ctx, pos->fd);
         if (src == NULL) {
@@ -314,29 +316,32 @@ static void handle_ctrl(struct apix *ctx)
         }
 
         if (srrp_get_srcid(pos->pac) == 0) {
-            apix_response(ctx, pos->fd, pos->pac, "t:NODEID SHOULD NOT BE ZERO");
+            apix_response(ctx, pos->fd, pos->pac,
+                          "j:{\"err\":-1,\"msg\":\"Nodeid should not be zero\"}");
             apimsg_finish(pos);
             continue;
         }
 
         struct sinkfd *tmp = find_sinkfd_by_nodeid(ctx, srrp_get_srcid(pos->pac));
         if (tmp != NULL && tmp != src) {
-            apix_response(ctx, pos->fd, pos->pac, "t:NODEID HAVE BEEN USED");
+            apix_response(ctx, pos->fd, pos->pac,
+                          "j:{\"err\":-2,\"msg\":\"Nodeid have been used\"}");
             apimsg_finish(pos);
             continue;
         }
 
         if (strcmp(srrp_get_anchor(pos->pac), SRRP_CTRL_ONLINE) == 0) {
             if (src->r_nodeid != 0 && src->r_nodeid != srrp_get_srcid(pos->pac)) {
-                apix_response(ctx, pos->fd, pos->pac, "t:NODEID SHOULD NOT CHANGE");
+                apix_response(ctx, pos->fd, pos->pac,
+                              "j:{\"err\":-3,\"msg\":\"Nodeid should not change\"}");
                 apimsg_finish(pos);
                 continue;
             }
             src->r_nodeid = srrp_get_srcid(pos->pac);
-            apix_response(ctx, pos->fd, pos->pac, "t:OK");
+            apix_response(ctx, pos->fd, pos->pac, "j:{\"err\":0}");
         } else if (strcmp(srrp_get_anchor(pos->pac), SRRP_CTRL_OFFLINE) == 0) {
             src->r_nodeid = 0;
-            apix_response(ctx, pos->fd, pos->pac, "t:OK");
+            apix_response(ctx, pos->fd, pos->pac, "j:{\"err\":0}");
         }
 
         apimsg_finish(pos);
@@ -359,21 +364,24 @@ static void handle_request(struct apix *ctx)
         }
 
         if (srrp_get_srcid(pos->pac) == 0) {
-            apix_response(ctx, pos->fd, pos->pac, "NODEID SHOULD NOT BE ZERO");
+            apix_response(ctx, pos->fd, pos->pac,
+                          "j:{\"err\":-1,\"msg\":\"Nodeid should not be zero\"}");
             apimsg_finish(pos);
             continue;
         }
 
         struct sinkfd *tmp = find_sinkfd_by_nodeid(ctx, srrp_get_srcid(pos->pac));
         if (tmp != NULL && tmp != src) {
-            apix_response(ctx, pos->fd, pos->pac, "NODEID HAVE BEEN USED");
+            apix_response(ctx, pos->fd, pos->pac,
+                          "j:{\"err\":-2,\"msg\":\"Nodeid have been used\"}");
             apimsg_finish(pos);
             continue;
         }
 
         struct sinkfd *dst = find_sinkfd_by_nodeid(ctx, srrp_get_dstid(pos->pac));
         if (dst == NULL) {
-            apix_response(ctx, pos->fd, pos->pac, "DESTINATION NOT FOUND");
+            apix_response(ctx, pos->fd, pos->pac,
+                          "j:{\"err\":-4,\"msg\":\"Destination not found\"}");
             apimsg_finish(pos);
             continue;
         }
