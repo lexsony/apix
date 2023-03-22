@@ -6,7 +6,7 @@
 
 #if defined __arm__ && !defined __unix__
     #include "apix-stm32.h"
-#elif defined __unix__
+#elif defined __unix__ || __APPLE__
     #include "apix-posix.h"
 #else
     #error unknown platform

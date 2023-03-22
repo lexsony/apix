@@ -1,7 +1,7 @@
 #ifndef __APIX_POSIX_H
 #define __APIX_POSIX_H
 
-#if defined __unix__
+#if defined __unix__ || __APPLE__
 
 #include <stdint.h>
 

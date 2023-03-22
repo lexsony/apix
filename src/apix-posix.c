@@ -15,9 +15,11 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#ifndef __APPLE__
 #include <termios.h>
 #include <linux/can.h>
 #include <linux/can/raw.h>
+#endif
 #include <sys/ioctl.h>
 #include <net/if.h>
 
@@ -411,6 +413,8 @@ static struct apisink_operations tcp_c_ops = {
     .poll = unix_c_poll,
 };
 
+#ifndef __APPLE__
+
 /**
  * com
  */
@@ -659,6 +663,8 @@ static struct apisink_operations can_ops = {
     .poll = can_poll,
 };
 
+#endif
+
 /**
  * posix_sink
  */
@@ -685,6 +691,7 @@ int apix_enable_posix(struct apix *ctx)
     apisink_init(&tcp_c_sink->sink, APISINK_TCP_C, &tcp_c_ops);
     apix_sink_register(ctx, &tcp_c_sink->sink);
 
+#ifndef __APPLE__
     // com
     struct posix_sink *com_sink = calloc(1, sizeof(struct posix_sink));
     apisink_init(&com_sink->sink, APISINK_COM, &com_ops);
@@ -694,6 +701,7 @@ int apix_enable_posix(struct apix *ctx)
     struct posix_sink *can_sink = calloc(1, sizeof(struct posix_sink));
     apisink_init(&can_sink->sink, APISINK_CAN, &can_ops);
     apix_sink_register(ctx, &can_sink->sink);
+#endif
 
     return 0;
 }
@@ -738,6 +746,7 @@ void apix_disable_posix(struct apix *ctx)
             free(tcp_c_sink);
         }
 
+#ifndef __APPLE__
         // com
         if (strcmp(pos->id, APISINK_COM) == 0) {
             struct posix_sink *com_sink =
@@ -755,6 +764,7 @@ void apix_disable_posix(struct apix *ctx)
             apisink_fini(&can_sink->sink);
             free(can_sink);
         }
+#endif
     }
 }
 
