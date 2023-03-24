@@ -6,6 +6,14 @@ pub struct Apix {
     pub ctx: *mut apix_sys::apix,
 }
 
+impl Drop for Apix {
+    fn drop(&mut self) {
+        unsafe {
+            apix_sys::apix_destroy(self.ctx);
+        }
+    }
+}
+
 impl Apix {
     pub fn log_set_debug() {
         unsafe {
@@ -21,12 +29,6 @@ impl Apix {
             } else {
                 Ok(Apix { ctx: ctx })
             }
-        }
-    }
-
-    pub fn destroy(&self) {
-        unsafe {
-            apix_sys::apix_destroy(self.ctx);
         }
     }
 
