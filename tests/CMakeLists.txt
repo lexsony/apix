@@ -1,10 +1,8 @@
-cmake_minimum_required(VERSION 3.12)
-
 add_executable(test-log test_log.c)
 target_link_libraries(test-log cmocka apix)
 add_test(test-log ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/test-log)
 
-add_executable(test-opt test_opt.c ../demos/opt.c)
+add_executable(test-opt test_opt.c ../apps/opt.c)
 target_link_libraries(test-opt cmocka)
 add_test(test-opt ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/test-opt)
 
