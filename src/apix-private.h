@@ -14,8 +14,6 @@
 
 #define APISINK_ID_SIZE 64
 #define SINKFD_ADDR_SIZE 64
-#define API_TOPIC_SIZE 256
-#define API_TOPIC_SUBSCRIBE_MAX 32
 
 #define API_REQUEST_TIMEOUT 3000 /*ms*/
 #define PARSE_PACKET_TIMEOUT 1000 /*ms*/
@@ -31,7 +29,6 @@ extern "C" {
 
 struct apix {
     struct list_head msgs;
-    struct list_head topics;
     struct list_head sinkfds;
     struct list_head sinks;
     struct timeval poll_ts;
@@ -81,13 +78,14 @@ struct sinkfd {
     char type; /* c: connect, l: listen, a: accept */
     char addr[SINKFD_ADDR_SIZE];
 
-    vec_t *rxbuf;
+    vec_8_t *rxbuf;
 
     int srrp_mode;
     uint32_t l_nodeid; /* local nodeid */
     uint32_t r_nodeid; /* remote nodeid */
     time_t ts_alive;
     struct timeval ts_poll_recv;
+    vec_p_t *sub_topics;
 
     struct apix_events {
         fd_close_func_t on_close;
@@ -120,7 +118,6 @@ struct sinkfd *find_sinkfd_by_nodeid(struct apix *ctx, uint32_t nodeid);
 
 /**
  * apimsg
- * api_topic
  */
 
 enum apimsg_type {
@@ -140,13 +137,6 @@ struct apimsg {
     int state;
     int fd /* src for req, dst for resp */;
     struct srrp_packet *pac;
-    struct list_head ln;
-};
-
-struct api_topic {
-    char topic[API_TOPIC_SIZE];
-    int fds[API_TOPIC_SUBSCRIBE_MAX];
-    int nfds;
     struct list_head ln;
 };
 

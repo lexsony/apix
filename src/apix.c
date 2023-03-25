@@ -12,6 +12,8 @@
 #include "srrp.h"
 #include "unused.h"
 #include "log.h"
+#include "str.h"
+#include "vec.h"
 
 /**
  * apix
@@ -123,56 +125,29 @@ static int apix_response(
     return rc;
 }
 
-static struct api_topic *
-find_topic(struct list_head *topics, const char *topic)
-{
-    struct api_topic *pos;
-    list_for_each_entry(pos, topics, ln) {
-        if (strcmp(pos->topic, topic) == 0) {
-            return pos;
-        }
-    }
-    return NULL;
-}
-
 static void topic_sub_handler(struct apix *ctx, struct apimsg *tmsg)
 {
-    struct api_topic *topic = NULL;
-    struct api_topic *pos;
-    list_for_each_entry(pos, &ctx->topics, ln) {
-        if (strcmp(pos->topic, srrp_get_anchor(tmsg->pac)) == 0) {
-            topic = pos;
-            break;
+    struct sinkfd *src = find_sinkfd_in_apix(ctx, tmsg->fd);
+    for (uint32_t i = 0; i < vsize(src->sub_topics); i++) {
+        if (strcmp(sget(vat(src->sub_topics, i)), srrp_get_anchor(tmsg->pac)) == 0) {
+            goto out;
         }
     }
-    if (topic == NULL) {
-        topic = malloc(sizeof(*topic));
-        memset(topic, 0, sizeof(*topic));
-        snprintf(topic->topic, sizeof(topic->topic), "%s", srrp_get_anchor(tmsg->pac));
-        INIT_LIST_HEAD(&topic->ln);
-        list_add(&topic->ln, &ctx->topics);
-    }
-    assert(topic);
-    topic->fds[topic->nfds] = tmsg->fd;
-    topic->nfds++;
 
+    str_t *topic = str_new(srrp_get_anchor(tmsg->pac));
+    vpush(src->sub_topics, topic);
+
+out:
     apix_response(ctx, tmsg->fd, tmsg->pac, "j:{\"err\":0}");
 }
 
 static void topic_unsub_handler(struct apix *ctx, struct apimsg *tmsg)
 {
-    struct api_topic *topic = NULL;
-    list_for_each_entry(topic, &ctx->topics, ln) {
-        if (strcmp(topic->topic, srrp_get_anchor(tmsg->pac)) == 0) {
+    struct sinkfd *src = find_sinkfd_in_apix(ctx, tmsg->fd);
+    for (uint32_t i = 0; i < vsize(src->sub_topics); i++) {
+        if (strcmp(sget(vat(src->sub_topics, i)), srrp_get_anchor(tmsg->pac)) == 0) {
+            vremove(src->sub_topics, i);
             break;
-        }
-    }
-    if (topic) {
-        for (int i = 0; i < topic->nfds; i++) {
-            if (topic->fds[i] == tmsg->fd) {
-                topic->fds[i] = topic->fds[topic->nfds-1];
-                topic->nfds--;
-            }
         }
     }
 
@@ -181,122 +156,15 @@ static void topic_unsub_handler(struct apix *ctx, struct apimsg *tmsg)
 
 static void topic_pub_handler(struct apix *ctx, struct apimsg *tmsg)
 {
-    struct api_topic *topic = find_topic(&ctx->topics, srrp_get_anchor(tmsg->pac));
-    if (topic) {
-        for (int i = 0; i < topic->nfds; i++)
-            apix_send(ctx, topic->fds[i], srrp_get_raw(tmsg->pac),
+    struct sinkfd *pos;
+    list_for_each_entry(pos, &ctx->sinkfds, ln_ctx) {
+        for (uint32_t i = 0; i < vsize(pos->sub_topics); i++) {
+            if (strcmp(sget(vat(pos->sub_topics, i)), srrp_get_anchor(tmsg->pac)) == 0) {
+                apix_send(ctx, pos->fd, srrp_get_raw(tmsg->pac),
                       srrp_get_packet_len(tmsg->pac));
-    } else {
-        // do nothing, just drop this msg
-        LOG_DEBUG("drop @: %s%s", srrp_get_anchor(tmsg->pac), srrp_get_payload(tmsg->pac));
-    }
-}
-
-struct apix *apix_new()
-{
-    struct apix *ctx = malloc(sizeof(*ctx));
-    bzero(ctx, sizeof(*ctx));
-    INIT_LIST_HEAD(&ctx->msgs);
-    INIT_LIST_HEAD(&ctx->topics);
-    INIT_LIST_HEAD(&ctx->sinkfds);
-    INIT_LIST_HEAD(&ctx->sinks);
-    return ctx;
-}
-
-void apix_destroy(struct apix *ctx)
-{
-    {
-        struct apimsg *pos, *n;
-        list_for_each_entry_safe(pos, n, &ctx->msgs, ln)
-            apimsg_delete(pos);
-    }
-
-    {
-        struct api_topic *pos, *n;
-        list_for_each_entry_safe(pos, n, &ctx->topics, ln) {
-            list_del_init(&pos->ln);
-            free(pos);
+            }
         }
     }
-
-    {
-        struct sinkfd *pos, *n;
-        list_for_each_entry_safe(pos, n, &ctx->sinkfds, ln_ctx)
-            sinkfd_destroy(pos);
-    }
-
-    {
-        struct apisink *pos, *n;
-        list_for_each_entry_safe(pos, n, &ctx->sinks, ln) {
-            apix_sink_unregister(pos->ctx, pos);
-            apisink_fini(pos);
-        }
-    }
-
-    free(ctx);
-}
-
-int apix_open(struct apix *ctx, const char *sinkid, const char *addr)
-{
-    struct apisink *pos;
-    list_for_each_entry(pos, &ctx->sinks, ln) {
-        if (strcmp(pos->id, sinkid) == 0) {
-            assert(pos->ops.open);
-            return pos->ops.open(pos, addr);
-        }
-    }
-    return -1;
-}
-
-int apix_close(struct apix *ctx, int fd)
-{
-    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
-    if (sinkfd == NULL)
-        return -1;
-    if (sinkfd->sink && sinkfd->sink->ops.close)
-        sinkfd->sink->ops.close(sinkfd->sink, fd);
-    return 0;
-}
-
-int apix_ioctl(struct apix *ctx, int fd, unsigned int cmd, unsigned long arg)
-{
-    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
-    if (sinkfd == NULL)
-        return -1;
-    if (sinkfd->sink == NULL || sinkfd->sink->ops.ioctl == NULL)
-        return -1;
-    return sinkfd->sink->ops.ioctl(sinkfd->sink, fd, cmd, arg);
-}
-
-int apix_send(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len)
-{
-    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
-    if (sinkfd == NULL)
-        return -1;
-    if (sinkfd->type == 'l' || sinkfd->sink == NULL ||
-        sinkfd->sink->ops.send == NULL)
-        return -1;
-    return sinkfd->sink->ops.send(sinkfd->sink, fd, buf, len);
-}
-
-int apix_recv(struct apix *ctx, int fd, uint8_t *buf, uint32_t len)
-{
-    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
-    if (sinkfd == NULL)
-        return -1;
-    if (sinkfd->sink == NULL || sinkfd->sink->ops.recv == NULL)
-        return -1;
-    return sinkfd->sink->ops.recv(sinkfd->sink, fd, buf, len);
-}
-
-int apix_read_from_buffer(struct apix *ctx, int fd, uint8_t *buf, uint32_t len)
-{
-    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
-    if (sinkfd == NULL)
-        return -1;
-    uint32_t less = len < vsize(sinkfd->rxbuf) ? len : vsize(sinkfd->rxbuf);
-    if (less) vdump(sinkfd->rxbuf, buf, less);
-    return less;
 }
 
 static void handle_ctrl(struct apix *ctx)
@@ -306,7 +174,7 @@ static void handle_ctrl(struct apix *ctx)
         if (apimsg_is_finished(pos) || !apimsg_is_ctrl(pos))
             continue;
 
-        LOG_DEBUG("(%x) = %d:%s", ctx, srrp_get_srcid(pos->pac),
+        LOG_DEBUG("[%x]: %s", ctx, srrp_get_srcid(pos->pac),
                   srrp_get_anchor(pos->pac));
 
         struct sinkfd *src = find_sinkfd_in_apix(ctx, pos->fd);
@@ -440,8 +308,10 @@ static void handle_topic_msg(struct apix *ctx)
             topic_sub_handler(ctx, pos);
         } else if (srrp_get_leader(pos->pac) == SRRP_UNSUBSCRIBE_LEADER) {
             topic_unsub_handler(ctx, pos);
-        } else {
+        } else if (srrp_get_leader(pos->pac) == SRRP_PUBLISH_LEADER) {
             topic_pub_handler(ctx, pos);
+        } else {
+            assert(false);
         }
         LOG_DEBUG("(%x) %s", ctx, srrp_get_raw(pos->pac));
         apimsg_finish(pos);
@@ -455,6 +325,104 @@ static void clear_finished_msg(struct apix *ctx)
         if (apimsg_is_finished(pos))
             apimsg_delete(pos);
     }
+}
+
+struct apix *apix_new()
+{
+    struct apix *ctx = malloc(sizeof(*ctx));
+    bzero(ctx, sizeof(*ctx));
+    INIT_LIST_HEAD(&ctx->msgs);
+    INIT_LIST_HEAD(&ctx->sinkfds);
+    INIT_LIST_HEAD(&ctx->sinks);
+    return ctx;
+}
+
+void apix_destroy(struct apix *ctx)
+{
+    {
+        struct apimsg *pos, *n;
+        list_for_each_entry_safe(pos, n, &ctx->msgs, ln)
+            apimsg_delete(pos);
+    }
+
+    {
+        struct sinkfd *pos, *n;
+        list_for_each_entry_safe(pos, n, &ctx->sinkfds, ln_ctx)
+            sinkfd_destroy(pos);
+    }
+
+    {
+        struct apisink *pos, *n;
+        list_for_each_entry_safe(pos, n, &ctx->sinks, ln) {
+            apix_sink_unregister(pos->ctx, pos);
+            apisink_fini(pos);
+        }
+    }
+
+    free(ctx);
+}
+
+int apix_open(struct apix *ctx, const char *sinkid, const char *addr)
+{
+    struct apisink *pos;
+    list_for_each_entry(pos, &ctx->sinks, ln) {
+        if (strcmp(pos->id, sinkid) == 0) {
+            assert(pos->ops.open);
+            return pos->ops.open(pos, addr);
+        }
+    }
+    return -1;
+}
+
+int apix_close(struct apix *ctx, int fd)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    if (sinkfd->sink && sinkfd->sink->ops.close)
+        sinkfd->sink->ops.close(sinkfd->sink, fd);
+    return 0;
+}
+
+int apix_ioctl(struct apix *ctx, int fd, unsigned int cmd, unsigned long arg)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    if (sinkfd->sink == NULL || sinkfd->sink->ops.ioctl == NULL)
+        return -1;
+    return sinkfd->sink->ops.ioctl(sinkfd->sink, fd, cmd, arg);
+}
+
+int apix_send(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    if (sinkfd->type == 'l' || sinkfd->sink == NULL ||
+        sinkfd->sink->ops.send == NULL)
+        return -1;
+    return sinkfd->sink->ops.send(sinkfd->sink, fd, buf, len);
+}
+
+int apix_recv(struct apix *ctx, int fd, uint8_t *buf, uint32_t len)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    if (sinkfd->sink == NULL || sinkfd->sink->ops.recv == NULL)
+        return -1;
+    return sinkfd->sink->ops.recv(sinkfd->sink, fd, buf, len);
+}
+
+int apix_read_from_buffer(struct apix *ctx, int fd, uint8_t *buf, uint32_t len)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    uint32_t less = len < vsize(sinkfd->rxbuf) ? len : vsize(sinkfd->rxbuf);
+    if (less) vdump(sinkfd->rxbuf, buf, less);
+    return less;
 }
 
 int apix_poll(struct apix *ctx, uint64_t usec)
@@ -686,6 +654,7 @@ struct sinkfd *sinkfd_new()
     sinkfd->srrp_mode = 0;
     sinkfd->l_nodeid = 0;
     sinkfd->r_nodeid = 0;
+    sinkfd->sub_topics = vec_new(sizeof(void *), 3);
     sinkfd->sink = NULL;
     INIT_LIST_HEAD(&sinkfd->ln_sink);
     INIT_LIST_HEAD(&sinkfd->ln_ctx);
@@ -698,6 +667,14 @@ void sinkfd_destroy(struct sinkfd *sinkfd)
         sinkfd->events.on_close(
             sinkfd->sink->ctx, sinkfd->fd, sinkfd->events_priv.priv_on_close);
     vec_delete(sinkfd->rxbuf);
+
+    while (vsize(sinkfd->sub_topics)) {
+        str_t *tmp = 0;
+        vpop(sinkfd->sub_topics, &tmp);
+        str_delete(tmp);
+    }
+    vec_delete(sinkfd->sub_topics);
+
     sinkfd->sink = NULL;
     list_del_init(&sinkfd->ln_sink);
     list_del_init(&sinkfd->ln_ctx);
