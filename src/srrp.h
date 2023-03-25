@@ -48,8 +48,10 @@ extern "C" {
 #define SRRP_DST_ALIAS_MAX 64
 #define SRRP_ANCHOR_MAX 1024
 
-#define SRRP_CTRL_ONLINE "/online"
-#define SRRP_CTRL_OFFLINE "/offline"
+#define SRRP_CTRL_SYNC "/sync"
+#define SRRP_CTRL_NODEID_DUP "/sync/nodeid/dup"
+#define SRRP_CTRL_NODEID_ZERO "/sync/nodeid/zero"
+#define SRRP_CTRL_NODEID_DIFF "/sync/nodeid/diff"
 
 struct srrp_packet;
 

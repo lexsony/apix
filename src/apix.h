@@ -87,16 +87,6 @@ int apix_enable_srrp_mode(struct apix *ctx, int fd, uint32_t nodeid);
 int apix_disable_srrp_mode(struct apix *ctx, int fd);
 
 /**
- * apix_srrp_online
- */
-int apix_srrp_online(struct apix *ctx, int fd);
-
-/**
- * apix_srrp_offline
- */
-int apix_srrp_offline(struct apix *ctx, int fd);
-
-/**
  * apix_srrp_forward
  * - forward the srrp packet to the real destination
  */

@@ -37,7 +37,7 @@ static void parse_packet(struct apix *ctx, struct sinkfd *sinkfd)
         uint32_t offset = srrp_next_packet_offset(
             vraw(sinkfd->rxbuf), vsize(sinkfd->rxbuf));
         if (offset != 0) {
-            LOG_WARN("broken packet:");
+            LOG_WARN("[%x] broken packet:", ctx);
             log_hex_string(vraw(sinkfd->rxbuf), offset);
             vdrop(sinkfd->rxbuf, offset);
         }
@@ -50,7 +50,7 @@ static void parse_packet(struct apix *ctx, struct sinkfd *sinkfd)
             if (time(0) < sinkfd->ts_poll_recv.tv_sec + PARSE_PACKET_TIMEOUT / 1000)
                 break;
 
-            LOG_ERROR("parse packet failed: %s", vraw(sinkfd->rxbuf));
+            LOG_ERROR("[%x] parse packet failed: %s", ctx, vraw(sinkfd->rxbuf));
             uint32_t offset = srrp_next_packet_offset(
                 vraw(sinkfd->rxbuf) + 1,
                 vsize(sinkfd->rxbuf) - 1) + 1;
@@ -64,7 +64,8 @@ static void parse_packet(struct apix *ctx, struct sinkfd *sinkfd)
         msg->fd = sinkfd->fd;
         msg->pac = pac;
         INIT_LIST_HEAD(&msg->ln);
-        list_add(&msg->ln, &ctx->msgs);
+        list_add_tail(&msg->ln, &ctx->msgs);
+        //LOG_DEBUG("[%x] parse packet: %s", ctx, srrp_get_raw(pac));
 
         vdrop(sinkfd->rxbuf, srrp_get_packet_len(pac));
     }
@@ -85,32 +86,46 @@ static int apix_response(
 }
 
 static void
-handle_ctrl(struct apix *ctx, struct sinkfd *src, struct apimsg *am)
+handle_ctrl(struct apix *ctx, struct sinkfd *sinkfd, struct apimsg *am)
 {
+    assert(sinkfd->type != 'l');
+
+    uint32_t nodeid = 0;
+    if (sinkfd->type == 'a') {
+        assert(sinkfd->father);
+        nodeid = sinkfd->father->l_nodeid;
+    } else {
+        nodeid = sinkfd->l_nodeid;
+    }
+
     if (srrp_get_srcid(am->pac) == 0) {
-        apix_response(ctx, am->fd, am->pac,
-                        "j:{\"err\":-1,\"am\":\"Nodeid should not be zero\"}");
+        struct srrp_packet *pac = srrp_new_ctrl(nodeid, SRRP_CTRL_NODEID_ZERO, "");
+        apix_send(ctx, sinkfd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+        srrp_free(pac);
+        sinkfd->state = SINKFD_ST_NODEID_ZERO;
         goto out;
     }
 
     struct sinkfd *tmp = find_sinkfd_by_nodeid(ctx, srrp_get_srcid(am->pac));
-    if (tmp != NULL && tmp != src) {
-        apix_response(ctx, am->fd, am->pac,
-                      "j:{\"err\":-2,\"am\":\"Nodeid have been used\"}");
+    if (tmp != NULL && tmp != sinkfd) {
+        struct srrp_packet *pac = srrp_new_ctrl(nodeid, SRRP_CTRL_NODEID_DUP, "");
+        apix_send(ctx, sinkfd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+        srrp_free(pac);
+        sinkfd->state = SINKFD_ST_NODEID_DUP;
         goto out;
     }
 
-    if (strcmp(srrp_get_anchor(am->pac), SRRP_CTRL_ONLINE) == 0) {
-        if (src->r_nodeid != 0 && src->r_nodeid != srrp_get_srcid(am->pac)) {
-            apix_response(ctx, am->fd, am->pac,
-                            "j:{\"err\":-3,\"am\":\"Nodeid should not change\"}");
+    if (strcmp(srrp_get_anchor(am->pac), SRRP_CTRL_SYNC) == 0) {
+        if (sinkfd->r_nodeid != 0 && sinkfd->r_nodeid != srrp_get_srcid(am->pac)) {
+            struct srrp_packet *pac = srrp_new_ctrl(nodeid, SRRP_CTRL_NODEID_DIFF, "");
+            apix_send(ctx, sinkfd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+            srrp_free(pac);
+            sinkfd->state = SINKFD_ST_NODEID_DIFF;
             goto out;
         }
-        src->r_nodeid = srrp_get_srcid(am->pac);
-        apix_response(ctx, am->fd, am->pac, "j:{\"err\":0}");
-    } else if (strcmp(srrp_get_anchor(am->pac), SRRP_CTRL_OFFLINE) == 0) {
-        src->r_nodeid = 0;
-        apix_response(ctx, am->fd, am->pac, "j:{\"err\":0}");
+        sinkfd->r_nodeid = srrp_get_srcid(am->pac);
+        sinkfd->state = SINKFD_ST_NODEID_NORMAL;
+        sinkfd->ts_sync_in = time(0);
     }
 
 out:
@@ -118,30 +133,48 @@ out:
 }
 
 static void
-handle_subscribe(struct apix *ctx, struct sinkfd *src, struct apimsg *am)
+handle_subscribe(struct apix *ctx, struct sinkfd *sinkfd, struct apimsg *am)
 {
-    for (uint32_t i = 0; i < vsize(src->sub_topics); i++) {
-        if (strcmp(sget(vat(src->sub_topics, i)), srrp_get_anchor(am->pac)) == 0) {
-            goto out;
+    assert(sinkfd->type != 'l');
+
+    if (sinkfd->r_nodeid == 0) {
+        apix_response(ctx, am->fd, am->pac,
+                      "j:{\"err\":1, \"msg\":\"nodeid not sync\"}");
+        apimsg_finish(am);
+        return;
+    }
+
+    for (uint32_t i = 0; i < vsize(sinkfd->sub_topics); i++) {
+        if (strcmp(sget(vat(sinkfd->sub_topics, i)), srrp_get_anchor(am->pac)) == 0) {
+            apix_response(ctx, am->fd, am->pac, "j:{\"err\":0}");
+            apimsg_finish(am);
+            return;
         }
     }
 
     str_t *topic = str_new(srrp_get_anchor(am->pac));
-    vpush(src->sub_topics, &topic);
-
-out:
+    vpush(sinkfd->sub_topics, &topic);
     apix_response(ctx, am->fd, am->pac, "j:{\"err\":0}");
     apimsg_finish(am);
 }
 
 static void
-handle_unsubscribe(struct apix *ctx, struct sinkfd *src, struct apimsg *am)
+handle_unsubscribe(struct apix *ctx, struct sinkfd *sinkfd, struct apimsg *am)
 {
-    for (uint32_t i = 0; i < vsize(src->sub_topics); i++) {
-        if (strcmp(sget(*(str_t **)vat(src->sub_topics, i)),
+    assert(sinkfd->type != 'l');
+
+    if (sinkfd->r_nodeid == 0) {
+        apix_response(ctx, am->fd, am->pac,
+                      "j:{\"err\":1, \"msg\":\"nodeid not sync\"}");
+        apimsg_finish(am);
+        return;
+    }
+
+    for (uint32_t i = 0; i < vsize(sinkfd->sub_topics); i++) {
+        if (strcmp(sget(*(str_t **)vat(sinkfd->sub_topics, i)),
                    srrp_get_anchor(am->pac)) == 0) {
-            str_delete(*(str_t **)vat(src->sub_topics, i));
-            vremove(src->sub_topics, i);
+            str_delete(*(str_t **)vat(sinkfd->sub_topics, i));
+            vremove(sinkfd->sub_topics, i);
             break;
         }
     }
@@ -189,7 +222,7 @@ static void forward_publish(struct apix *ctx, struct apimsg *am)
 }
 
 static void
-handle_forward(struct apix *ctx, struct sinkfd *src, struct apimsg *am)
+handle_forward(struct apix *ctx, struct apimsg *am)
 {
     if (srrp_get_leader(am->pac) == SRRP_REQUEST_LEADER ||
         srrp_get_leader(am->pac) == SRRP_RESPONSE_LEADER) {
@@ -203,6 +236,27 @@ handle_forward(struct apix *ctx, struct sinkfd *src, struct apimsg *am)
     apimsg_finish(am);
 }
 
+static void
+handle_request_or_response(struct apix *ctx, struct sinkfd *sinkfd, struct apimsg *am)
+{
+    assert(sinkfd->type != 'l');
+
+    if (sinkfd->r_nodeid == 0) {
+        apix_response(ctx, am->fd, am->pac,
+                      "j:{\"err\":1, \"msg\":\"nodeid not sync\"}");
+        apimsg_finish(am);
+        return;
+    }
+
+    if (sinkfd->events.on_srrp_packet) {
+        sinkfd->events.on_srrp_packet(
+            ctx, am->fd, am->pac, sinkfd->events_priv.priv_on_srrp_packet);
+        // user code may change the state of apimsg to APIMSG_ST_FORWARD
+        if (am->state == APIMSG_ST_NONE)
+            apimsg_finish(am);
+    }
+}
+
 static void handle_apimsg(struct apix *ctx)
 {
     struct apimsg *pos;
@@ -210,10 +264,13 @@ static void handle_apimsg(struct apix *ctx)
         if (apimsg_is_finished(pos))
             continue;
 
+        LOG_DEBUG("[%x] handle_apimsg: %s", ctx, srrp_get_raw(pos->pac));
+
         struct sinkfd *src = find_sinkfd_in_apix(ctx, pos->fd);
         if (src == NULL) {
             apimsg_finish(pos);
-            LOG_INFO("[%x]: src fd closed, drop it, %s", ctx, srrp_get_raw(pos->pac));
+            LOG_INFO("[%x] handle_apimsg: src fd closed, drop it, %s",
+                     ctx, srrp_get_raw(pos->pac));
             continue;
         }
 
@@ -229,17 +286,11 @@ static void handle_apimsg(struct apix *ctx)
         }
 
         if (pos->state == APIMSG_ST_FORWARD) {
-            handle_forward(ctx, src, pos);
+            handle_forward(ctx, pos);
             continue;
         }
 
-        if (src->events.on_srrp_packet) {
-            src->events.on_srrp_packet(
-                ctx, pos->fd, pos->pac, src->events_priv.priv_on_srrp_packet);
-            // user code may change the state of apimsg to APIMSG_ST_FORWARD
-            if (pos->state == APIMSG_ST_NONE)
-                apimsg_finish(pos);
-        }
+        handle_request_or_response(ctx, src, pos);
     }
 }
 
@@ -250,6 +301,23 @@ static void clear_finished_apimsg(struct apix *ctx)
         if (apimsg_is_finished(pos))
             apimsg_delete(pos);
     }
+}
+
+static void apix_sync_sinkfd(struct apix *ctx, struct sinkfd *sinkfd)
+{
+    assert(sinkfd->type != 'l');
+
+    uint32_t nodeid = 0;
+    if (sinkfd->type == 'a') {
+        assert(sinkfd->father);
+        nodeid = sinkfd->father->l_nodeid;
+    } else {
+        nodeid = sinkfd->l_nodeid;
+    }
+    struct srrp_packet *pac = srrp_new_ctrl(nodeid, SRRP_CTRL_SYNC, "");
+    apix_send(ctx, sinkfd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+    srrp_free(pac);
+    sinkfd->ts_sync_out = time(0);
 }
 
 struct apix *apix_new()
@@ -359,7 +427,7 @@ int apix_poll(struct apix *ctx, uint64_t usec)
     struct apisink *pos_sink;
     list_for_each_entry(pos_sink, &ctx->sinks, ln) {
         if (pos_sink->ops.poll(pos_sink) != 0) {
-            LOG_ERROR("%s", strerror(errno));
+            LOG_ERROR("[%x] poll err: %s", ctx, strerror(errno));
         }
     }
 
@@ -393,9 +461,15 @@ int apix_poll(struct apix *ctx, uint64_t usec)
                 parse_packet(ctx, pos_fd);
             }
         }
+
+        // sync
+        if (pos_fd->type != 'l' &&
+            pos_fd->ts_sync_out + SINKFD_SYNC_TIMEOUT < time(0)) {
+            apix_sync_sinkfd(ctx, pos_fd);
+        }
     }
 
-    LOG_DEBUG("poll_cnt: %d", ctx->poll_cnt);
+    //LOG_DEBUG("[%x] poll_cnt: %d", ctx, ctx->poll_cnt);
     if (ctx->poll_cnt == 0) {
         if (usec != 0) {
             usleep(usec);
@@ -468,7 +542,10 @@ int apix_enable_srrp_mode(struct apix *ctx, int fd, uint32_t nodeid)
     if (sinkfd == NULL)
         return -EBADF;
     sinkfd->srrp_mode = 1;
+    assert(nodeid != 0);
     sinkfd->l_nodeid = nodeid;
+    if (sinkfd->type != 'l')
+        apix_sync_sinkfd(ctx, sinkfd);
     return 0;
 }
 
@@ -479,32 +556,6 @@ int apix_disable_srrp_mode(struct apix *ctx, int fd)
         return -EBADF;
     sinkfd->srrp_mode = 0;
     sinkfd->l_nodeid = 0;
-    return 0;
-}
-
-int apix_srrp_online(struct apix *ctx, int fd)
-{
-    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
-    if (sinkfd == NULL)
-        return -EBADF;
-    assert(sinkfd->srrp_mode == 1);
-
-    struct srrp_packet *pac = srrp_new_ctrl(sinkfd->l_nodeid, SRRP_CTRL_ONLINE, "");
-    apix_send(ctx, fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
-    srrp_free(pac);
-    return 0;
-}
-
-int apix_srrp_offline(struct apix *ctx, int fd)
-{
-    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
-    if (sinkfd == NULL)
-        return -EBADF;
-    assert(sinkfd->srrp_mode == 1);
-
-    struct srrp_packet *pac = srrp_new_ctrl(sinkfd->l_nodeid, SRRP_CTRL_OFFLINE, "");
-    apix_send(ctx, fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
-    srrp_free(pac);
     return 0;
 }
 
@@ -572,7 +623,11 @@ struct sinkfd *sinkfd_new()
     struct sinkfd *sinkfd = malloc(sizeof(struct sinkfd));
     memset(sinkfd, 0, sizeof(*sinkfd));
     sinkfd->fd = -1;
+    sinkfd->father = NULL;
     sinkfd->type = 0;
+    sinkfd->state = SINKFD_ST_NONE;
+    sinkfd->ts_sync_in = 0;
+    sinkfd->ts_sync_out = 0;
     sinkfd->rxbuf = vec_new(1, 1024);
     sinkfd->srrp_mode = 0;
     sinkfd->l_nodeid = 0;

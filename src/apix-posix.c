@@ -147,13 +147,15 @@ static int unix_s_poll(struct apisink *sink)
         if (pos->type == 'l') {
             int newfd = accept(pos->fd, NULL, NULL);
             if (newfd == -1) {
-                LOG_ERROR("[accept] fd:%d, %s", pos->fd, strerror(errno));
+                LOG_ERROR("[%x] accept: {fd:%d, err:%s}",
+                          sink->ctx, pos->fd, strerror(errno));
                 continue;
             }
-            LOG_DEBUG("[accept] fd:%d, newfd:%d", pos->fd, newfd);
+            LOG_DEBUG("[%x] accept: {fd:%d, newfd:%d}", sink->ctx, pos->fd, newfd);
 
             struct sinkfd *sinkfd = sinkfd_new();
             sinkfd->fd = newfd;
+            sinkfd->father = pos;
             sinkfd->type = 'a';
             sinkfd->srrp_mode = pos->srrp_mode;
             sinkfd->sink = sink;

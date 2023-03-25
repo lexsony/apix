@@ -15,7 +15,7 @@
 #define APISINK_ID_SIZE 64
 #define SINKFD_ADDR_SIZE 64
 
-#define API_REQUEST_TIMEOUT 3000 /*ms*/
+#define SINKFD_SYNC_TIMEOUT (1000 * 60) /*ms*/
 #define PARSE_PACKET_TIMEOUT 1000 /*ms*/
 #define APIX_IDLE_MAX (1 * 1000 * 1000) /*us*/
 
@@ -73,17 +73,30 @@ void apix_sink_unregister(struct apix *ctx, struct apisink *sink);
  * - each apisink holds several sinkfds
  */
 
+enum sinkfd_state {
+    SINKFD_ST_NONE = 0,
+    SINKFD_ST_NODEID_NORMAL,
+    SINKFD_ST_NODEID_DUP,
+    SINKFD_ST_NODEID_ZERO,
+    SINKFD_ST_NODEID_DIFF,
+    SINKFD_ST_FINISHED,
+    SINKFD_ST_CLOSED,
+};
+
 struct sinkfd {
     int fd;
+    struct sinkfd *father;
     char type; /* c: connect, l: listen, a: accept */
     char addr[SINKFD_ADDR_SIZE];
+    int state;
+    time_t ts_sync_in;
+    time_t ts_sync_out;
 
     vec_8_t *rxbuf;
 
     int srrp_mode;
     uint32_t l_nodeid; /* local nodeid */
     uint32_t r_nodeid; /* remote nodeid */
-    time_t ts_alive;
     struct timeval ts_poll_recv;
     vec_p_t *sub_topics;
 
