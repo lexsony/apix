@@ -1,12 +1,12 @@
 include_directories(./)
 
-add_executable(apix-default apix-default.c opt.c)
-target_link_libraries(apix-default apix)
+add_executable(apixsrv apixsrv.c opt.c)
+target_link_libraries(apixsrv apix)
 
-add_executable(apix-cli apix-cli.c opt.c cli.c)
-target_link_libraries(apix-cli apix readline tinfo pthread)
+add_executable(apixcli apixcli.c opt.c cli.c)
+target_link_libraries(apixcli apix readline tinfo pthread)
 
-install(TARGETS apix-default apix-cli
+install(TARGETS apixsrv apixcli
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
