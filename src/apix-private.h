@@ -92,16 +92,14 @@ struct sinkfd {
         fd_accept_func_t on_accept;
         fd_pollin_func_t on_pollin;
         /* TODO: implement on_pollout & on_pollerr */
-        srrp_request_func_t on_request;
-        srrp_response_func_t on_response;
+        srrp_packet_func_t on_srrp_packet;
     } events;
 
     struct apix_events_priv {
         void *priv_on_close;
         void *priv_on_accept;
         void *priv_on_pollin;
-        void *priv_on_request;
-        void *priv_on_response;
+        void *priv_on_srrp_packet;
     } events_priv;
 
     struct apisink *sink;
@@ -114,51 +112,26 @@ void sinkfd_destroy(struct sinkfd *sinkfd);
 
 struct sinkfd *find_sinkfd_in_apix(struct apix *ctx, int fd);
 struct sinkfd *find_sinkfd_in_apisink(struct apisink *sink, int fd);
+struct sinkfd *find_sinkfd_by_l_nodeid(struct apix *ctx, uint32_t nodeid);
+struct sinkfd *find_sinkfd_by_r_nodeid(struct apix *ctx, uint32_t nodeid);
 struct sinkfd *find_sinkfd_by_nodeid(struct apix *ctx, uint32_t nodeid);
 
 /**
  * apimsg
  */
 
-enum apimsg_type {
-    APIMSG_T_CTRL = 0,
-    APIMSG_T_REQUEST,
-    APIMSG_T_RESPONSE,
-    APIMSG_T_TOPIC_MSG,
-};
-
 enum apimsg_state {
     APIMSG_ST_NONE = 0,
     APIMSG_ST_FINISHED,
+    APIMSG_ST_FORWARD,
 };
 
 struct apimsg {
-    int type; /* apimsg_type */
     int state;
-    int fd /* src for req, dst for resp */;
+    int fd; /* receive from fd */
     struct srrp_packet *pac;
     struct list_head ln;
 };
-
-static inline int apimsg_is_ctrl(struct apimsg *msg)
-{
-    return msg->type == APIMSG_T_CTRL;
-}
-
-static inline int apimsg_is_request(struct apimsg *msg)
-{
-    return msg->type == APIMSG_T_REQUEST;
-}
-
-static inline int apimsg_is_response(struct apimsg *msg)
-{
-    return msg->type == APIMSG_T_RESPONSE;
-}
-
-static inline int apimsg_is_topic_msg(struct apimsg *msg)
-{
-    return msg->type == APIMSG_T_TOPIC_MSG;
-}
 
 static inline int apimsg_is_finished(struct apimsg *msg)
 {

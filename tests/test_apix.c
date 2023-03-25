@@ -22,10 +22,11 @@
 static int requester_finished = 0;
 static int responser_finished = 0;
 
-static void requester_on_srrp_response(
-    struct apix *ctx, int fd, struct srrp_packet *req, void *priv)
+static void requester_on_srrp_packet(
+    struct apix *ctx, int fd, struct srrp_packet *pac, void *priv)
 {
-    LOG_INFO("requester on response: %s", srrp_get_raw(req));
+    assert_true(srrp_get_leader(pac) == SRRP_RESPONSE_LEADER);
+    LOG_INFO("requester on response: %s", srrp_get_raw(pac));
     requester_finished = 1;
 }
 
@@ -35,7 +36,7 @@ static void *requester_thread(void *args)
     apix_enable_posix(ctx);
     int fd = apix_open_unix_client(ctx, UNIX_ADDR);
     apix_enable_srrp_mode(ctx, fd, 3333);
-    apix_on_srrp_response(ctx, fd, requester_on_srrp_response, NULL);
+    apix_on_srrp_packet(ctx, fd, requester_on_srrp_packet, NULL);
 
     int rc = 0;
 
@@ -52,6 +53,8 @@ static void *requester_thread(void *args)
     while (requester_finished != 1)
         apix_poll(ctx, 0);
 
+    sleep(1);
+
     apix_close(ctx, fd);
     apix_disable_posix(ctx);
     apix_destroy(ctx);
@@ -59,25 +62,27 @@ static void *requester_thread(void *args)
     return NULL;
 }
 
-static void responser_on_srrp_response(
-    struct apix *ctx, int fd, struct srrp_packet *resp, void *priv)
+static void responser_on_srrp_packet(
+    struct apix *ctx, int fd, struct srrp_packet *pac, void *priv)
 {
-    if (strstr(srrp_get_anchor(resp), SRRP_CTRL_ONLINE) != 0) {
-        LOG_INFO("responser on response: %s", srrp_get_raw(resp));
+    if (srrp_get_leader(pac) == SRRP_REQUEST_LEADER) {
+        LOG_INFO("responser on request: %s", srrp_get_raw(pac));
+        if (strstr(srrp_get_anchor(pac), "/hello") != 0) {
+            struct srrp_packet *resp = srrp_new_response(
+                srrp_get_dstid(pac), srrp_get_srcid(pac), srrp_get_anchor(pac),
+                "j:{err:0,errmsg:'succ',data:{msg:'world'}}",
+                srrp_get_crc16(pac));
+            apix_send(ctx, fd, srrp_get_raw(resp), srrp_get_packet_len(resp));
+            srrp_free(resp);
+            responser_finished = 1;
+        }
+        return;
     }
-}
 
-static void responser_on_srrp_request(
-    struct apix *ctx, int fd, struct srrp_packet *req, struct srrp_packet *resp, void *priv)
-{
-    LOG_INFO("responser on request: %s", srrp_get_raw(req));
-    if (strstr(srrp_get_anchor(req), "/hello") != 0) {
-        struct srrp_packet *tmp = srrp_new_response(
-            srrp_get_dstid(req), srrp_get_srcid(req), srrp_get_anchor(req),
-            "j:{err:0,errmsg:'succ',data:{msg:'world'}}",
-            srrp_get_crc16(req));
-        srrp_move(tmp, resp);
-        responser_finished = 1;
+    if (srrp_get_leader(pac) == SRRP_RESPONSE_LEADER) {
+        if (strstr(srrp_get_anchor(pac), SRRP_CTRL_ONLINE) != 0) {
+            LOG_INFO("responser on response: %s", srrp_get_raw(pac));
+        }
     }
 }
 
@@ -87,8 +92,7 @@ static void *responser_thread(void *args)
     apix_enable_posix(ctx);
     int fd = apix_open_unix_client(ctx, UNIX_ADDR);
     apix_enable_srrp_mode(ctx, fd, 8888);
-    apix_on_srrp_request(ctx, fd, responser_on_srrp_request, NULL);
-    apix_on_srrp_response(ctx, fd, responser_on_srrp_response, NULL);
+    apix_on_srrp_packet(ctx, fd, responser_on_srrp_packet, NULL);
 
     assert_true(apix_srrp_online(ctx, fd) == 0);
 
@@ -103,12 +107,25 @@ static void *responser_thread(void *args)
     return NULL;
 }
 
+static void broker_on_srrp_packet(
+    struct apix *ctx, int fd, struct srrp_packet *pac, void *priv)
+{
+    apix_srrp_forward(ctx, pac);
+    LOG_INFO("forward packet: %s", srrp_get_raw(pac));
+}
+
+static void broker_on_accept(struct apix *ctx, int fd, int newfd, void *priv)
+{
+    apix_on_srrp_packet(ctx, newfd, broker_on_srrp_packet, NULL);
+}
+
 static void test_api_request_response(void **status)
 {
     struct apix *ctx = apix_new();
     apix_enable_posix(ctx);
     int fd = apix_open_unix_server(ctx, UNIX_ADDR);
     apix_enable_srrp_mode(ctx, fd, 0);
+    apix_on_fd_accept(ctx, fd, broker_on_accept, NULL);
 
     pthread_t responser_pid;
     pthread_create(&responser_pid, NULL, responser_thread, NULL);
@@ -161,6 +178,8 @@ static void *publish_thread(void *args)
     struct srrp_packet *pac = srrp_new_publish("/test-topic", "{msg:'ahaa'}");
     rc = send(fd, srrp_get_raw(pac), srrp_get_packet_len(pac), 0);
     srrp_free(pac);
+
+    sleep(1);
 
     close(fd);
     publish_finished = 1;
@@ -225,6 +244,7 @@ static void test_api_subscribe_publish(void **status)
     int fd = apix_open_tcp_server(ctx, TCP_ADDR);
     assert_true(fd != -1);
     apix_enable_srrp_mode(ctx, fd, 0);
+    apix_on_fd_accept(ctx, fd, broker_on_accept, NULL);
 
     pthread_t subscribe_pid;
     pthread_create(&subscribe_pid, NULL, subscribe_thread, NULL);

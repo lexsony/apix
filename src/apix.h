@@ -97,23 +97,19 @@ int apix_srrp_online(struct apix *ctx, int fd);
 int apix_srrp_offline(struct apix *ctx, int fd);
 
 /**
- * apix_on_srrp_request
- * - called when received srrp requests
+ * apix_srrp_forward
+ * - forward the srrp packet to the real destination
  */
-typedef void (*srrp_request_func_t)(
-    struct apix *ctx, int fd, struct srrp_packet *req,
-    struct srrp_packet *resp, void *priv);
-int apix_on_srrp_request(
-    struct apix *ctx, int fd, srrp_request_func_t func, void *priv);
+void apix_srrp_forward(struct apix *ctx, struct srrp_packet *pac);
 
 /**
- * apix_on_srrp_response
- * - called when received srrp responses
+ * apix_on_srrp_packet
+ * - called when received srrp packets
  */
-typedef void (*srrp_response_func_t)(
-    struct apix *ctx, int fd, struct srrp_packet *resp, void *priv);
-int apix_on_srrp_response(
-    struct apix *ctx, int fd, srrp_response_func_t func, void *priv);
+typedef void (*srrp_packet_func_t)(
+    struct apix *ctx, int fd, struct srrp_packet *pac, void *priv);
+int apix_on_srrp_packet(
+    struct apix *ctx, int fd, srrp_packet_func_t func, void *priv);
 
 #ifdef __cplusplus
 }

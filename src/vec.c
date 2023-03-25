@@ -94,7 +94,7 @@ void vpop(vec_t *self, /* out */ void *value)
 {
     assert(self->offset + self->size <= self->cap);
     assert(self->size > 0);
-    memcpy(value, vat(self, self->size), self->type_size);
+    memcpy(value, vat(self, self->offset), self->type_size);
     self->size -= 1;
     self->offset += 1;
 }
