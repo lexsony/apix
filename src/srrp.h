@@ -51,7 +51,6 @@ extern "C" {
 #define SRRP_CTRL_SYNC "/sync"
 #define SRRP_CTRL_NODEID_DUP "/sync/nodeid/dup"
 #define SRRP_CTRL_NODEID_ZERO "/sync/nodeid/zero"
-#define SRRP_CTRL_NODEID_DIFF "/sync/nodeid/diff"
 
 struct srrp_packet;
 

@@ -88,9 +88,15 @@ int apix_disable_srrp_mode(struct apix *ctx, int fd);
 
 /**
  * apix_srrp_forward
- * - forward the srrp packet to the real destination
+ * - forward the srrp packet to the real destination through dstid
  */
 void apix_srrp_forward(struct apix *ctx, struct srrp_packet *pac);
+
+/**
+ * apix_srrp_send
+ * - send the srrp packet to the real destination through dstid
+ */
+int apix_srrp_send(struct apix *ctx, struct srrp_packet *pac);
 
 /**
  * apix_on_srrp_packet

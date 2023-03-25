@@ -15,7 +15,7 @@
 #define APISINK_ID_SIZE 64
 #define SINKFD_ADDR_SIZE 64
 
-#define SINKFD_SYNC_TIMEOUT (1000 * 60) /*ms*/
+#define SINKFD_SYNC_TIMEOUT (1000 * 5) /*ms*/
 #define PARSE_PACKET_TIMEOUT 1000 /*ms*/
 #define APIX_IDLE_MAX (1 * 1000 * 1000) /*us*/
 
@@ -78,7 +78,6 @@ enum sinkfd_state {
     SINKFD_ST_NODEID_NORMAL,
     SINKFD_ST_NODEID_DUP,
     SINKFD_ST_NODEID_ZERO,
-    SINKFD_ST_NODEID_DIFF,
     SINKFD_ST_FINISHED,
     SINKFD_ST_CLOSED,
 };

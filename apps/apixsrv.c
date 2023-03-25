@@ -28,6 +28,13 @@ static struct opt opttab[] = {
     INIT_OPT_NONE(),
 };
 
+static void
+on_srrp_packet(struct apix *ctx, int fd, struct srrp_packet *pac, void *priv)
+{
+    LOG_INFO("forward #%d: %s", fd, srrp_get_raw(pac));
+    apix_srrp_forward(ctx, pac);
+}
+
 static void on_fd_close(struct apix *ctx, int fd, void *priv)
 {
     LOG_INFO("close #%d", fd);
@@ -36,7 +43,7 @@ static void on_fd_close(struct apix *ctx, int fd, void *priv)
 static void on_fd_accept(struct apix *ctx, int _fd, int newfd, void *priv)
 {
     apix_on_fd_close(ctx, newfd, on_fd_close, NULL);
-    apix_on_fd_accept(ctx, newfd, on_fd_accept, NULL);
+    apix_on_srrp_packet(ctx, newfd, on_srrp_packet, NULL);
     LOG_INFO("accept #%d from %d", newfd, _fd);
 }
 
@@ -53,7 +60,7 @@ static void *apix_thread(void *arg)
         LOG_ERROR("open unix socket at %s failed!", opt_string(opt));
         exit(-1);
     }
-    apix_enable_srrp_mode(ctx, fd_unix, 0);
+    apix_enable_srrp_mode(ctx, fd_unix, 0x1);
     apix_on_fd_close(ctx, fd_unix, on_fd_close, NULL);
     apix_on_fd_accept(ctx, fd_unix, on_fd_accept, NULL);
     LOG_INFO("open unix socket #%d at %s", fd_unix, opt_string(opt));
@@ -65,7 +72,7 @@ static void *apix_thread(void *arg)
         LOG_ERROR("open tcp socket at %s failed!", opt_string(opt));
         exit(-1);
     }
-    apix_enable_srrp_mode(ctx, fd_tcp, 0);
+    apix_enable_srrp_mode(ctx, fd_tcp, 0x2);
     apix_on_fd_close(ctx, fd_tcp, on_fd_close, NULL);
     apix_on_fd_accept(ctx, fd_tcp, on_fd_accept, NULL);
     LOG_INFO("open tcp socket #%d at %s", fd_tcp, opt_string(opt));
@@ -74,7 +81,6 @@ static void *apix_thread(void *arg)
         apix_poll(ctx, 0);
     }
 
-    apix_disable_posix(ctx);
     apix_destroy(ctx); // auto close all fds
 
     return NULL;

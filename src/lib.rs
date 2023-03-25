@@ -143,78 +143,38 @@ impl Apix {
         }
     }
 
-    pub fn srrp_online(&self, fd: i32) {
+    pub fn srrp_forward(&self, pac: &SrrpPacket) {
         unsafe {
-            apix_sys::apix_srrp_online(self.ctx, fd);
+            apix_sys::apix_srrp_forward(self.ctx, pac.pac);
         }
     }
 
-    pub fn srrp_offline(&self, fd: i32) {
+    pub fn srrp_send(&self, pac: &SrrpPacket) {
         unsafe {
-            apix_sys::apix_srrp_offline(self.ctx, fd);
+            apix_sys::apix_srrp_send(self.ctx, pac.pac);
         }
     }
 
-    extern "C" fn __on_srrp_request(
+    extern "C" fn __on_srrp_packet(
         _: *mut apix_sys::apix, _: i32,
-        req: *mut apix_sys::srrp_packet,
-        resp: *mut apix_sys::srrp_packet,
-        priv_data: *mut std::ffi::c_void) {
-        let closure: &mut Box<dyn FnMut(&SrrpPacket) -> Option<SrrpPacket>> = unsafe {
-            std::mem::transmute(priv_data)
-        };
-        let new_req = Srrp::from_raw_packet(req);
-        match closure(&new_req) {
-            Some(new_resp) => {
-                unsafe {
-                    let anchor = std::ffi::CString::new(new_resp.anchor).unwrap();
-                    let payload = std::ffi::CString::new(new_resp.payload).unwrap();
-                    let tmp = apix_sys::srrp_new_response(
-                        new_resp.srcid,
-                        new_resp.dstid,
-                        anchor.as_ptr() as *const i8,
-                        payload.as_ptr() as *const i8,
-                        new_resp.reqcrc16,
-                    );
-                    apix_sys::srrp_move(tmp, resp);
-                }
-                true
-            },
-            None => false
-        };
-    }
-
-    pub fn on_srrp_request<F>(&self, fd: i32, func: F)
-    where F: FnMut(&SrrpPacket) -> Option<SrrpPacket>,
-          F: 'static
-    {
-        let obj: Box<Box<dyn FnMut(&SrrpPacket) -> Option<SrrpPacket>>> =
-            Box::new(Box::new(func));
-        unsafe {
-            apix_sys::apix_on_srrp_request(
-                self.ctx, fd, Some(Apix::__on_srrp_request),
-                Box::into_raw(obj) as *mut std::ffi::c_void);
-        }
-    }
-
-    extern "C" fn __on_srrp_response(
-        _: *mut apix_sys::apix, _: i32,
-        resp: *mut apix_sys::srrp_packet,
+        pac: *mut apix_sys::srrp_packet,
         priv_data: *mut std::ffi::c_void) {
         let closure: &mut Box<dyn FnMut(&SrrpPacket)> = unsafe {
             std::mem::transmute(priv_data)
         };
-        let resp = Srrp::from_raw_packet(resp);
-        closure(&resp);
+        let mut pac = Srrp::from_raw_packet(pac);
+        closure(&pac);
+        pac.pac = std::ptr::null_mut() as *mut apix_sys::srrp_packet;
     }
 
-    pub fn on_srrp_response<F>(&self, fd: i32, func: F)
+    pub fn on_srrp_packet<F>(&self, fd: i32, func: F)
     where F: FnMut(&SrrpPacket)
     {
         let obj: Box<Box<dyn FnMut(&SrrpPacket)>> = Box::new(Box::new(func));
         unsafe {
-            apix_sys::apix_on_srrp_response(self.ctx, fd, Some(Apix::__on_srrp_response),
-                                            Box::into_raw(obj) as *mut std::ffi::c_void);
+            apix_sys::apix_on_srrp_packet(
+                self.ctx, fd, Some(Apix::__on_srrp_packet),
+                Box::into_raw(obj) as *mut std::ffi::c_void);
         }
     }
 
@@ -297,7 +257,6 @@ impl Apix {
     }
 }
 
-#[derive(Default)]
 pub struct SrrpPacket {
     pub leader: i8,
     pub packet_len: u16,
@@ -310,12 +269,23 @@ pub struct SrrpPacket {
     pub reqcrc16: u16,
     pub crc16: u16,
     pub raw: Vec<u8>,
+    pub pac: *mut apix_sys::srrp_packet,
+}
+
+impl Drop for SrrpPacket {
+    fn drop(&mut self) {
+        unsafe {
+            if !self.pac.is_null() {
+                apix_sys::srrp_free(self.pac);
+            }
+        }
+    }
 }
 
 pub struct Srrp {}
 
 impl Srrp {
-    fn from_raw_packet(pac: *const apix_sys::srrp_packet) -> SrrpPacket {
+    fn from_raw_packet(pac: *mut apix_sys::srrp_packet) -> SrrpPacket {
         unsafe {
             let packet_len = apix_sys::srrp_get_packet_len(pac);
             let anchor = apix_sys::srrp_get_anchor(pac);
@@ -342,7 +312,8 @@ impl Srrp {
                         v.push(*(raw).offset(i as isize));
                     }
                     v
-                }
+                },
+                pac: pac,
             }
         }
     }
@@ -361,7 +332,6 @@ impl Srrp {
                 None
             } else {
                 let sp = Srrp::from_raw_packet(pac);
-                apix_sys::srrp_free(pac);
                 Some(sp)
             }
         }
@@ -376,7 +346,6 @@ impl Srrp {
                 None
             } else {
                 let sp = Srrp::from_raw_packet(pac);
-                apix_sys::srrp_free(pac);
                 Some(sp)
             }
         }
@@ -395,7 +364,6 @@ impl Srrp {
                 None
             } else {
                 let sp = Srrp::from_raw_packet(pac);
-                apix_sys::srrp_free(pac);
                 Some(sp)
             }
         }
@@ -416,7 +384,6 @@ impl Srrp {
                 None
             } else {
                 let sp = Srrp::from_raw_packet(pac);
-                apix_sys::srrp_free(pac);
                 Some(sp)
             }
         }

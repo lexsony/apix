@@ -12,7 +12,7 @@ func TestBase(T *testing.T) {
     ctx.EnablePosix()
     fd := ctx.OpenTcpClient("127.0.0.1:8080")
 
-    pac, _ := srrp.NewCtrl(0x1111, "/online", "")
+    pac, _ := srrp.NewCtrl(0x1111, "/sync", "")
     ctx.Send(fd, pac.Raw)
 
     for true {

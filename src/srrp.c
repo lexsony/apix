@@ -281,7 +281,7 @@ static struct srrp_packet *__srrp_new(
     pac->payload_len = strlen(payload);
 
     pac->srcid = srcid;
-    pac->dstid = 0;
+    pac->dstid = dstid;
 
     pac->anchor = str_new(anchor);
     assert(pac->anchor);
