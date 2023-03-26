@@ -138,12 +138,12 @@ on_srrp_packet(struct apix *ctx, int fd, struct srrp_packet *pac, void *priv)
         struct srrp_packet *resp;
         if (svc_priv) {
             resp = srrp_new_response(
-                srrp_get_dstid(pac), srrp_get_srcid(pac), srrp_get_anchor(pac),
-                svc_priv->msg, srrp_get_crc16(pac));
+                srrp_get_dstid(pac), srrp_get_srcid(pac),
+                srrp_get_anchor(pac), svc_priv->msg);
         } else {
             resp = srrp_new_response(
-                srrp_get_dstid(pac), srrp_get_srcid(pac), srrp_get_anchor(pac),
-                "{msg:'...'}", srrp_get_crc16(pac));
+                srrp_get_dstid(pac), srrp_get_srcid(pac),
+                srrp_get_anchor(pac), "{msg:'...'}");
         }
         apix_send(ctx, fd, srrp_get_raw(resp), srrp_get_packet_len(resp));
 

@@ -92,8 +92,7 @@ static void responser_on_srrp_packet(
         if (strstr(srrp_get_anchor(pac), "/hello") != 0) {
             struct srrp_packet *resp = srrp_new_response(
                 srrp_get_dstid(pac), srrp_get_srcid(pac), srrp_get_anchor(pac),
-                "j:{err:0,errmsg:'succ',data:{msg:'world'}}",
-                srrp_get_crc16(pac));
+                "j:{err:0,errmsg:'succ',data:{msg:'world'}}");
             apix_send(ctx, fd, srrp_get_raw(resp), srrp_get_packet_len(resp));
             srrp_free(resp);
             responser_finished = 1;

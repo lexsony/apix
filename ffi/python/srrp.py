@@ -30,8 +30,8 @@ class __Srrp():
         func.restype = ctypes.c_uint16
         return func(self.pac)
 
-    def payload_offset(self):
-        func = lib.srrp_get_payload_offset
+    def payload_fin(self):
+        func = lib.srrp_get_payload_fin
         func.argtypes = [ctypes.c_void_p]
         func.restype = ctypes.c_uint32
         return func(self.pac)
@@ -65,12 +65,6 @@ class __Srrp():
         func.argtypes = [ctypes.c_void_p]
         func.restype = ctypes.c_char_p
         return func(self.pac).decode("utf-8")
-
-    def reqcrc16(self):
-        func = lib.srrp_get_reqcrc16
-        func.argtypes = [ctypes.c_void_p]
-        func.restype = ctypes.c_uint16
-        return func(self.pac)
 
     def crc16(self):
         func = lib.srrp_get_crc16
@@ -106,14 +100,13 @@ class SrrpRequest(__Srrp):
         super().__init__(pac)
 
 class SrrpResponse(__Srrp):
-    def __init__(self, srcid, dstid, anchor, payload, reqcrc16):
+    def __init__(self, srcid, dstid, anchor, payload):
         func = lib.srrp_new_response
         func.argtypes = [ctypes.c_uint32, ctypes.c_uint32,
-                         ctypes.c_char_p, ctypes.c_char_p,
-                         ctypes.c_uint16]
+                         ctypes.c_char_p, ctypes.c_char_p]
         func.restype = ctypes.c_void_p
         pac = func(srcid, dstid, ctypes.c_char_p(anchor.encode('utf-8')),
-                   ctypes.c_char_p(payload.encode('utf-8')), reqcrc16)
+                   ctypes.c_char_p(payload.encode('utf-8')))
         assert(pac != 0)
         super().__init__(pac)
 

@@ -16,7 +16,7 @@
 struct srrp_packet {
     char leader;
     uint16_t packet_len;
-    uint32_t payload_offset;
+    uint32_t payload_fin;
     uint32_t payload_len;
 
     uint32_t srcid;
@@ -25,9 +25,7 @@ struct srrp_packet {
     str_t *anchor;
     const uint8_t *payload;
 
-    uint16_t reqcrc16; /* only used by response */
     uint16_t crc16;
-
     vec_t *raw;
 };
 
@@ -41,9 +39,9 @@ uint16_t srrp_get_packet_len(const struct srrp_packet *pac)
     return pac->packet_len;
 }
 
-uint32_t srrp_get_payload_offset(const struct srrp_packet *pac)
+uint32_t srrp_get_payload_fin(const struct srrp_packet *pac)
 {
-    return pac->payload_offset;
+    return pac->payload_fin;
 }
 
 uint32_t srrp_get_payload_len(const struct srrp_packet *pac)
@@ -69,11 +67,6 @@ const char *srrp_get_anchor(const struct srrp_packet *pac)
 const uint8_t *srrp_get_payload(const struct srrp_packet *pac)
 {
     return pac->payload;
-}
-
-uint16_t srrp_get_reqcrc16(const struct srrp_packet *pac)
-{
-    return pac->reqcrc16;
 }
 
 uint16_t srrp_get_crc16(const struct srrp_packet *pac)
@@ -128,7 +121,7 @@ struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len)
 {
     char leader;
     uint16_t packet_len;
-    uint32_t payload_offset, payload_len, srcid, dstid;
+    uint32_t payload_fin, payload_len, srcid, dstid;
     char anchor[SRRP_ANCHOR_MAX] = {0};
 
     leader = buf[0];
@@ -137,14 +130,14 @@ struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len)
         leader == SRRP_REQUEST_LEADER ||
         leader == SRRP_RESPONSE_LEADER) {
         if (sscanf((char *)buf + 1, "%hx,%x,%x,#%x,#%x:%[^?]",
-                   &packet_len, &payload_offset, &payload_len,
+                   &packet_len, &payload_fin, &payload_len,
                    &srcid, &dstid, anchor) != 6)
             return NULL;
     } else if (leader == SRRP_SUBSCRIBE_LEADER ||
                leader == SRRP_UNSUBSCRIBE_LEADER ||
                leader == SRRP_PUBLISH_LEADER) {
         if (sscanf((char *)buf + 1, "%hx,%x,%x:%[^?]",
-                   &packet_len, &payload_offset, &payload_len, anchor) != 4)
+                   &packet_len, &payload_fin, &payload_len, anchor) != 4)
             return NULL;
     } else {
         return NULL;
@@ -154,18 +147,12 @@ struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len)
         return NULL;
 
     uint16_t crc = 0;
-    uint16_t reqcrc = 0;
 
     if (sscanf((char *)buf + packet_len - CRC_SIZE, "%4hx", &crc) != 1)
         return NULL;
 
     if (crc != crc16(buf, packet_len - CRC_SIZE))
         return NULL;
-
-    if (leader == SRRP_RESPONSE_LEADER) {
-        if (sscanf((char *)buf + packet_len - CRC_SIZE * 2, "%4hx", &reqcrc) != 1)
-            return NULL;
-    }
 
     struct srrp_packet *pac = calloc(1, sizeof(*pac));
     assert(pac);
@@ -176,7 +163,7 @@ struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len)
 
     pac->leader = leader;
     pac->packet_len = packet_len;
-    pac->payload_offset = payload_offset;
+    pac->payload_fin = payload_fin;
     pac->payload_len = payload_len;
 
     pac->srcid = srcid;
@@ -189,14 +176,13 @@ struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len)
     else
         pac->payload = (uint8_t *)strstr(vraw(pac->raw), "?") + 1;
 
-    pac->reqcrc16 = reqcrc;
     pac->crc16 = crc;
     return pac;
 }
 
 static struct srrp_packet *__srrp_new(
     char leader, uint32_t srcid, uint32_t dstid,
-    const char *anchor, const char *payload, uint16_t reqcrc16)
+    const char *anchor, const char *payload)
 {
     vec_t *v = vec_new(1, 0);
     assert(v);
@@ -209,8 +195,8 @@ static struct srrp_packet *__srrp_new(
     vpack(v, "____", 4);
 #endif
 
-    // payload_offset
-    vpack(v, ",0", 2);
+    // payload_fin
+    vpack(v, ",1", 2);
 
     char tmp[32] = {0};
 
@@ -242,14 +228,6 @@ static struct srrp_packet *__srrp_new(
     // stop flag
     vpack(v, "\0", 1);
 
-    // reqcrc16
-    if (leader == SRRP_RESPONSE_LEADER) {
-        snprintf(tmp, sizeof(tmp), "%.4x", reqcrc16);
-        assert(strlen(tmp) == 4);
-        vpack(v, tmp, strlen(tmp));
-        vpack(v, "\0", 1);
-    }
-
     // packet_len
 #ifndef VINSERT
     uint16_t packet_len = vsize(v) + CRC_SIZE;
@@ -280,7 +258,7 @@ static struct srrp_packet *__srrp_new(
 
     pac->leader = leader;
     pac->packet_len = packet_len;
-    pac->payload_offset = 0;
+    pac->payload_fin = 1;
     pac->payload_len = strlen(payload);
 
     pac->srcid = srcid;
@@ -293,7 +271,6 @@ static struct srrp_packet *__srrp_new(
     else
         pac->payload = (uint8_t *)strstr(vraw(pac->raw), "?") + 1;
 
-    pac->reqcrc16 = reqcrc16;
     pac->crc16 = crc;
 
     return pac;
@@ -302,36 +279,35 @@ static struct srrp_packet *__srrp_new(
 struct srrp_packet *
 srrp_new_ctrl(uint32_t srcid, const char *anchor, const char *payload)
 {
-    return __srrp_new(SRRP_CTRL_LEADER, srcid, 0, anchor, payload, 0);
+    return __srrp_new(SRRP_CTRL_LEADER, srcid, 0, anchor, payload);
 }
 
 struct srrp_packet *srrp_new_request(
     uint32_t srcid, uint32_t dstid, const char *anchor, const char *payload)
 {
-    return __srrp_new(SRRP_REQUEST_LEADER, srcid, dstid, anchor, payload, 0);
+    return __srrp_new(SRRP_REQUEST_LEADER, srcid, dstid, anchor, payload);
 }
 
 struct srrp_packet *srrp_new_response(
-    uint32_t srcid, uint32_t dstid,
-    const char *anchor, const char *payload, uint16_t reqcrc16)
+    uint32_t srcid, uint32_t dstid, const char *anchor, const char *payload)
 {
-    return __srrp_new(SRRP_RESPONSE_LEADER, srcid, dstid, anchor, payload, reqcrc16);
+    return __srrp_new(SRRP_RESPONSE_LEADER, srcid, dstid, anchor, payload);
 }
 
 struct srrp_packet *
 srrp_new_subscribe(const char *anchor, const char *payload)
 {
-    return __srrp_new(SRRP_SUBSCRIBE_LEADER, 0, 0, anchor, payload, 0);
+    return __srrp_new(SRRP_SUBSCRIBE_LEADER, 0, 0, anchor, payload);
 }
 
 struct srrp_packet *
 srrp_new_unsubscribe(const char *anchor, const char *payload)
 {
-    return __srrp_new(SRRP_UNSUBSCRIBE_LEADER, 0, 0, anchor, payload, 0);
+    return __srrp_new(SRRP_UNSUBSCRIBE_LEADER, 0, 0, anchor, payload);
 }
 
 struct srrp_packet *
 srrp_new_publish(const char *anchor, const char *payload)
 {
-    return __srrp_new(SRRP_PUBLISH_LEADER, 0, 0, anchor, payload, 0);
+    return __srrp_new(SRRP_PUBLISH_LEADER, 0, 0, anchor, payload);
 }

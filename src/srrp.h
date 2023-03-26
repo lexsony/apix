@@ -9,7 +9,7 @@ extern "C" {
 
 /**
  * Data type:
- *   ascii hex: packet_len, payload_offset, payload_len, srcid, dstid, reqcrc16, crc16
+ *   ascii hex: packet_len, payload_fin, payload_len, srcid, dstid, crc16
  *   acsii str: anchor
  *
  * Payload type:
@@ -17,24 +17,24 @@ extern "C" {
  *   t: txt
  *   j: json
  *
- * Ctrl: =[packet_len],[payload_offset],[payload_len],#[srcid],#0:[/anchor]?[payload_type]:[payload]\0<crc16>\0
- *   =[packet_len],0,[payload_len],#F1,#0:/online?j:{"alias":["google.com","a.google.com","b.google.com"]}\0<crc16>\0
+ * Ctrl: =[packet_len],[payload_fin],[payload_len],#[srcid],#0:[/anchor]?[payload_type]:[payload]\0<crc16>\0
+ *   =[packet_len],1,[payload_len],#F1,#0:/sync?j:{"alias":["google.com","a.google.com","b.google.com"]}\0<crc16>\0
  *
- * Request: >[packet_len],[payload_offset],[payload_len],#[srcid],<#[dstid]|@[dst]>:[/anchor]?[payload_type]:[payload]\0<crc16>\0
- *   >[packet_len],0,[payload_len],#F1,#8A8F:/echo?j:{"v": "good news"}\0<crc16>\0
- *   >[packet_len],0,[payload_len],#F1,@google.com:/echo?j:{"v":"good news"}\0<crc16>\0
+ * Request: >[packet_len],[payload_fin],[payload_len],#[srcid],#[dstid]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
+ *   >[packet_len],0,[payload_len],#F1,#8A8F:/echo?j:{"err":0,\0<crc16>\0
+ *   >[packet_len],1,[payload_len],#F1,#8A8F:/echo?j:"msg":"ok"}\0<crc16>\0
  *
- * Response: <[packet_len],[payload_offset],[payload_len],#[srcid],#[dstid]:[/anchor]?[payload_type]:[payload]\0<reqcrc16>:<crc16>\0
- *   <[packet_len],0,[payload_len],#8A8F,#F1:/echo?j:{"err":0,"msg":"succ","v":"good news"}\0<crc16>\0
+ * Response: <[packet_len],[payload_fin],[payload_len],#[srcid],#[dstid]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
+ *   <[packet_len],1,[payload_len],#8A8F,#F1:/echo?j:{"err":0,"msg":"ok","v":"good news"}\0<crc16>\0
  *
- * Subscribe: <[packet_len],[payload_offset],[payload_len]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
- *   +[packet_len],0,[payload_len]:/motor/speed?_:\0<crc16>\0
+ * Subscribe: <[packet_len],[payload_fin],[payload_len]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
+ *   +[packet_len],1,0:/motor/speed\0<crc16>\0
  *
- * UnSubscribe: <[packet_len],[payload_offset],[payload_len]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
- *   -[packet_len],0,[payload_len]:/motor/speed?_:\0<crc16>\0
+ * UnSubscribe: <[packet_len],[payload_fin],[payload_len]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
+ *   -[packet_len],1,0:/motor/speed\0<crc16>\0
  *
- * Publish: <[packet_len],[payload_offset],[payload_len]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
- *   @[packet_len],0,[payload_len]:/motor/speed?j:{"speed":12,"voltage":24}\0<crc16>\0
+ * Publish: <[packet_len],[payload_fin],[payload_len]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
+ *   @[packet_len],1,[payload_len]:/motor/speed?j:{"speed":12,"voltage":24}\0<crc16>\0
  */
 
 #define SRRP_CTRL_LEADER '='
@@ -56,13 +56,12 @@ struct srrp_packet;
 
 char srrp_get_leader(const struct srrp_packet *pac);
 uint16_t srrp_get_packet_len(const struct srrp_packet *pac);
-uint32_t srrp_get_payload_offset(const struct srrp_packet *pac);
+uint32_t srrp_get_payload_fin(const struct srrp_packet *pac);
 uint32_t srrp_get_payload_len(const struct srrp_packet *pac);
 uint32_t srrp_get_srcid(const struct srrp_packet *pac);
 uint32_t srrp_get_dstid(const struct srrp_packet *pac);
 const char *srrp_get_anchor(const struct srrp_packet *pac);
 const uint8_t *srrp_get_payload(const struct srrp_packet *pac);
-uint16_t srrp_get_reqcrc16(const struct srrp_packet *pac);
 uint16_t srrp_get_crc16(const struct srrp_packet *pac);
 const uint8_t *srrp_get_raw(const struct srrp_packet *pac);
 
@@ -110,8 +109,7 @@ struct srrp_packet *srrp_new_request(
  * - create new response packet
  */
 struct srrp_packet *srrp_new_response(
-    uint32_t srcid, uint32_t dstid,
-    const char *anchor, const char *payload, uint16_t reqcrc16);
+    uint32_t srcid, uint32_t dstid, const char *anchor, const char *payload);
 
 /**
  * srrp_new_subscribe

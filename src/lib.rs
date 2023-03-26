@@ -260,13 +260,12 @@ impl Apix {
 pub struct SrrpPacket {
     pub leader: i8,
     pub packet_len: u16,
-    pub payload_offset: u32,
+    pub payload_fin: u8,
     pub payload_len: u32,
     pub srcid: u32,
     pub dstid: u32,
     pub anchor: String,
     pub payload: String,
-    pub reqcrc16: u16,
     pub crc16: u16,
     pub raw: Vec<u8>,
     pub pac: *mut apix_sys::srrp_packet,
@@ -294,7 +293,7 @@ impl Srrp {
             SrrpPacket {
                 leader: apix_sys::srrp_get_leader(pac),
                 packet_len: packet_len,
-                payload_offset: apix_sys::srrp_get_payload_offset(pac),
+                payload_fin: apix_sys::srrp_get_payload_fin(pac),
                 payload_len: apix_sys::srrp_get_payload_len(pac),
                 srcid: apix_sys::srrp_get_srcid(pac),
                 dstid: apix_sys::srrp_get_dstid(pac),
@@ -304,7 +303,6 @@ impl Srrp {
                     _ => std::ffi::CStr::from_ptr(payload as *const i8)
                         .to_str().unwrap().to_owned(),
                 },
-                reqcrc16: apix_sys::srrp_get_reqcrc16(pac),
                 crc16: apix_sys::srrp_get_crc16(pac),
                 raw: {
                     let mut v: Vec<u8> = Vec::new();
@@ -349,9 +347,8 @@ impl Srrp {
         }
     }
 
-    pub fn new_request(
-        srcid: u32, dstid: u32, anchor: &str, payload: &str)
-        -> Option<SrrpPacket> {
+    pub fn new_request(srcid: u32, dstid: u32, anchor: &str, payload: &str)
+                       -> Option<SrrpPacket> {
         unsafe {
             let anchor = std::ffi::CString::new(anchor).unwrap();
             let payload = std::ffi::CString::new(payload).unwrap();
@@ -367,9 +364,8 @@ impl Srrp {
         }
     }
 
-    pub fn new_response(
-        srcid: u32, dstid: u32, anchor: &str, payload: &str, reqcrc16: u16)
-        -> Option<SrrpPacket> {
+    pub fn new_response(srcid: u32, dstid: u32, anchor: &str, payload: &str)
+                        -> Option<SrrpPacket> {
         unsafe {
             let anchor = std::ffi::CString::new(anchor).unwrap();
             let payload = std::ffi::CString::new(payload).unwrap();
@@ -377,7 +373,6 @@ impl Srrp {
                 srcid, dstid,
                 anchor.as_ptr() as *const i8,
                 payload.as_ptr() as *const i8,
-                reqcrc16,
             );
             if pac.is_null() {
                 None

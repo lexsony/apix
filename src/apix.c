@@ -78,8 +78,7 @@ static int apix_response(
         srrp_get_dstid(req),
         srrp_get_srcid(req),
         srrp_get_anchor(req),
-        data,
-        srrp_get_crc16(req));
+        data);
     int rc = apix_send(ctx, fd, srrp_get_raw(resp), srrp_get_packet_len(resp));
     srrp_free(resp);
     return rc;
