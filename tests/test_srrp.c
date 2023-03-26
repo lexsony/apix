@@ -24,7 +24,7 @@ static void test_srrp_request_reponse(void **status)
     rxpac = srrp_parse(srrp_get_raw(txpac), srrp_get_packet_len(txpac));
     assert_true(rxpac);
     assert_true(srrp_get_packet_len(rxpac) == srrp_get_packet_len(txpac));
-    assert_true(srrp_get_leader(rxpac) == '>');
+    assert_true(srrp_get_leader(rxpac) == SRRP_REQUEST_LEADER);
     assert_true(srrp_get_srcid(rxpac) == 0x3333);
     assert_true(srrp_get_dstid(rxpac) == 0x8888);
     assert_true(strcmp(srrp_get_anchor(rxpac), "/hello/x") == 0);
@@ -40,7 +40,7 @@ static void test_srrp_request_reponse(void **status)
     rxpac = srrp_parse(srrp_get_raw(txpac), srrp_get_packet_len(txpac));
     assert_true(rxpac);
     assert_true(srrp_get_packet_len(rxpac) == srrp_get_packet_len(txpac));
-    assert_true(srrp_get_leader(rxpac) == '<');
+    assert_true(srrp_get_leader(rxpac) == SRRP_RESPONSE_LEADER);
     assert_true(srrp_get_srcid(rxpac) == 0x8888);
     assert_true(srrp_get_dstid(rxpac) == 0x3333);
     assert_true(srrp_get_reqcrc16(rxpac) == crc);
@@ -52,7 +52,7 @@ static void test_srrp_request_reponse(void **status)
     // 3
     rxpac = srrp_parse(buf, sizeof(buf));
     assert_true(rxpac);
-    assert_true(srrp_get_leader(rxpac) == '>');
+    assert_true(srrp_get_leader(rxpac) == SRRP_REQUEST_LEADER);
     assert_true(srrp_get_srcid(rxpac) == 0x3333);
     assert_true(srrp_get_dstid(rxpac) == 0x8888);
     assert_true(strcmp(srrp_get_anchor(rxpac), "/hello/x") == 0);
@@ -61,7 +61,7 @@ static void test_srrp_request_reponse(void **status)
 
     rxpac = srrp_parse(buf + len, sizeof(buf) - len);
     assert_true(rxpac);
-    assert_true(srrp_get_leader(rxpac) == '<');
+    assert_true(srrp_get_leader(rxpac) == SRRP_RESPONSE_LEADER);
     assert_true(srrp_get_srcid(rxpac) == 0x8888);
     assert_true(srrp_get_dstid(rxpac) == 0x3333);
     assert_true(srrp_get_reqcrc16(rxpac) == crc);
@@ -86,21 +86,21 @@ static void test_srrp_subscribe_publish(void **status)
     pac = srrp_parse(srrp_get_raw(sub), srrp_get_packet_len(sub));
     assert_true(pac);
     assert_true(srrp_get_packet_len(pac) == srrp_get_packet_len(sub));
-    assert_true(srrp_get_leader(pac) == '#');
+    assert_true(srrp_get_leader(pac) == SRRP_SUBSCRIBE_LEADER);
     assert_true(strcmp(srrp_get_anchor(pac), "/motor/speed") == 0);
     srrp_free(pac);
 
     pac = srrp_parse(srrp_get_raw(unsub), srrp_get_packet_len(unsub));
     assert_true(pac);
     assert_true(srrp_get_packet_len(pac) == srrp_get_packet_len(unsub));
-    assert_true(srrp_get_leader(pac) == '%');
+    assert_true(srrp_get_leader(pac) == SRRP_UNSUBSCRIBE_LEADER);
     assert_true(strcmp(srrp_get_anchor(pac), "/motor/speed") == 0);
     srrp_free(pac);
 
     pac = srrp_parse(srrp_get_raw(pub), srrp_get_packet_len(pub));
     assert_true(pac);
     assert_true(srrp_get_packet_len(pac) == srrp_get_packet_len(pub));
-    assert_true(srrp_get_leader(pac) == '@');
+    assert_true(srrp_get_leader(pac) == SRRP_PUBLISH_LEADER);
     assert_true(strcmp(srrp_get_anchor(pac), "/motor/speed") == 0);
 
     int buf_len = srrp_get_packet_len(sub) + srrp_get_packet_len(pub);
@@ -113,7 +113,7 @@ static void test_srrp_subscribe_publish(void **status)
     pac = srrp_parse(buf, buf_len);
     assert_true(pac);
     assert_true(srrp_get_packet_len(pac) == srrp_get_packet_len(sub));
-    assert_true(srrp_get_leader(pac) == '#');
+    assert_true(srrp_get_leader(pac) == SRRP_SUBSCRIBE_LEADER);
     assert_true(strcmp(srrp_get_anchor(pac), "/motor/speed") == 0);
     int len = srrp_get_packet_len(pac);
     srrp_free(pac);
@@ -121,7 +121,7 @@ static void test_srrp_subscribe_publish(void **status)
     pac = srrp_parse(buf + len, buf_len - len);
     assert_true(pac);
     assert_true(srrp_get_packet_len(pac) == srrp_get_packet_len(pub));
-    assert_true(srrp_get_leader(pac) == '@');
+    assert_true(srrp_get_leader(pac) == SRRP_PUBLISH_LEADER);
     assert_true(strcmp(srrp_get_anchor(pac), "/motor/speed") == 0);
     srrp_free(pac);
     free(buf);

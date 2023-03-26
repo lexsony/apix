@@ -28,10 +28,10 @@ extern "C" {
  *   <[packet_len],0,[payload_len],#8A8F,#F1:/echo?j:{"err":0,"msg":"succ","v":"good news"}\0<crc16>\0
  *
  * Subscribe: <[packet_len],[payload_offset],[payload_len]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
- *   #[packet_len],0,[payload_len]:/motor/speed?_:\0<crc16>\0
+ *   +[packet_len],0,[payload_len]:/motor/speed?_:\0<crc16>\0
  *
  * UnSubscribe: <[packet_len],[payload_offset],[payload_len]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
- *   %[packet_len],0,[payload_len]:/motor/speed?_:\0<crc16>\0
+ *   -[packet_len],0,[payload_len]:/motor/speed?_:\0<crc16>\0
  *
  * Publish: <[packet_len],[payload_offset],[payload_len]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
  *   @[packet_len],0,[payload_len]:/motor/speed?j:{"speed":12,"voltage":24}\0<crc16>\0
@@ -40,8 +40,8 @@ extern "C" {
 #define SRRP_CTRL_LEADER '='
 #define SRRP_REQUEST_LEADER '>'
 #define SRRP_RESPONSE_LEADER '<'
-#define SRRP_SUBSCRIBE_LEADER '#'
-#define SRRP_UNSUBSCRIBE_LEADER '%'
+#define SRRP_SUBSCRIBE_LEADER '+'
+#define SRRP_UNSUBSCRIBE_LEADER '-'
 #define SRRP_PUBLISH_LEADER '@'
 
 #define SRRP_PACKET_MAX 65535
