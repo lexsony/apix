@@ -10,9 +10,9 @@ func TestBase(T *testing.T) {
 
     ctx := apix.New()
     ctx.EnablePosix()
-    fd := ctx.OpenTcpClient("127.0.0.1:8080")
+    fd := ctx.OpenUnixClient("/tmp/apix")
 
-    pac, _ := srrp.NewCtrl(0x1111, "/sync", "")
+    pac, _ := srrp.NewCtrl(0xff00, "/sync", "")
     ctx.Send(fd, pac.Raw)
 
     for true {

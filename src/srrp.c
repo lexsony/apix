@@ -184,7 +184,10 @@ struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len)
 
     pac->anchor = str_new(anchor);
     assert(pac->anchor);
-    pac->payload = (uint8_t *)strstr(vraw(pac->raw), "?") + 1;
+    if (pac->payload_len == 0)
+        pac->payload = vraw(pac->raw) + strlen(vraw(pac->raw));
+    else
+        pac->payload = (uint8_t *)strstr(vraw(pac->raw), "?") + 1;
 
     pac->reqcrc16 = reqcrc;
     pac->crc16 = crc;

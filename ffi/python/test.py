@@ -6,8 +6,8 @@ run_flag = 1
 ctx = apix.Apix()
 ctx.enable_posix()
 
-fd = ctx.open_tcp_client("127.0.0.1:8080")
-pac = srrp.SrrpCtrl(0x3333, "/sync", "")
+fd = ctx.open_unix_client("/tmp/apix")
+pac = srrp.SrrpCtrl(0xff01, "/sync", "")
 ctx.send(fd, pac.raw())
 
 while run_flag:

@@ -53,7 +53,9 @@ func Parse(buf []byte) (SrrpPacket, error) {
     if pac == nil {
         return SrrpPacket {}, errors.New("srrp parse failed")
     } else {
-        return from_raw_packet(pac), nil
+        ret := from_raw_packet(pac)
+        C.srrp_free(pac)
+        return ret, nil;
     }
 }
 
@@ -63,7 +65,9 @@ func NewCtrl(srcid uint32, anchor string, payload string) (SrrpPacket, error) {
     if pac == nil {
         return SrrpPacket {}, errors.New("srrp parse failed")
     } else {
-        return from_raw_packet(pac), nil
+        ret := from_raw_packet(pac)
+        C.srrp_free(pac)
+        return ret, nil;
     }
 }
 
@@ -75,7 +79,9 @@ func NewRequest(srcid uint32, dstid uint32,
     if pac == nil {
         return SrrpPacket {}, errors.New("srrp parse failed")
     } else {
-        return from_raw_packet(pac), nil
+        ret := from_raw_packet(pac)
+        C.srrp_free(pac)
+        return ret, nil;
     }
 }
 
@@ -87,6 +93,8 @@ func NewResponse(srcid uint32, dstid uint32,
     if pac == nil {
         return SrrpPacket {}, errors.New("srrp parse failed")
     } else {
-        return from_raw_packet(pac), nil
+        ret := from_raw_packet(pac)
+        C.srrp_free(pac)
+        return ret, nil;
     }
 }
