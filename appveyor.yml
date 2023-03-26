@@ -25,7 +25,7 @@ for:
     install:
       - sh: export C_INCLUDE_PATH=/usr/local/include
       - sh: export LIBRARY_PATH=/usr/local/lib
-      - sh: HOMEBREW_NO_AUTO_UPDATE=1 brew install cmocka;
+      - sh: HOMEBREW_NO_AUTO_UPDATE=1 brew install cmocka readline;
     build: off
     build_script:
       - mkdir build && cd build

@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -9,7 +10,9 @@
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#ifndef __APPLE__
 #include <linux/can.h>
+#endif
 #include <readline/readline.h>
 
 #include <apix/apix.h>
@@ -203,6 +206,8 @@ static void on_fd_accept(struct apix *ctx, int _fd, int newfd, void *priv)
     printf("accept #%d, %s(%c)\n", newfd, fds[newfd].addr, fds[newfd].type);
 }
 
+#ifndef __APPLE__
+
 static int
 on_can_pollin(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len, void *priv)
 {
@@ -227,6 +232,8 @@ on_can_pollin(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len, void *
     log_hex_string((char *)frame->data, frame->can_dlc);
     return sizeof(struct can_frame);
 }
+
+#endif
 
 static void print_cur_msg(void)
 {
@@ -411,6 +418,8 @@ static void on_cmd_com(const char *cmd)
     }
 }
 
+#ifndef __APPLE__
+
 static void on_cmd_can(const char *cmd)
 {
     if (strcmp(cur_mode, "can") != 0) {
@@ -418,6 +427,8 @@ static void on_cmd_can(const char *cmd)
         cur_fd = -1;
     }
 }
+
+#endif
 
 static void on_cmd_unix_listen(const char *cmd)
 {
@@ -586,6 +597,8 @@ static void on_cmd_com_open(const char *cmd)
     printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
 }
 
+#ifndef __APPLE__
+
 static void on_cmd_can_open(const char *cmd)
 {
     if (strcmp(cur_mode, "can") != 0)
@@ -623,6 +636,8 @@ static void on_cmd_can_open(const char *cmd)
     printf("connect #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
 }
 
+#endif
+
 static void on_cmd_open(const char *cmd)
 {
     if (strcmp(cur_mode, "unix") == 0) {
@@ -631,8 +646,10 @@ static void on_cmd_open(const char *cmd)
         on_cmd_tcp_open(cmd);
     } else if (strcmp(cur_mode, "com") == 0) {
         on_cmd_com_open(cmd);
+#ifndef __APPLE__
     } else if (strcmp(cur_mode, "can") == 0) {
         on_cmd_can_open(cmd);
+#endif
     }
 }
 
@@ -661,6 +678,7 @@ static void on_cmd_send(const char *cmd)
 
     int len = transfer_hex_string(msg, strlen(msg));
 
+#ifndef __APPLE__
     if (strcmp(cur_mode, "can") == 0) {
         struct can_frame frame = {0};
         memcpy(frame.data, msg, len);
@@ -670,6 +688,9 @@ static void on_cmd_send(const char *cmd)
     } else {
         apix_send(ctx, cur_fd, (uint8_t *)msg, len);
     }
+#else
+    apix_send(ctx, cur_fd, (uint8_t *)msg, len);
+#endif
 }
 
 static void on_cmd_setid(const char *cmd)
@@ -757,6 +778,7 @@ static void on_cmd_srrpget(const char *cmd)
     }
 
     struct srrp_packet *pac = srrp_new_request(fds[cur_fd].node_id, dstid, hdr, msg);
+#ifndef __APPLE__
     if (strcmp(cur_mode, "can") == 0) {
         struct can_frame frame = {0};
         memcpy(frame.data, srrp_get_raw(pac), srrp_get_packet_len(pac));
@@ -766,6 +788,9 @@ static void on_cmd_srrpget(const char *cmd)
     } else {
         apix_send(ctx, cur_fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
     }
+#else
+    apix_send(ctx, cur_fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+#endif
     srrp_free(pac);
 }
 
@@ -862,7 +887,9 @@ static const struct cli_cmd cli_cmds[] = {
     { "unix", on_cmd_unix, "enter unix mode, path" },
     { "tcp", on_cmd_tcp, "enter tcp mode, ip:port" },
     { "com", on_cmd_com, "enter com mode, path,baud,data_bits,parity,stop_bits" },
+#ifndef __APPLE__
     { "can", on_cmd_can, "enter can mode, device" },
+#endif
     { "listen", on_cmd_listen, "listen fd" },
     { "open", on_cmd_open, "open fd" },
     { "close", on_cmd_close, "close fd" },

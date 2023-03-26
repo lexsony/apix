@@ -4,7 +4,7 @@ add_executable(apixsrv apixsrv.c opt.c)
 target_link_libraries(apixsrv apix)
 
 add_executable(apixcli apixcli.c opt.c cli.c)
-target_link_libraries(apixcli apix readline tinfo pthread)
+target_link_libraries(apixcli apix readline pthread)
 
 install(TARGETS apixsrv apixcli
     RUNTIME DESTINATION bin

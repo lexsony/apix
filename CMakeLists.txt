@@ -29,7 +29,7 @@ if (BUILD_TESTS)
     add_subdirectory(tests)
 endif ()
 
-option(BUILD_APPS "Build all apps." ON)
+option(BUILD_APPS "Build all apps." OFF)
 if (BUILD_APPS)
     add_subdirectory(apps)
 endif ()
