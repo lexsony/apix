@@ -331,8 +331,7 @@ impl Srrp {
             if pac.is_null() {
                 None
             } else {
-                let sp = Srrp::from_raw_packet(pac);
-                Some(sp)
+                Some(Srrp::from_raw_packet(pac))
             }
         }
     }
@@ -345,14 +344,14 @@ impl Srrp {
             if pac.is_null() {
                 None
             } else {
-                let sp = Srrp::from_raw_packet(pac);
-                Some(sp)
+                Some(Srrp::from_raw_packet(pac))
             }
         }
     }
 
-    pub fn new_request(srcid: u32, dstid: u32,
-                       anchor: &str, payload: &str) -> Option<SrrpPacket> {
+    pub fn new_request(
+        srcid: u32, dstid: u32, anchor: &str, payload: &str)
+        -> Option<SrrpPacket> {
         unsafe {
             let anchor = std::ffi::CString::new(anchor).unwrap();
             let payload = std::ffi::CString::new(payload).unwrap();
@@ -363,14 +362,14 @@ impl Srrp {
             if pac.is_null() {
                 None
             } else {
-                let sp = Srrp::from_raw_packet(pac);
-                Some(sp)
+                Some(Srrp::from_raw_packet(pac))
             }
         }
     }
 
-    pub fn new_response(srcid: u32, dstid: u32, anchor: &str, payload: &str,
-                        reqcrc16: u16) -> Option<SrrpPacket> {
+    pub fn new_response(
+        srcid: u32, dstid: u32, anchor: &str, payload: &str, reqcrc16: u16)
+        -> Option<SrrpPacket> {
         unsafe {
             let anchor = std::ffi::CString::new(anchor).unwrap();
             let payload = std::ffi::CString::new(payload).unwrap();
@@ -385,6 +384,54 @@ impl Srrp {
             } else {
                 let sp = Srrp::from_raw_packet(pac);
                 Some(sp)
+            }
+        }
+    }
+
+    pub fn new_subscribe(anchor: &str, payload: &str) -> Option<SrrpPacket> {
+        unsafe {
+            let anchor = std::ffi::CString::new(anchor).unwrap();
+            let payload = std::ffi::CString::new(payload).unwrap();
+            let pac = apix_sys::srrp_new_subscribe(
+                anchor.as_ptr() as *const i8,
+                payload.as_ptr() as *const i8,
+            );
+            if pac.is_null() {
+                None
+            } else {
+                Some(Srrp::from_raw_packet(pac))
+            }
+        }
+    }
+
+    pub fn new_unsubscribe(anchor: &str, payload: &str) -> Option<SrrpPacket> {
+        unsafe {
+            let anchor = std::ffi::CString::new(anchor).unwrap();
+            let payload = std::ffi::CString::new(payload).unwrap();
+            let pac = apix_sys::srrp_new_unsubscribe(
+                anchor.as_ptr() as *const i8,
+                payload.as_ptr() as *const i8,
+            );
+            if pac.is_null() {
+                None
+            } else {
+                Some(Srrp::from_raw_packet(pac))
+            }
+        }
+    }
+
+    pub fn new_publish(anchor: &str, payload: &str) -> Option<SrrpPacket> {
+        unsafe {
+            let anchor = std::ffi::CString::new(anchor).unwrap();
+            let payload = std::ffi::CString::new(payload).unwrap();
+            let pac = apix_sys::srrp_new_publish(
+                anchor.as_ptr() as *const i8,
+                payload.as_ptr() as *const i8,
+            );
+            if pac.is_null() {
+                None
+            } else {
+                Some(Srrp::from_raw_packet(pac))
             }
         }
     }

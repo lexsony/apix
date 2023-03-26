@@ -98,3 +98,39 @@ func NewResponse(srcid uint32, dstid uint32,
         return ret, nil;
     }
 }
+
+func NewSubscribe(anchor string, payload string) (SrrpPacket, error) {
+    pac := C.srrp_new_subscribe(C.CString(anchor), C.CString(payload))
+
+    if pac == nil {
+        return SrrpPacket {}, errors.New("srrp parse failed")
+    } else {
+        ret := from_raw_packet(pac)
+        C.srrp_free(pac)
+        return ret, nil;
+    }
+}
+
+func NewUnsubscribe(anchor string, payload string) (SrrpPacket, error) {
+    pac := C.srrp_new_unsubscribe(C.CString(anchor), C.CString(payload))
+
+    if pac == nil {
+        return SrrpPacket {}, errors.New("srrp parse failed")
+    } else {
+        ret := from_raw_packet(pac)
+        C.srrp_free(pac)
+        return ret, nil;
+    }
+}
+
+func NewPublish(anchor string, payload string) (SrrpPacket, error) {
+    pac := C.srrp_new_publish(C.CString(anchor), C.CString(payload))
+
+    if pac == nil {
+        return SrrpPacket {}, errors.New("srrp parse failed")
+    } else {
+        ret := from_raw_packet(pac)
+        C.srrp_free(pac)
+        return ret, nil;
+    }
+}
