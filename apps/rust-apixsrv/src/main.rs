@@ -36,7 +36,7 @@ fn init_fd(ctx: &Rc<apix::Apix>, fd: i32) {
             pac.crc16).unwrap();
         info!("srrp_packet #{} resp: srcid:{}, dstid:{}, {}?{}",
               fd, resp.srcid, resp.dstid, resp.anchor, resp.payload);
-        tmp.srrp_send(&resp);
+        tmp.srrp_send(fd, &resp);
     });
 }
 

@@ -40,7 +40,7 @@ on_srrp_packet_listen(struct apix *ctx, int fd, struct srrp_packet *pac, void *p
         srrp_get_anchor(pac),
         "j:{\"err\":404,\"msg\":\"Service not found\"}",
         srrp_get_reqcrc16(pac));
-    apix_srrp_send(ctx, resp);
+    apix_srrp_send(ctx, fd, resp);
     srrp_free(resp);
 }
 

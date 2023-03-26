@@ -73,6 +73,12 @@ void apix_sink_unregister(struct apix *ctx, struct apisink *sink);
  * - each apisink holds several sinkfds
  */
 
+enum sinkfd_type {
+    SINKFD_T_LISTEN = 'l',
+    SINKFD_T_ACCEPT = 'a',
+    SINKFD_T_CONNECT = 'c',
+};
+
 enum sinkfd_state {
     SINKFD_ST_NONE = 0,
     SINKFD_ST_NODEID_NORMAL,
@@ -85,9 +91,9 @@ enum sinkfd_state {
 struct sinkfd {
     int fd;
     struct sinkfd *father;
-    char type; /* c: connect, l: listen, a: accept */
     char addr[SINKFD_ADDR_SIZE];
-    int state;
+    char type; /* sinkfd_type */
+    int state; /* sinkfd_state */
     time_t ts_sync_in;
     time_t ts_sync_out;
 

@@ -94,9 +94,9 @@ void apix_srrp_forward(struct apix *ctx, struct srrp_packet *pac);
 
 /**
  * apix_srrp_send
- * - send the srrp packet to the real destination through dstid
+ * - send the srrp packet to the src fd and real destination through dstid
  */
-int apix_srrp_send(struct apix *ctx, struct srrp_packet *pac);
+int apix_srrp_send(struct apix *ctx, int fd, struct srrp_packet *pac);
 
 /**
  * apix_on_srrp_packet

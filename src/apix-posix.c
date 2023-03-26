@@ -80,7 +80,7 @@ static int unix_s_open(struct apisink *sink, const char *addr)
 
     struct sinkfd *sinkfd = sinkfd_new();
     sinkfd->fd = fd;
-    sinkfd->type = 'l';
+    sinkfd->type = SINKFD_T_LISTEN;
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
     sinkfd->sink = sink;
     list_add(&sinkfd->ln_sink, &sink->sinkfds);
@@ -144,7 +144,7 @@ static int unix_s_poll(struct apisink *sink)
         nr_recv_fds--;
 
         // accept
-        if (pos->type == 'l') {
+        if (pos->type == SINKFD_T_LISTEN) {
             int newfd = accept(pos->fd, NULL, NULL);
             if (newfd == -1) {
                 LOG_ERROR("[%x] accept: {fd:%d, err:%s}",
@@ -156,7 +156,7 @@ static int unix_s_poll(struct apisink *sink)
             struct sinkfd *sinkfd = sinkfd_new();
             sinkfd->fd = newfd;
             sinkfd->father = pos;
-            sinkfd->type = 'a';
+            sinkfd->type = SINKFD_T_ACCEPT;
             sinkfd->srrp_mode = pos->srrp_mode;
             sinkfd->sink = sink;
             list_add(&sinkfd->ln_sink, &sink->sinkfds);
@@ -338,7 +338,7 @@ static int tcp_s_open(struct apisink *sink, const char *addr)
 
     struct sinkfd *sinkfd = sinkfd_new();
     sinkfd->fd = fd;
-    sinkfd->type = 'l';
+    sinkfd->type = SINKFD_T_LISTEN;
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
     sinkfd->sink = sink;
     list_add(&sinkfd->ln_sink, &sink->sinkfds);
@@ -393,7 +393,7 @@ static int tcp_c_open(struct apisink *sink, const char *addr)
 
     struct sinkfd *sinkfd = sinkfd_new();
     sinkfd->fd = fd;
-    sinkfd->type = 'c';
+    sinkfd->type = SINKFD_T_CONNECT;
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
     sinkfd->sink = sink;
     list_add(&sinkfd->ln_sink, &sink->sinkfds);
@@ -589,7 +589,7 @@ static int can_open(struct apisink *sink, const char *addr)
 
     struct sinkfd *sinkfd = sinkfd_new();
     sinkfd->fd = fd;
-    sinkfd->type = 'c';
+    sinkfd->type = SINKFD_T_CONNECT;
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
     sinkfd->sink = sink;
     list_add(&sinkfd->ln_sink, &sink->sinkfds);

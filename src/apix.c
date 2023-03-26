@@ -88,10 +88,10 @@ static int apix_response(
 static void
 handle_ctrl(struct apix *ctx, struct sinkfd *sinkfd, struct apimsg *am)
 {
-    assert(sinkfd->type != 'l');
+    assert(sinkfd->type != SINKFD_T_LISTEN);
 
     uint32_t nodeid = 0;
-    if (sinkfd->type == 'a') {
+    if (sinkfd->type == SINKFD_T_ACCEPT) {
         assert(sinkfd->father);
         nodeid = sinkfd->father->l_nodeid;
     } else {
@@ -129,7 +129,7 @@ out:
 static void
 handle_subscribe(struct apix *ctx, struct sinkfd *sinkfd, struct apimsg *am)
 {
-    assert(sinkfd->type != 'l');
+    assert(sinkfd->type != SINKFD_T_LISTEN);
 
     for (uint32_t i = 0; i < vsize(sinkfd->sub_topics); i++) {
         if (strcmp(sget(vat(sinkfd->sub_topics, i)), srrp_get_anchor(am->pac)) == 0) {
@@ -148,7 +148,7 @@ handle_subscribe(struct apix *ctx, struct sinkfd *sinkfd, struct apimsg *am)
 static void
 handle_unsubscribe(struct apix *ctx, struct sinkfd *sinkfd, struct apimsg *am)
 {
-    assert(sinkfd->type != 'l');
+    assert(sinkfd->type != SINKFD_T_LISTEN);
 
     for (uint32_t i = 0; i < vsize(sinkfd->sub_topics); i++) {
         if (strcmp(sget(*(str_t **)vat(sinkfd->sub_topics, i)),
@@ -256,7 +256,7 @@ static void handle_apimsg(struct apix *ctx)
             continue;
         }
 
-        assert(src->type != 'l');
+        assert(src->type != SINKFD_T_LISTEN);
 
         if (srrp_get_leader(pos->pac) == SRRP_CTRL_LEADER) {
             handle_ctrl(ctx, src, pos);
@@ -303,10 +303,10 @@ static void clear_finished_apimsg(struct apix *ctx)
 
 static void apix_sync_sinkfd(struct apix *ctx, struct sinkfd *sinkfd)
 {
-    assert(sinkfd->type != 'l');
+    assert(sinkfd->type != SINKFD_T_LISTEN);
 
     uint32_t nodeid = 0;
-    if (sinkfd->type == 'a') {
+    if (sinkfd->type == SINKFD_T_ACCEPT) {
         assert(sinkfd->father);
         nodeid = sinkfd->father->l_nodeid;
     } else {
@@ -390,7 +390,7 @@ int apix_send(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len)
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
         return -1;
-    if (sinkfd->type == 'l' || sinkfd->sink == NULL ||
+    if (sinkfd->type == SINKFD_T_LISTEN || sinkfd->sink == NULL ||
         sinkfd->sink->ops.send == NULL)
         return -1;
     return sinkfd->sink->ops.send(sinkfd->sink, fd, buf, len);
@@ -461,7 +461,7 @@ int apix_poll(struct apix *ctx, uint64_t usec)
         }
 
         // sync
-        if (pos_fd->type != 'l' && pos_fd->srrp_mode == 1 &&
+        if (pos_fd->type != SINKFD_T_LISTEN && pos_fd->srrp_mode == 1 &&
             pos_fd->ts_sync_out + (SINKFD_SYNC_TIMEOUT / 1000) < time(0)) {
             apix_sync_sinkfd(ctx, pos_fd);
         }
@@ -542,7 +542,7 @@ int apix_enable_srrp_mode(struct apix *ctx, int fd, uint32_t nodeid)
     sinkfd->srrp_mode = 1;
     assert(nodeid != 0);
     sinkfd->l_nodeid = nodeid;
-    if (sinkfd->type != 'l')
+    if (sinkfd->type != SINKFD_T_LISTEN)
         apix_sync_sinkfd(ctx, sinkfd);
     return 0;
 }
@@ -569,14 +569,29 @@ void apix_srrp_forward(struct apix *ctx, struct srrp_packet *pac)
     assert(false);
 }
 
-int apix_srrp_send(struct apix *ctx, struct srrp_packet *pac)
+int apix_srrp_send(struct apix *ctx, int fd, struct srrp_packet *pac)
 {
-    struct sinkfd *dst = find_sinkfd_by_r_nodeid(ctx, srrp_get_dstid(pac));
-    if (dst == NULL) {
-        return -EBADF;
+    int retval = -1;
+
+    assert(fd > 0);
+
+    // send to src fd
+    struct sinkfd *dst_fd = find_sinkfd_in_apix(ctx, fd);
+    if (dst_fd && dst_fd->type != SINKFD_T_LISTEN) {
+        apix_send(ctx, dst_fd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+        retval = 0;
     }
-    apix_send(ctx, dst->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
-    return 0;
+
+    // send to nodeid
+    if (srrp_get_dstid(pac) != 0) {
+        struct sinkfd *dst_nd = find_sinkfd_by_r_nodeid(ctx, srrp_get_dstid(pac));
+        if (dst_nd && dst_nd != dst_fd) {
+            apix_send(ctx, dst_nd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+            retval = 0;
+        }
+    }
+
+    return retval;
 }
 
 /**

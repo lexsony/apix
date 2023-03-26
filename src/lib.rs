@@ -149,9 +149,9 @@ impl Apix {
         }
     }
 
-    pub fn srrp_send(&self, pac: &SrrpPacket) {
+    pub fn srrp_send(&self, fd: i32, pac: &SrrpPacket) {
         unsafe {
-            apix_sys::apix_srrp_send(self.ctx, pac.pac);
+            apix_sys::apix_srrp_send(self.ctx, fd, pac.pac);
         }
     }
 

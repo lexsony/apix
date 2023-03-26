@@ -771,7 +771,7 @@ static void on_cmd_srrpget(const char *cmd)
     int dstid = 0;
     char hdr[256] = {0};
     char msg[4096] = {0};
-    int nr = sscanf(cmd, "srrpget %d:%[^?]?%[^\r\n]", &dstid, hdr, msg);
+    int nr = sscanf(cmd, "srrpget 0x%x:%[^?]?%[^\r\n]", &dstid, hdr, msg);
     if (nr != 3) {
         printf("param error\n");
         return;
