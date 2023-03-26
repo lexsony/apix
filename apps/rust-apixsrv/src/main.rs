@@ -31,7 +31,9 @@ fn init_fd(ctx: &Rc<apix::Apix>, fd: i32) {
         info!("srrp_packet #{} pac: srcid:{}, dstid:{}, {}?{}",
               fd, pac.srcid, pac.dstid, pac.anchor, pac.payload);
         let resp = apix::Srrp::new_response(
-            pac.dstid, pac.srcid, &pac.anchor, "t:bingo", pac.crc16).unwrap();
+            pac.dstid, pac.srcid, &pac.anchor,
+            "j:{\"err\":404,\"msg\":\"Service not found\"}",
+            pac.crc16).unwrap();
         info!("srrp_packet #{} resp: srcid:{}, dstid:{}, {}?{}",
               fd, resp.srcid, resp.dstid, resp.anchor, resp.payload);
         tmp.srrp_send(&resp);

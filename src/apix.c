@@ -245,7 +245,7 @@ static void handle_apimsg(struct apix *ctx)
         if (apimsg_is_finished(pos))
             continue;
 
-        LOG_DEBUG("[%x] handle_apimsg: fd: %d, state: %d, %s",
+        LOG_DEBUG("[%x] handle_apimsg: fd:%d, state:%d, %s",
                   ctx, pos->fd, pos->state, srrp_get_raw(pos->pac));
 
         struct sinkfd *src = find_sinkfd_in_apix(ctx, pos->fd);

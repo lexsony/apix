@@ -10,6 +10,7 @@
 #include <apix/apix.h>
 #include <apix/log.h>
 #include "opt.h"
+#include "srrp.h"
 
 static int exit_flag;
 static struct apix *ctx;
@@ -29,7 +30,22 @@ static struct opt opttab[] = {
 };
 
 static void
-on_srrp_packet(struct apix *ctx, int fd, struct srrp_packet *pac, void *priv)
+on_srrp_packet_listen(struct apix *ctx, int fd, struct srrp_packet *pac, void *priv)
+{
+    LOG_INFO("serv #%d: %s", fd, srrp_get_raw(pac));
+
+    struct srrp_packet *resp = srrp_new_response(
+        srrp_get_dstid(pac),
+        srrp_get_srcid(pac),
+        srrp_get_anchor(pac),
+        "j:{\"err\":404,\"msg\":\"Service not found\"}",
+        srrp_get_reqcrc16(pac));
+    apix_srrp_send(ctx, resp);
+    srrp_free(resp);
+}
+
+static void
+on_srrp_packet_accept(struct apix *ctx, int fd, struct srrp_packet *pac, void *priv)
 {
     LOG_INFO("forward #%d: %s", fd, srrp_get_raw(pac));
     apix_srrp_forward(ctx, pac);
@@ -43,7 +59,7 @@ static void on_fd_close(struct apix *ctx, int fd, void *priv)
 static void on_fd_accept(struct apix *ctx, int _fd, int newfd, void *priv)
 {
     apix_on_fd_close(ctx, newfd, on_fd_close, NULL);
-    apix_on_srrp_packet(ctx, newfd, on_srrp_packet, NULL);
+    apix_on_srrp_packet(ctx, newfd, on_srrp_packet_accept, NULL);
     LOG_INFO("accept #%d from %d", newfd, _fd);
 }
 
@@ -63,6 +79,7 @@ static void *apix_thread(void *arg)
     apix_enable_srrp_mode(ctx, fd_unix, 0x1);
     apix_on_fd_close(ctx, fd_unix, on_fd_close, NULL);
     apix_on_fd_accept(ctx, fd_unix, on_fd_accept, NULL);
+    apix_on_srrp_packet(ctx, fd_unix, on_srrp_packet_listen, NULL);
     LOG_INFO("open unix socket #%d at %s", fd_unix, opt_string(opt));
 
     opt = find_opt("tcp", opttab);
@@ -75,6 +92,7 @@ static void *apix_thread(void *arg)
     apix_enable_srrp_mode(ctx, fd_tcp, 0x2);
     apix_on_fd_close(ctx, fd_tcp, on_fd_close, NULL);
     apix_on_fd_accept(ctx, fd_tcp, on_fd_accept, NULL);
+    apix_on_srrp_packet(ctx, fd_tcp, on_srrp_packet_listen, NULL);
     LOG_INFO("open tcp socket #%d at %s", fd_tcp, opt_string(opt));
 
     while (exit_flag == 0) {
