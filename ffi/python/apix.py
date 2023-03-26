@@ -3,6 +3,11 @@ from ctypes.util import find_library
 
 lib = ctypes.CDLL(find_library("apix"))
 
+def log_set_debug():
+    func = lib.log_set_level
+    func.argtypes = [ctypes.c_int32]
+    func(1)
+
 class Apix():
     def __init__(self):
         func = lib.apix_new

@@ -58,13 +58,13 @@ class __Srrp():
         func = lib.srrp_get_anchor
         func.argtypes = [ctypes.c_void_p]
         func.restype = ctypes.c_char_p
-        return func(self.pac)
+        return func(self.pac).decode("utf-8")
 
     def payload(self):
         func = lib.srrp_get_payload
         func.argtypes = [ctypes.c_void_p]
         func.restype = ctypes.c_char_p
-        return func(self.pac)
+        return func(self.pac).decode("utf-8")
 
     def reqcrc16(self):
         func = lib.srrp_get_reqcrc16
@@ -117,6 +117,36 @@ class SrrpResponse(__Srrp):
         assert(pac != 0)
         super().__init__(pac)
 
+class SrrpSubscribe(__Srrp):
+    def __init__(self, anchor, payload):
+        func = lib.srrp_new_subscribe
+        func.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+        func.restype = ctypes.c_void_p
+        pac = func(ctypes.c_char_p(anchor.encode('utf-8')),
+                   ctypes.c_char_p(payload.encode('utf-8')))
+        assert(pac != 0)
+        super().__init__(pac)
+
+class SrrpUnSubscribe(__Srrp):
+    def __init__(self, anchor, payload):
+        func = lib.srrp_new_unsubscribe
+        func.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+        func.restype = ctypes.c_void_p
+        pac = func(ctypes.c_char_p(anchor.encode('utf-8')),
+                   ctypes.c_char_p(payload.encode('utf-8')))
+        assert(pac != 0)
+        super().__init__(pac)
+
+class SrrpPublish(__Srrp):
+    def __init__(self, anchor, payload):
+        func = lib.srrp_new_publish
+        func.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+        func.restype = ctypes.c_void_p
+        pac = func(ctypes.c_char_p(anchor.encode('utf-8')),
+                   ctypes.c_char_p(payload.encode('utf-8')))
+        assert(pac != 0)
+        super().__init__(pac)
+
 def srrp_next_packet_offset(buf):
     func = lib.srrp_next_packet_offset
     func.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
@@ -128,4 +158,6 @@ def srrp_parse(buf):
     func.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
     func.restype = ctypes.c_void_p
     pac = func(ctypes.cast(buf, ctypes.c_void_p), len(buf))
+    if pac is None:
+        return None
     return __Srrp(pac)
