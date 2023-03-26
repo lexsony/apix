@@ -30,6 +30,9 @@ void *vat(vec_t *self, uint32_t idx);
 void vpush(vec_t *self, const void *value);
 void vpop(vec_t *self, /* out */ void *value);
 
+//void vpush_front(vec_t *self, const void *value);
+void vpop_back(vec_t *self, /* out */ void *value);
+
 void vpack(vec_t *self, const void *value, uint32_t cnt);
 void vdump(vec_t *self, /* out */ void *value, uint32_t cnt);
 void vdrop(vec_t *self, uint32_t cnt);

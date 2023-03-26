@@ -10,6 +10,27 @@
 
 #define UNIX_ADDR "test_apisink_unix"
 
+static void test_srrp_base(void **status)
+{
+    struct srrp_packet *pac0 = NULL;
+    struct srrp_packet *pac1 = NULL;
+    struct srrp_packet *pac2 = NULL;
+
+    pac0 = srrp_new_request(0x3333, 0x8888, "/hello/x", "j:{\"err\":0,");
+    pac1 = srrp_new_request(0x3333, 0x8888, "/hello/x", "\"msg\":\"ok\"}");
+    srrp_set_payload_fin(pac0, SRRP_PAYLOAD_FIN_0);
+    assert_true(srrp_get_payload_fin(pac0) == SRRP_PAYLOAD_FIN_0);
+    assert_true(srrp_get_payload_fin(pac1) == SRRP_PAYLOAD_FIN_1);
+
+    pac2 = srrp_cat(pac0, pac1);
+    assert_true(strcmp((char *)srrp_get_payload(pac2),
+                       "j:{\"err\":0,\"msg\":\"ok\"}") == 0);
+    assert_true(srrp_get_payload_fin(pac2) == 1);
+
+    assert_true(pac2 == pac0);
+    srrp_free(pac2);
+}
+
 static void test_srrp_request_reponse(void **status)
 {
     struct srrp_packet *txpac = NULL;
@@ -131,6 +152,7 @@ static void test_srrp_subscribe_publish(void **status)
 int main(void)
 {
     const struct CMUnitTest tests[] = {
+        cmocka_unit_test(test_srrp_base),
         cmocka_unit_test(test_srrp_request_reponse),
         cmocka_unit_test(test_srrp_subscribe_publish),
     };

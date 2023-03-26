@@ -44,6 +44,9 @@ extern "C" {
 #define SRRP_UNSUBSCRIBE_LEADER '-'
 #define SRRP_PUBLISH_LEADER '@'
 
+#define SRRP_PAYLOAD_FIN_0 0
+#define SRRP_PAYLOAD_FIN_1 1
+
 #define SRRP_PACKET_MAX 65535
 #define SRRP_DST_ALIAS_MAX 64
 #define SRRP_ANCHOR_MAX 1024
@@ -56,7 +59,7 @@ struct srrp_packet;
 
 char srrp_get_leader(const struct srrp_packet *pac);
 uint16_t srrp_get_packet_len(const struct srrp_packet *pac);
-uint32_t srrp_get_payload_fin(const struct srrp_packet *pac);
+uint8_t srrp_get_payload_fin(const struct srrp_packet *pac);
 uint32_t srrp_get_payload_len(const struct srrp_packet *pac);
 uint32_t srrp_get_srcid(const struct srrp_packet *pac);
 uint32_t srrp_get_dstid(const struct srrp_packet *pac);
@@ -64,6 +67,8 @@ const char *srrp_get_anchor(const struct srrp_packet *pac);
 const uint8_t *srrp_get_payload(const struct srrp_packet *pac);
 uint16_t srrp_get_crc16(const struct srrp_packet *pac);
 const uint8_t *srrp_get_raw(const struct srrp_packet *pac);
+
+void srrp_set_payload_fin(struct srrp_packet *pac, uint8_t fin);
 
 /**
  * srrp_free
@@ -73,9 +78,19 @@ void srrp_free(struct srrp_packet *pac);
 
 /**
  * srrp_move
- * - move packet from fst to snd, then auto free fst
+ * - move packet from fst to snd, then auto free fst.
+ * - the return value is snd.
  */
-void srrp_move(struct srrp_packet *fst, struct srrp_packet *snd);
+struct srrp_packet *srrp_move(struct srrp_packet *fst, struct srrp_packet *snd);
+
+/**
+ * srrp_cat
+ * - concatenate slice packets, auto free snd.
+ * - the return value is fst.
+ * - the payload_fin of fst must 0, otherwise assert will fail.
+ * - the leader, srcid, dstid, anchor, must same, otherwise assert will fail.
+ */
+struct srrp_packet *srrp_cat(struct srrp_packet *fst, struct srrp_packet *snd);
 
 /**
  * srrp_next_packet_offset

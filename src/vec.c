@@ -99,6 +99,14 @@ void vpop(vec_t *self, /* out */ void *value)
     self->offset += 1;
 }
 
+void vpop_back(vec_t *self, /* out */ void *value)
+{
+    assert(self->offset + self->size <= self->cap);
+    assert(self->size > 0);
+    memcpy(value, vat(self, self->offset + self->size - 1), self->type_size);
+    self->size -= 1;
+}
+
 void vpack(vec_t *self, const void *value, uint32_t cnt)
 {
     assert(vec_check_cap(self, cnt) == 0);
