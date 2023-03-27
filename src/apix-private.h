@@ -97,6 +97,7 @@ struct sinkfd {
     time_t ts_sync_in;
     time_t ts_sync_out;
 
+    vec_8_t *txbuf;
     vec_8_t *rxbuf;
 
     int srrp_mode;
@@ -104,6 +105,7 @@ struct sinkfd {
     uint32_t r_nodeid; /* remote nodeid */
     struct timeval ts_poll_recv;
     vec_p_t *sub_topics;
+    //struct srrp_packet *rxpac;
 
     struct apix_events {
         fd_close_func_t on_close;

@@ -52,6 +52,13 @@ impl Apix {
         }
     }
 
+    pub fn send_to_buffer(&self, fd: i32, buf: &mut [u8]) {
+        unsafe {
+            apix_sys::apix_send_to_buffer(
+                self.ctx, fd, buf.as_ptr() as *mut u8, buf.len() as u32);
+        }
+    }
+
     pub fn read_from_buffer(&self, fd: i32, buf: &mut [u8]) {
         unsafe {
             apix_sys::apix_read_from_buffer(

@@ -7,6 +7,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <sys/select.h>
 
 #include "apix-private.h"
 #include "srrp.h"
@@ -79,7 +80,7 @@ static int apix_response(
         srrp_get_srcid(req),
         srrp_get_anchor(req),
         data);
-    int rc = apix_send(ctx, fd, srrp_get_raw(resp), srrp_get_packet_len(resp));
+    int rc = apix_send_to_buffer(ctx, fd, srrp_get_raw(resp), srrp_get_packet_len(resp));
     srrp_free(resp);
     return rc;
 }
@@ -99,7 +100,7 @@ handle_ctrl(struct apix *ctx, struct sinkfd *sinkfd, struct apimsg *am)
 
     if (srrp_get_srcid(am->pac) == 0) {
         struct srrp_packet *pac = srrp_new_ctrl(nodeid, SRRP_CTRL_NODEID_ZERO, "");
-        apix_send(ctx, sinkfd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+        apix_send_to_buffer(ctx, sinkfd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
         srrp_free(pac);
         sinkfd->state = SINKFD_ST_NODEID_ZERO;
         goto out;
@@ -108,7 +109,7 @@ handle_ctrl(struct apix *ctx, struct sinkfd *sinkfd, struct apimsg *am)
     struct sinkfd *tmp = find_sinkfd_by_nodeid(ctx, srrp_get_srcid(am->pac));
     if (tmp != NULL && tmp != sinkfd) {
         struct srrp_packet *pac = srrp_new_ctrl(nodeid, SRRP_CTRL_NODEID_DUP, "");
-        apix_send(ctx, sinkfd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+        apix_send_to_buffer(ctx, sinkfd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
         srrp_free(pac);
         sinkfd->state = SINKFD_ST_NODEID_DUP;
         goto out;
@@ -167,7 +168,7 @@ static void forward_request_or_response(struct apix *ctx, struct apimsg *am)
     struct sinkfd *dst = NULL;
 
     dst = find_sinkfd_by_l_nodeid(ctx, srrp_get_dstid(am->pac));
-    //LOG_DEBUG("forward_rr: dstid:%x, dst:%p", srrp_get_dstid(am->pac), dst);
+    //LOG_DEBUG("forward_rr_l: dstid:%x, dst:%p", srrp_get_dstid(am->pac), dst);
     if (dst) {
         if (dst->events.on_srrp_packet) {
             dst->events.on_srrp_packet(
@@ -180,8 +181,10 @@ static void forward_request_or_response(struct apix *ctx, struct apimsg *am)
     }
 
     dst = find_sinkfd_by_r_nodeid(ctx, srrp_get_dstid(am->pac));
+    //LOG_DEBUG("forward_rr_r: dstid:%x, dst:%p", srrp_get_dstid(am->pac), dst);
     if (dst) {
-        apix_send(ctx, dst->fd, srrp_get_raw(am->pac), srrp_get_packet_len(am->pac));
+        apix_send_to_buffer(
+            ctx, dst->fd, srrp_get_raw(am->pac), srrp_get_packet_len(am->pac));
         return;
     }
 
@@ -197,7 +200,7 @@ static void forward_publish(struct apix *ctx, struct apimsg *am)
         for (uint32_t i = 0; i < vsize(pos->sub_topics); i++) {
             if (strcmp(sget(*(str_t **)vat(pos->sub_topics, i)),
                        srrp_get_anchor(am->pac)) == 0) {
-                apix_send(ctx, pos->fd, srrp_get_raw(am->pac),
+                apix_send_to_buffer(ctx, pos->fd, srrp_get_raw(am->pac),
                       srrp_get_packet_len(am->pac));
             }
         }
@@ -392,6 +395,7 @@ int apix_send(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len)
     if (sinkfd->type == SINKFD_T_LISTEN || sinkfd->sink == NULL ||
         sinkfd->sink->ops.send == NULL)
         return -1;
+
     return sinkfd->sink->ops.send(sinkfd->sink, fd, buf, len);
 }
 
@@ -403,6 +407,19 @@ int apix_recv(struct apix *ctx, int fd, uint8_t *buf, uint32_t len)
     if (sinkfd->sink == NULL || sinkfd->sink->ops.recv == NULL)
         return -1;
     return sinkfd->sink->ops.recv(sinkfd->sink, fd, buf, len);
+}
+
+int apix_send_to_buffer(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    if (sinkfd->type == SINKFD_T_LISTEN || sinkfd->sink == NULL ||
+        sinkfd->sink->ops.send == NULL)
+        return -1;
+
+    vpack(sinkfd->txbuf, buf, len);
+    return 0;
 }
 
 int apix_read_from_buffer(struct apix *ctx, int fd, uint8_t *buf, uint32_t len)
@@ -428,9 +445,26 @@ int apix_poll(struct apix *ctx, uint64_t usec)
         }
     }
 
-    // parse each sinkfds
+    // send & parse each sinkfds
     struct sinkfd *pos_fd;
     list_for_each_entry(pos_fd, &ctx->sinkfds, ln_ctx) {
+        // send txbuf to system buffer
+        struct timeval tv = { 0, 0 };
+        fd_set sendfds;
+        FD_ZERO(&sendfds);
+        FD_SET(pos_fd->fd, &sendfds);
+        int rc = select(pos_fd->fd + 1, NULL, &sendfds, NULL, &tv);
+        FD_CLR(pos_fd->fd, &sendfds);
+        if (rc == 1) {
+            if (vsize(pos_fd->txbuf)) {
+                int nr = apix_send(
+                    ctx, pos_fd->fd, vraw(pos_fd->txbuf), vsize(pos_fd->txbuf));
+                if (nr > 0) assert((uint32_t)nr <= vsize(pos_fd->txbuf));
+                vdrop(pos_fd->txbuf, nr);
+            }
+        }
+
+        // parse rxbuf to srrp_packet
         if (timercmp(&ctx->poll_ts, &pos_fd->ts_poll_recv, <)) {
             assert(vsize(pos_fd->rxbuf));
             ctx->poll_cnt++;
@@ -577,7 +611,7 @@ int apix_srrp_send(struct apix *ctx, int fd, struct srrp_packet *pac)
     // send to src fd
     struct sinkfd *dst_fd = find_sinkfd_in_apix(ctx, fd);
     if (dst_fd && dst_fd->type != SINKFD_T_LISTEN) {
-        apix_send(ctx, dst_fd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+        apix_send_to_buffer(ctx, dst_fd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
         retval = 0;
     }
 
@@ -585,7 +619,7 @@ int apix_srrp_send(struct apix *ctx, int fd, struct srrp_packet *pac)
     if (srrp_get_dstid(pac) != 0) {
         struct sinkfd *dst_nd = find_sinkfd_by_r_nodeid(ctx, srrp_get_dstid(pac));
         if (dst_nd && dst_nd != dst_fd) {
-            apix_send(ctx, dst_nd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+            apix_send_to_buffer(ctx, dst_nd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
             retval = 0;
         }
     }
@@ -650,7 +684,8 @@ struct sinkfd *sinkfd_new()
     sinkfd->state = SINKFD_ST_NONE;
     sinkfd->ts_sync_in = 0;
     sinkfd->ts_sync_out = 0;
-    sinkfd->rxbuf = vec_new(1, 1024);
+    sinkfd->txbuf = vec_new(1, 2048);
+    sinkfd->rxbuf = vec_new(1, 2048);
     sinkfd->srrp_mode = 0;
     sinkfd->l_nodeid = 0;
     sinkfd->r_nodeid = 0;
@@ -666,6 +701,8 @@ void sinkfd_destroy(struct sinkfd *sinkfd)
     if (sinkfd->events.on_close)
         sinkfd->events.on_close(
             sinkfd->sink->ctx, sinkfd->fd, sinkfd->events_priv.priv_on_close);
+
+    vec_delete(sinkfd->txbuf);
     vec_delete(sinkfd->rxbuf);
 
     while (vsize(sinkfd->sub_topics)) {

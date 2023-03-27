@@ -35,6 +35,11 @@ func (self *Apix) Recv(fd int, buf []byte) (int) {
         (*C.uchar)(unsafe.Pointer(&buf[0])), C.uint(len(buf))))
 }
 
+func (self *Apix) SendToBuffer(fd int, buf []byte) (int) {
+    return int(C.apix_send_to_buffer(self.ctx, C.int(fd),
+        (*C.uchar)(unsafe.Pointer(&buf[0])), C.uint(len(buf))))
+}
+
 func (self *Apix) ReadFromBuffer(fd int, buf []byte) (int) {
     return int(C.apix_read_from_buffer(self.ctx, C.int(fd),
         (*C.uchar)(unsafe.Pointer(&buf[0])), C.uint(len(buf))))

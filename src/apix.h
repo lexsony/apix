@@ -26,15 +26,44 @@ struct apix *apix_new();
 void apix_destroy(struct apix *ctx);
 
 /**
- * apix fd operations
- * - treat it as UNIX style fd operations
+ * apix_open
+ * - return the file descriptor(fd) from system
+ * - never call fctrl or setsockopt inner, so the state of fd is default
  */
+int apix_open(struct apix *ctx, const char *sinkid, const char *addr);
 
-int /*fd*/ apix_open(struct apix *ctx, const char *sinkid, const char *addr);
+/**
+ * apix_close
+ * - inner call the close systemcall
+ */
 int apix_close(struct apix *ctx, int fd);
+
+/**
+ * apix_ioctl
+ * - inner call the ioctl systemcall
+ */
 int apix_ioctl(struct apix *ctx, int fd, unsigned int cmd, unsigned long arg);
+
+/**
+ * apix_send
+ * - inner call send or write in blocking-mode
+ * - set MSG_NOSIGNAL
+ * - not set O_NONBLOCK by fctrl
+ */
 int apix_send(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len);
+
+/**
+ * apix_recv
+ * - inner call recv or write in blocking-mode
+ * - not set O_NONBLOCK by fctrl
+ */
 int apix_recv(struct apix *ctx, int fd, uint8_t *buf, uint32_t len);
+
+/**
+ * apix_send_to_buffer
+ * - a nonblocking-mode send
+ */
+int apix_send_to_buffer(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len);
 
 /**
  * apix_read_from_buffer

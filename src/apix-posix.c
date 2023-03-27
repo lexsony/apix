@@ -675,32 +675,38 @@ int apix_enable_posix(struct apix *ctx)
 {
     // unix_s
     struct posix_sink *unix_s_sink = calloc(1, sizeof(struct posix_sink));
+    FD_ZERO(&unix_s_sink->fds);
     apisink_init(&unix_s_sink->sink, APISINK_UNIX_S, &unix_s_ops);
     apix_sink_register(ctx, &unix_s_sink->sink);
 
     // unix_c
     struct posix_sink *unix_c_sink = calloc(1, sizeof(struct posix_sink));
+    FD_ZERO(&unix_c_sink->fds);
     apisink_init(&unix_c_sink->sink, APISINK_UNIX_C, &unix_c_ops);
     apix_sink_register(ctx, &unix_c_sink->sink);
 
     // tcp_s
     struct posix_sink *tcp_s_sink = calloc(1, sizeof(struct posix_sink));
+    FD_ZERO(&tcp_s_sink->fds);
     apisink_init(&tcp_s_sink->sink, APISINK_TCP_S, &tcp_s_ops);
     apix_sink_register(ctx, &tcp_s_sink->sink);
 
     // tcp_c
     struct posix_sink *tcp_c_sink = calloc(1, sizeof(struct posix_sink));
+    FD_ZERO(&tcp_c_sink->fds);
     apisink_init(&tcp_c_sink->sink, APISINK_TCP_C, &tcp_c_ops);
     apix_sink_register(ctx, &tcp_c_sink->sink);
 
 #ifndef __APPLE__
     // com
     struct posix_sink *com_sink = calloc(1, sizeof(struct posix_sink));
+    FD_ZERO(&com_sink->fds);
     apisink_init(&com_sink->sink, APISINK_COM, &com_ops);
     apix_sink_register(ctx, &com_sink->sink);
 
     // can
     struct posix_sink *can_sink = calloc(1, sizeof(struct posix_sink));
+    FD_ZERO(&can_sink->fds);
     apisink_init(&can_sink->sink, APISINK_CAN, &can_ops);
     apix_sink_register(ctx, &can_sink->sink);
 #endif

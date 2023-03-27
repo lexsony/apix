@@ -46,6 +46,13 @@ class Apix():
         nr = func(self.ctx, fd, ctypes.cast(buf, ctypes.c_void_p), len(buf))
         return ctypes.cast(buf, ctypes.POINTER(ctypes.c_ubyte * nr)).contents
 
+    def send_to_buffer(self, fd, buf):
+        func = lib.apix_send
+        func.argtypes = [ctypes.c_void_p, ctypes.c_int32, ctypes.c_void_p, ctypes.c_uint32]
+        func.restype = ctypes.c_int32
+        assert(type(buf) == bytes)
+        return func(self.ctx, fd, ctypes.cast(buf, ctypes.c_void_p), len(buf))
+
     def read_from_buffer(self, fd):
         func = lib.apix_read_from_buffer
         func.argtypes = [ctypes.c_void_p, ctypes.c_int32, ctypes.c_void_p, ctypes.c_uint32]
