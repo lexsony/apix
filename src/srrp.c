@@ -15,7 +15,7 @@
 
 static vec_t *__srrp_new_raw(
     char leader, uint8_t fin, uint32_t srcid, uint32_t dstid,
-    const char *anchor, const char *payload);
+    const char *anchor, const uint8_t *payload, uint32_t payload_len);
 
 struct srrp_packet {
     char leader;
@@ -155,7 +155,8 @@ struct srrp_packet *srrp_cat(struct srrp_packet *fst, struct srrp_packet *snd)
     vec_t *v = __srrp_new_raw(fst->leader, fst->fin,
                               fst->srcid, fst->dstid,
                               sget(fst->anchor),
-                              (const char *)fst->payload);
+                              fst->payload,
+                              fst->payload_len);
 
     vec_delete(fst->raw);
     fst->raw = v;
@@ -255,7 +256,7 @@ struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len)
 
 static vec_t *__srrp_new_raw(
     char leader, uint8_t fin, uint32_t srcid, uint32_t dstid,
-    const char *anchor, const char *payload)
+    const char *anchor, const uint8_t *payload, uint32_t payload_len)
 {
     char tmp[32] = {0};
 
@@ -283,7 +284,7 @@ static vec_t *__srrp_new_raw(
 #endif
 
     // payload_len
-    snprintf(tmp, sizeof(tmp), "#%x", (uint32_t)strlen(payload));
+    snprintf(tmp, sizeof(tmp), "#%x", payload_len);
     vpack(v, tmp, strlen(tmp));
 
     if (leader == SRRP_CTRL_LEADER ||
@@ -302,9 +303,9 @@ static vec_t *__srrp_new_raw(
     vpack(v, anchor, strlen(anchor));
 
     // payload
-    if (strlen(payload)) {
+    if (payload_len) {
         vpack(v, "?", 1);
-        vpack(v, payload, strlen(payload));
+        vpack(v, payload, payload_len);
     }
 
     // stop flag
@@ -338,10 +339,10 @@ static vec_t *__srrp_new_raw(
 
 struct srrp_packet *srrp_new(
     char leader, uint8_t fin, uint32_t srcid, uint32_t dstid,
-    const char *anchor, const char *payload)
+    const char *anchor, const uint8_t *payload, uint32_t payload_len)
 {
     vec_t *v = __srrp_new_raw(
-        leader, fin, srcid, dstid, anchor, payload);
+        leader, fin, srcid, dstid, anchor, payload, payload_len);
 
     struct srrp_packet *pac = calloc(1, sizeof(*pac));
     assert(pac);
@@ -351,7 +352,7 @@ struct srrp_packet *srrp_new(
     pac->fin = fin;
     pac->ver = SRRP_VERSION;
     pac->packet_len = vsize(v);
-    pac->payload_len = strlen(payload);
+    pac->payload_len = payload_len;
 
     pac->srcid = srcid;
     pac->dstid = dstid;

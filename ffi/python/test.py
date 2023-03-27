@@ -7,7 +7,7 @@ ctx = apix.Apix()
 ctx.enable_posix()
 
 fd = ctx.open_unix_client("/tmp/apix")
-pac = srrp.SrrpCtrl(0xff01, "/sync", "")
+pac = srrp.srrp_new_ctrl(0xff01, "/sync", "")
 ctx.send(fd, pac.raw())
 
 while run_flag:

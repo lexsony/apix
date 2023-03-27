@@ -8,9 +8,10 @@ class __Srrp():
         self.pac = pac
 
     def __del__(self):
-        func = lib.srrp_free
-        func.argtypes = [ctypes.c_void_p]
-        func(self.pac)
+        if self.pac is not None:
+            func = lib.srrp_free
+            func.argtypes = [ctypes.c_void_p]
+            func(self.pac)
 
     def is_null(self):
         if self.pac is None:
@@ -84,84 +85,6 @@ class __Srrp():
         func.restype = ctypes.POINTER(ctypes.c_ubyte * self.packet_len())
         return bytes(func(self.pac).contents)
 
-class SrrpCtrl(__Srrp):
-    def __init__(self, srcid, anchor, payload):
-        func = lib.srrp_new
-        func.argtypes = [ctypes.c_char, ctypes.c_uint8,
-                         ctypes.c_uint32, ctypes.c_uint32,
-                         ctypes.c_char_p, ctypes.c_char_p]
-        func.restype = ctypes.c_void_p
-        pac = func(0x3D, 1, srcid, 0,
-                   ctypes.c_char_p(anchor.encode('utf-8')),
-                   ctypes.c_char_p(payload.encode('utf-8')))
-        assert(pac != 0)
-        super().__init__(pac)
-
-class SrrpRequest(__Srrp):
-    def __init__(self, srcid, dstid, anchor, payload):
-        func = lib.srrp_new
-        func.argtypes = [ctypes.c_char, ctypes.c_uint8,
-                         ctypes.c_uint32, ctypes.c_uint32,
-                         ctypes.c_char_p, ctypes.c_char_p]
-        func.restype = ctypes.c_void_p
-        pac = func(0x3E, 1, srcid, dstid,
-                   ctypes.c_char_p(anchor.encode('utf-8')),
-                   ctypes.c_char_p(payload.encode('utf-8')))
-        assert(pac != 0)
-        super().__init__(pac)
-
-class SrrpResponse(__Srrp):
-    def __init__(self, srcid, dstid, anchor, payload):
-        func = lib.srrp_new
-        func.argtypes = [ctypes.c_char, ctypes.c_uint8,
-                         ctypes.c_uint32, ctypes.c_uint32,
-                         ctypes.c_char_p, ctypes.c_char_p]
-        func.restype = ctypes.c_void_p
-        pac = func(0x3C, 1, srcid, dstid,
-                   ctypes.c_char_p(anchor.encode('utf-8')),
-                   ctypes.c_char_p(payload.encode('utf-8')))
-        assert(pac != 0)
-        super().__init__(pac)
-
-class SrrpSubscribe(__Srrp):
-    def __init__(self, anchor, payload):
-        func = lib.srrp_new
-        func.argtypes = [ctypes.c_char, ctypes.c_uint8,
-                         ctypes.c_uint32, ctypes.c_uint32,
-                         ctypes.c_char_p, ctypes.c_char_p]
-        func.restype = ctypes.c_void_p
-        pac = func(0x2B, 1, 0, 0,
-                   ctypes.c_char_p(anchor.encode('utf-8')),
-                   ctypes.c_char_p(payload.encode('utf-8')))
-        assert(pac != 0)
-        super().__init__(pac)
-
-class SrrpUnSubscribe(__Srrp):
-    def __init__(self, anchor, payload):
-        func = lib.srrp_new
-        func.argtypes = [ctypes.c_char, ctypes.c_uint8,
-                         ctypes.c_uint32, ctypes.c_uint32,
-                         ctypes.c_char_p, ctypes.c_char_p]
-        func.restype = ctypes.c_void_p
-        pac = func(0x2D, 1, 0, 0,
-                   ctypes.c_char_p(anchor.encode('utf-8')),
-                   ctypes.c_char_p(payload.encode('utf-8')))
-        assert(pac != 0)
-        super().__init__(pac)
-
-class SrrpPublish(__Srrp):
-    def __init__(self, anchor, payload):
-        func = lib.srrp_new
-        func.argtypes = [ctypes.c_char, ctypes.c_uint8,
-                         ctypes.c_uint32, ctypes.c_uint32,
-                         ctypes.c_char_p, ctypes.c_char_p]
-        func.restype = ctypes.c_void_p
-        pac = func(0x40, 1, 0, 0,
-                   ctypes.c_char_p(anchor.encode('utf-8')),
-                   ctypes.c_char_p(payload.encode('utf-8')))
-        assert(pac != 0)
-        super().__init__(pac)
-
 def srrp_next_packet_offset(buf):
     func = lib.srrp_next_packet_offset
     func.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
@@ -173,6 +96,36 @@ def srrp_parse(buf):
     func.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
     func.restype = ctypes.c_void_p
     pac = func(ctypes.cast(buf, ctypes.c_void_p), len(buf))
-    if pac is None:
-        return None
     return __Srrp(pac)
+
+def srrp_new(leader, fin, srcid, dstid, anchor, payload, payload_len):
+    func = lib.srrp_new
+    func.argtypes = [ctypes.c_char, ctypes.c_uint8,
+                     ctypes.c_uint32, ctypes.c_uint32,
+                     ctypes.c_char_p, ctypes.c_char_p,
+                     ctypes.c_uint32]
+    func.restype = ctypes.c_void_p
+    pac = func(leader, fin, srcid, dstid,
+               ctypes.c_char_p(anchor.encode('utf-8')),
+               ctypes.c_char_p(payload.encode('utf-8')),
+               payload_len)
+    assert(pac != 0)
+    return __Srrp(pac)
+
+def srrp_new_ctrl(srcid, anchor, payload):
+    return srrp_new(0x3D, 1, srcid, 0, anchor, payload, len(payload))
+
+def srrp_new_request(srcid, dstid, anchor, payload):
+    return srrp_new(0x3E, 1, srcid, dstid, anchor, payload, len(payload))
+
+def srrp_new_response(srcid, dstid, anchor, payload):
+    return srrp_new(0x3C, 1, srcid, dstid, anchor, payload, len(payload))
+
+def srrp_new_subscribe(anchor, payload):
+    return srrp_new(0x2B, 1, 0, 0, anchor, payload, len(payload))
+
+def srrp_new_unsubscribe(anchor, payload):
+    return srrp_new(0x2D, 1, 0, 0, anchor, payload, len(payload))
+
+def srrp_new_publish(anchor, payload):
+    return srrp_new(0x40, 1, 0, 0, anchor, payload, len(payload))

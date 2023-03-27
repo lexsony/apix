@@ -116,49 +116,55 @@ struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len);
  */
 struct srrp_packet *
 srrp_new(char leader, uint8_t fin, uint32_t srcid, uint32_t dstid,
-         const char *anchor, const char *payload);
+         const char *anchor, const uint8_t *payload, uint32_t payload_len);
 
 /**
  * srrp_new_ctrl
  * - create new ctrl packet
  */
 #define srrp_new_ctrl(srcid, anchor, payload)                   \
-    srrp_new(SRRP_CTRL_LEADER, SRRP_FIN_1, srcid, 0, anchor, payload)
+    srrp_new(SRRP_CTRL_LEADER, SRRP_FIN_1, srcid, 0,            \
+             anchor, (const uint8_t *)payload, strlen(payload))
 
 /**
  * srrp_new_request
  * - create new request packet
  */
 #define srrp_new_request(srcid, dstid, anchor, payload)          \
-    srrp_new(SRRP_REQUEST_LEADER, SRRP_FIN_1, srcid, dstid, anchor, payload)
+    srrp_new(SRRP_REQUEST_LEADER, SRRP_FIN_1, srcid, dstid,      \
+             anchor, (const uint8_t *)payload, strlen(payload))
 
 /**
  * srrp_new_response
  * - create new response packet
  */
 #define srrp_new_response(srcid, dstid, anchor, payload)          \
-    srrp_new(SRRP_RESPONSE_LEADER, SRRP_FIN_1, srcid, dstid, anchor, payload)
+    srrp_new(SRRP_RESPONSE_LEADER, SRRP_FIN_1, srcid, dstid,      \
+             anchor, (const uint8_t *)payload, strlen(payload))
 
 /**
  * srrp_new_subscribe
  * - create new subscribe packet
  */
 #define srrp_new_subscribe(anchor, payload)                     \
-    srrp_new(SRRP_SUBSCRIBE_LEADER, SRRP_FIN_1, 0, 0, anchor, payload)
+    srrp_new(SRRP_SUBSCRIBE_LEADER, SRRP_FIN_1, 0, 0,           \
+             anchor, (const uint8_t *)payload, strlen(payload))
 
 /**
  * srrp_new_unsubscribe
  * - create new unsubscribe packet
  */
 #define srrp_new_unsubscribe(anchor, payload)                     \
-    srrp_new(SRRP_UNSUBSCRIBE_LEADER, SRRP_FIN_1, 0, 0, anchor, payload)
+    srrp_new(SRRP_UNSUBSCRIBE_LEADER, SRRP_FIN_1, 0, 0,           \
+             anchor, (const uint8_t *)payload, strlen(payload))
 
 /**
  * srrp_new_publish
  * - create new publish packet
  */
 #define srrp_new_publish(anchor, payload)                   \
-    srrp_new(SRRP_PUBLISH_LEADER, 1, 0, 0, anchor, payload)
+    srrp_new(SRRP_PUBLISH_LEADER, 1, 0, 0,                  \
+             anchor, (const uint8_t *)payload, strlen(payload))
 
 #ifdef __cplusplus
 }

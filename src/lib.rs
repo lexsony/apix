@@ -349,7 +349,10 @@ impl Srrp {
             let anchor = std::ffi::CString::new(anchor).unwrap();
             let pac = apix_sys::srrp_new(
                 leader as i8, fin, srcid, dstid,
-                anchor.as_ptr() as *const i8, payload.as_ptr() as *const i8);
+                anchor.as_ptr() as *const i8,
+                payload.as_ptr() as *const u8,
+                payload.len() as u32,
+            );
             if pac.is_null() {
                 None
             } else {

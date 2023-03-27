@@ -61,8 +61,15 @@ func Parse(buf []byte) (SrrpPacket, error) {
 
 func New(leader uint8, fin uint8, srcid uint32, dstid uint32,
         anchor string, payload string) (SrrpPacket, error) {
-    pac := C.srrp_new(C.char(leader), C.uchar(fin), C.uint(srcid), C.uint(dstid),
-        C.CString(anchor), C.CString(payload))
+    pac := C.srrp_new(
+        C.char(leader),
+        C.uchar(fin),
+        C.uint(srcid),
+        C.uint(dstid),
+        C.CString(anchor),
+        (*C.uchar)(unsafe.Pointer(C.CString(payload))),
+        C.uint(len(payload)),
+    )
 
     if pac == nil {
         return SrrpPacket {}, errors.New("srrp parse failed")
