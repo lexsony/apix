@@ -27,7 +27,8 @@ static void test_srrp_base(void **status)
                        "j:{\"err\":0,\"msg\":\"ok\"}") == 0);
     assert_true(srrp_get_fin(pac2) == 1);
 
-    assert_true(pac2 == pac0);
+    srrp_free(pac0);
+    srrp_free(pac1);
     srrp_free(pac2);
 }
 

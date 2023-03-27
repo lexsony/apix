@@ -90,12 +90,13 @@ struct srrp_packet *srrp_move(struct srrp_packet *fst, struct srrp_packet *snd);
 
 /**
  * srrp_cat
- * - concatenate slice packets, auto free snd.
- * - the return value is fst.
+ * - concatenate slice packets.
+ * - the return value is a new alloc packet.
  * - the fin of fst must 0, otherwise assert will fail.
  * - the leader, srcid, dstid, anchor, must same, otherwise assert will fail.
  */
-struct srrp_packet *srrp_cat(struct srrp_packet *fst, struct srrp_packet *snd);
+struct srrp_packet *srrp_cat(
+    const struct srrp_packet *fst, const struct srrp_packet *snd);
 
 /**
  * srrp_next_packet_offset

@@ -105,7 +105,7 @@ struct sinkfd {
     uint32_t r_nodeid; /* remote nodeid */
     struct timeval ts_poll_recv;
     vec_p_t *sub_topics;
-    //struct srrp_packet *rxpac;
+    struct srrp_packet *rxpac_unfin;
 
     struct apix_events {
         fd_close_func_t on_close;

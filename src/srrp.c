@@ -128,42 +128,35 @@ struct srrp_packet *srrp_move(struct srrp_packet *fst, struct srrp_packet *snd)
     return snd;
 }
 
-struct srrp_packet *srrp_cat(struct srrp_packet *fst, struct srrp_packet *snd)
+struct srrp_packet *srrp_cat(
+    const struct srrp_packet *fst, const struct srrp_packet *snd)
 {
-    assert(fst->leader == snd->leader);
-    assert(fst->fin == SRRP_FIN_0);
-    assert(fst->srcid == snd->srcid);
-    assert(fst->dstid == snd->dstid);
-    assert(strcmp(sget(fst->anchor), sget(snd->anchor)) == 0);
+    if (fst->leader != snd->leader)
+        return NULL;
+    if (fst->fin != SRRP_FIN_0)
+        return NULL;
+    if (fst->ver != snd->ver)
+        return NULL;
+    if (fst->srcid != snd->srcid)
+        return NULL;
+    if (fst->dstid != snd->dstid)
+        return NULL;
+    if (strcmp(sget(fst->anchor), sget(snd->anchor)) != 0)
+        return NULL;
+    //assert(snd->payload_len != 0);
 
-    if (snd->payload_len == 0 && snd->fin == SRRP_FIN_0)
-        goto out;
+    vec_t *v = vec_new(1, fst->payload_len + snd->payload_len);
+    vpack(v, fst->payload, fst->payload_len);
+    vpack(v, snd->payload, snd->payload_len);
 
-    fst->packet_len += snd->payload_len;
-    fst->fin = snd->fin;
-    fst->payload_len += snd->payload_len;
+    struct srrp_packet *retpac = srrp_new(
+        fst->leader, snd->fin,
+        fst->srcid, fst->dstid,
+        sget(fst->anchor),
+        vraw(v), vsize(v));
 
-    for (int i = 0; i < CRC_SIZE + 1; i++) {
-        char tmp;
-        vpop_back(fst->raw, &tmp);
-    }
-    vpack(fst->raw, snd->payload, snd->payload_len);
-
-    // stop flag
-    vpack(fst->raw, "\0", 1);
-
-    vec_t *v = __srrp_new_raw(fst->leader, fst->fin,
-                              fst->srcid, fst->dstid,
-                              sget(fst->anchor),
-                              fst->payload,
-                              fst->payload_len);
-
-    vec_delete(fst->raw);
-    fst->raw = v;
-
-out:
-    srrp_free(snd);
-    return fst;
+    vec_delete(v);
+    return retpac;
 }
 
 uint32_t srrp_next_packet_offset(const uint8_t *buf, uint32_t len)
@@ -232,7 +225,7 @@ struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len)
     vpack(pac->raw, buf, packet_len);
 
     pac->leader = leader;
-    pac->fin = fin;
+    pac->fin = fin - '0';
     pac->ver = ver;
     pac->packet_len = packet_len;
     pac->payload_len = payload_len;

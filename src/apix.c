@@ -58,17 +58,47 @@ static void parse_packet(struct apix *ctx, struct sinkfd *sinkfd)
             vdrop(sinkfd->rxbuf, offset);
             break;
         }
-
-        struct apimsg *msg = malloc(sizeof(*msg));
-        memset(msg, 0, sizeof(*msg));
-        msg->state = APIMSG_ST_NONE;
-        msg->fd = sinkfd->fd;
-        msg->pac = pac;
-        INIT_LIST_HEAD(&msg->ln);
-        list_add_tail(&msg->ln, &ctx->msgs);
-        //LOG_DEBUG("[%x] parse packet: %s", ctx, srrp_get_raw(pac));
-
         vdrop(sinkfd->rxbuf, srrp_get_packet_len(pac));
+
+        // concatenate srrp packet
+        if (sinkfd->rxpac_unfin) {
+            assert(srrp_get_fin(sinkfd->rxpac_unfin) == SRRP_FIN_0);
+            if (srrp_get_leader(pac) != srrp_get_leader(sinkfd->rxpac_unfin) ||
+                srrp_get_ver(pac) != srrp_get_ver(sinkfd->rxpac_unfin) ||
+                srrp_get_srcid(pac) != srrp_get_srcid(sinkfd->rxpac_unfin) ||
+                srrp_get_dstid(pac) != srrp_get_dstid(sinkfd->rxpac_unfin) ||
+                strcmp(srrp_get_anchor(pac), srrp_get_anchor(sinkfd->rxpac_unfin)) != 0) {
+                // drop pre pac
+                srrp_free(sinkfd->rxpac_unfin);
+                // set to rxpac_unfin
+                sinkfd->rxpac_unfin = pac;
+            } else {
+                struct srrp_packet *tsp = sinkfd->rxpac_unfin;
+                sinkfd->rxpac_unfin = srrp_cat(tsp, pac);
+                assert(sinkfd->rxpac_unfin != NULL);
+                srrp_free(tsp);
+                srrp_free(pac);
+                pac = NULL;
+            }
+        } else {
+            sinkfd->rxpac_unfin = pac;
+            pac = NULL;
+        }
+        LOG_DEBUG("[%x] parse packet: %s", ctx, srrp_get_raw(sinkfd->rxpac_unfin));
+
+        // construct apimsg if receviced fin srrp packet
+        if (srrp_get_fin(sinkfd->rxpac_unfin) == SRRP_FIN_1) {
+            struct apimsg *msg = malloc(sizeof(*msg));
+            memset(msg, 0, sizeof(*msg));
+            msg->state = APIMSG_ST_NONE;
+            msg->fd = sinkfd->fd;
+            msg->pac = sinkfd->rxpac_unfin;
+            INIT_LIST_HEAD(&msg->ln);
+            list_add_tail(&msg->ln, &ctx->msgs);
+            //LOG_DEBUG("[%x] parse packet: %s", ctx, srrp_get_raw(pac));
+
+            sinkfd->rxpac_unfin = NULL;
+        }
     }
 }
 
@@ -600,6 +630,37 @@ void apix_srrp_forward(struct apix *ctx, struct srrp_packet *pac)
     assert(false);
 }
 
+static void __apix_srrp_send(
+    struct apix *ctx, int fd, const struct srrp_packet *pac)
+{
+    uint32_t idx = 0;
+    const uint32_t cnt = 1400;
+    struct srrp_packet *tmp_pac = NULL;
+
+    while (idx != srrp_get_payload_len(pac)) {
+        uint32_t tmp_cnt = srrp_get_payload_len(pac) - idx;
+        uint8_t fin = 0;
+        if (tmp_cnt > cnt) {
+            tmp_cnt = cnt;
+            fin = SRRP_FIN_0;
+        } else {
+            fin = SRRP_FIN_1;
+        };
+        tmp_pac = srrp_new(srrp_get_leader(pac),
+                       fin,
+                       srrp_get_srcid(pac),
+                       srrp_get_dstid(pac),
+                       srrp_get_anchor(pac),
+                       srrp_get_payload(pac) + idx,
+                       tmp_cnt);
+        LOG_DEBUG("[%x] split to partial packet: %s", ctx, srrp_get_raw(tmp_pac));
+        apix_send_to_buffer(ctx, fd, srrp_get_raw(tmp_pac),
+                            srrp_get_packet_len(tmp_pac));
+        idx += tmp_cnt;
+        srrp_free(tmp_pac);
+    }
+}
+
 int apix_srrp_send(struct apix *ctx, int fd, struct srrp_packet *pac)
 {
     int retval = -1;
@@ -609,7 +670,7 @@ int apix_srrp_send(struct apix *ctx, int fd, struct srrp_packet *pac)
     // send to src fd
     struct sinkfd *dst_fd = find_sinkfd_in_apix(ctx, fd);
     if (dst_fd && dst_fd->type != SINKFD_T_LISTEN) {
-        apix_send_to_buffer(ctx, dst_fd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+        __apix_srrp_send(ctx, dst_fd->fd, pac);
         retval = 0;
     }
 
@@ -617,7 +678,7 @@ int apix_srrp_send(struct apix *ctx, int fd, struct srrp_packet *pac)
     if (srrp_get_dstid(pac) != 0) {
         struct sinkfd *dst_nd = find_sinkfd_by_r_nodeid(ctx, srrp_get_dstid(pac));
         if (dst_nd && dst_nd != dst_fd) {
-            apix_send_to_buffer(ctx, dst_nd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+            __apix_srrp_send(ctx, dst_nd->fd, pac);
             retval = 0;
         }
     }
@@ -688,6 +749,7 @@ struct sinkfd *sinkfd_new()
     sinkfd->l_nodeid = 0;
     sinkfd->r_nodeid = 0;
     sinkfd->sub_topics = vec_new(sizeof(void *), 3);
+    sinkfd->rxpac_unfin = NULL;
     sinkfd->sink = NULL;
     INIT_LIST_HEAD(&sinkfd->ln_sink);
     INIT_LIST_HEAD(&sinkfd->ln_ctx);
