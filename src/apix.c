@@ -80,7 +80,7 @@ static int apix_response(
         srrp_get_srcid(req),
         srrp_get_anchor(req),
         data);
-    int rc = apix_send_to_buffer(ctx, fd, srrp_get_raw(resp), srrp_get_packet_len(resp));
+    int rc = apix_srrp_send(ctx, fd, resp);
     srrp_free(resp);
     return rc;
 }
@@ -100,7 +100,7 @@ handle_ctrl(struct apix *ctx, struct sinkfd *sinkfd, struct apimsg *am)
 
     if (srrp_get_srcid(am->pac) == 0) {
         struct srrp_packet *pac = srrp_new_ctrl(nodeid, SRRP_CTRL_NODEID_ZERO, "");
-        apix_send_to_buffer(ctx, sinkfd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+        apix_srrp_send(ctx, sinkfd->fd, pac);
         srrp_free(pac);
         sinkfd->state = SINKFD_ST_NODEID_ZERO;
         goto out;
@@ -109,7 +109,7 @@ handle_ctrl(struct apix *ctx, struct sinkfd *sinkfd, struct apimsg *am)
     struct sinkfd *tmp = find_sinkfd_by_nodeid(ctx, srrp_get_srcid(am->pac));
     if (tmp != NULL && tmp != sinkfd) {
         struct srrp_packet *pac = srrp_new_ctrl(nodeid, SRRP_CTRL_NODEID_DUP, "");
-        apix_send_to_buffer(ctx, sinkfd->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+        apix_srrp_send(ctx, sinkfd->fd, pac);
         srrp_free(pac);
         sinkfd->state = SINKFD_ST_NODEID_DUP;
         goto out;
@@ -183,8 +183,7 @@ static void forward_request_or_response(struct apix *ctx, struct apimsg *am)
     dst = find_sinkfd_by_r_nodeid(ctx, srrp_get_dstid(am->pac));
     //LOG_DEBUG("forward_rr_r: dstid:%x, dst:%p", srrp_get_dstid(am->pac), dst);
     if (dst) {
-        apix_send_to_buffer(
-            ctx, dst->fd, srrp_get_raw(am->pac), srrp_get_packet_len(am->pac));
+        apix_srrp_send(ctx, dst->fd, am->pac);
         return;
     }
 
@@ -200,8 +199,7 @@ static void forward_publish(struct apix *ctx, struct apimsg *am)
         for (uint32_t i = 0; i < vsize(pos->sub_topics); i++) {
             if (strcmp(sget(*(str_t **)vat(pos->sub_topics, i)),
                        srrp_get_anchor(am->pac)) == 0) {
-                apix_send_to_buffer(ctx, pos->fd, srrp_get_raw(am->pac),
-                      srrp_get_packet_len(am->pac));
+                apix_srrp_send(ctx, pos->fd, am->pac);
             }
         }
     }
