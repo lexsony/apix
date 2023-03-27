@@ -145,7 +145,7 @@ void vshrink(vec_t *self)
     }
 }
 
-static void __vinsert(vec_t *self, uint32_t idx, const void *value, uint32_t cnt)
+void vinsert(vec_t *self, uint32_t idx, const void *value, uint32_t cnt)
 {
     if (idx > self->size) {
         assert(vec_check_cap(self, idx - self->size + cnt) == 0);
@@ -164,17 +164,12 @@ static void __vinsert(vec_t *self, uint32_t idx, const void *value, uint32_t cnt
     }
 }
 
-void vinsert(vec_t *self, uint32_t idx, const void *value)
+void vremove(vec_t *self, uint32_t idx, uint32_t cnt)
 {
-    __vinsert(self, idx, value, 1);
-}
-
-void vremove(vec_t *self, uint32_t idx)
-{
-    assert(idx < self->size);
-    memmove(vat(self, idx), vat(self, idx + 1),
-            (self->size - idx - 1) * self->type_size);
-    self->size -= 1;
+    assert(idx + cnt <= self->size);
+    memmove(vat(self, idx), vat(self, idx + cnt),
+            (self->size - idx - cnt) * self->type_size);
+    self->size -= cnt;
 }
 
 void *vraw(vec_t *self)

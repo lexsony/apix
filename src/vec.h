@@ -37,8 +37,8 @@ void vpack(vec_t *self, const void *value, uint32_t cnt);
 void vdump(vec_t *self, /* out */ void *value, uint32_t cnt);
 void vdrop(vec_t *self, uint32_t cnt);
 void vshrink(vec_t *self);
-void vinsert(vec_t *self, uint32_t idx, const void *value);
-void vremove(vec_t *self, uint32_t idx);
+void vinsert(vec_t *self, uint32_t idx, const void *value, uint32_t cnt);
+void vremove(vec_t *self, uint32_t idx, uint32_t cnt);
 
 /**
  * vraw: only available on VEC_ALLOC_LINEAR

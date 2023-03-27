@@ -266,8 +266,9 @@ impl Apix {
 
 pub struct SrrpPacket {
     pub leader: i8,
+    pub fin: u8,
+    pub ver: u16,
     pub packet_len: u16,
-    pub payload_fin: u8,
     pub payload_len: u32,
     pub srcid: u32,
     pub dstid: u32,
@@ -299,8 +300,9 @@ impl Srrp {
             let raw = apix_sys::srrp_get_raw(pac);
             SrrpPacket {
                 leader: apix_sys::srrp_get_leader(pac),
+                fin: apix_sys::srrp_get_fin(pac),
+                ver: apix_sys::srrp_get_ver(pac),
                 packet_len: packet_len,
-                payload_fin: apix_sys::srrp_get_payload_fin(pac),
                 payload_len: apix_sys::srrp_get_payload_len(pac),
                 srcid: apix_sys::srrp_get_srcid(pac),
                 dstid: apix_sys::srrp_get_dstid(pac),
@@ -341,100 +343,42 @@ impl Srrp {
         }
     }
 
+    pub fn new(leader: char, fin: u8, srcid: u32, dstid: u32, anchor: &str, payload: &str)
+               -> Option<SrrpPacket> {
+        unsafe {
+            let anchor = std::ffi::CString::new(anchor).unwrap();
+            let pac = apix_sys::srrp_new(
+                leader as i8, fin, srcid, dstid,
+                anchor.as_ptr() as *const i8, payload.as_ptr() as *const i8);
+            if pac.is_null() {
+                None
+            } else {
+                Some(Srrp::from_raw_packet(pac))
+            }
+        }
+    }
+
     pub fn new_ctrl(srcid: u32, anchor: &str, payload: &str) -> Option<SrrpPacket> {
-        unsafe {
-            let anchor = std::ffi::CString::new(anchor).unwrap();
-            let pac = apix_sys::srrp_new_ctrl(
-                srcid, anchor.as_ptr() as *const i8, payload.as_ptr() as *const i8);
-            if pac.is_null() {
-                None
-            } else {
-                Some(Srrp::from_raw_packet(pac))
-            }
-        }
+        return Self::new('=', 1, srcid, 0, anchor, payload);
     }
 
-    pub fn new_request(srcid: u32, dstid: u32, anchor: &str, payload: &str)
-                       -> Option<SrrpPacket> {
-        unsafe {
-            let anchor = std::ffi::CString::new(anchor).unwrap();
-            let payload = std::ffi::CString::new(payload).unwrap();
-            let pac = apix_sys::srrp_new_request(
-                srcid, dstid,
-                anchor.as_ptr() as *const i8,
-                payload.as_ptr() as *const i8);
-            if pac.is_null() {
-                None
-            } else {
-                Some(Srrp::from_raw_packet(pac))
-            }
-        }
+    pub fn new_request(srcid: u32, dstid: u32, anchor: &str, payload: &str) -> Option<SrrpPacket> {
+        return Self::new('>', 1, srcid, dstid, anchor, payload);
     }
 
-    pub fn new_response(srcid: u32, dstid: u32, anchor: &str, payload: &str)
-                        -> Option<SrrpPacket> {
-        unsafe {
-            let anchor = std::ffi::CString::new(anchor).unwrap();
-            let payload = std::ffi::CString::new(payload).unwrap();
-            let pac = apix_sys::srrp_new_response(
-                srcid, dstid,
-                anchor.as_ptr() as *const i8,
-                payload.as_ptr() as *const i8,
-            );
-            if pac.is_null() {
-                None
-            } else {
-                let sp = Srrp::from_raw_packet(pac);
-                Some(sp)
-            }
-        }
+    pub fn new_response(srcid: u32, dstid: u32, anchor: &str, payload: &str) -> Option<SrrpPacket> {
+        return Self::new('<', 1, srcid, dstid, anchor, payload);
     }
 
     pub fn new_subscribe(anchor: &str, payload: &str) -> Option<SrrpPacket> {
-        unsafe {
-            let anchor = std::ffi::CString::new(anchor).unwrap();
-            let payload = std::ffi::CString::new(payload).unwrap();
-            let pac = apix_sys::srrp_new_subscribe(
-                anchor.as_ptr() as *const i8,
-                payload.as_ptr() as *const i8,
-            );
-            if pac.is_null() {
-                None
-            } else {
-                Some(Srrp::from_raw_packet(pac))
-            }
-        }
+        return Self::new('+', 1, 0, 0, anchor, payload);
     }
 
     pub fn new_unsubscribe(anchor: &str, payload: &str) -> Option<SrrpPacket> {
-        unsafe {
-            let anchor = std::ffi::CString::new(anchor).unwrap();
-            let payload = std::ffi::CString::new(payload).unwrap();
-            let pac = apix_sys::srrp_new_unsubscribe(
-                anchor.as_ptr() as *const i8,
-                payload.as_ptr() as *const i8,
-            );
-            if pac.is_null() {
-                None
-            } else {
-                Some(Srrp::from_raw_packet(pac))
-            }
-        }
+        return Self::new('-', 1, 0, 0, anchor, payload);
     }
 
     pub fn new_publish(anchor: &str, payload: &str) -> Option<SrrpPacket> {
-        unsafe {
-            let anchor = std::ffi::CString::new(anchor).unwrap();
-            let payload = std::ffi::CString::new(payload).unwrap();
-            let pac = apix_sys::srrp_new_publish(
-                anchor.as_ptr() as *const i8,
-                payload.as_ptr() as *const i8,
-            );
-            if pac.is_null() {
-                None
-            } else {
-                Some(Srrp::from_raw_packet(pac))
-            }
-        }
+        return Self::new('@', 1, 0, 0, anchor, payload);
     }
 }

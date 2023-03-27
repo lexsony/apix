@@ -154,7 +154,7 @@ handle_unsubscribe(struct apix *ctx, struct sinkfd *sinkfd, struct apimsg *am)
         if (strcmp(sget(*(str_t **)vat(sinkfd->sub_topics, i)),
                    srrp_get_anchor(am->pac)) == 0) {
             str_delete(*(str_t **)vat(sinkfd->sub_topics, i));
-            vremove(sinkfd->sub_topics, i);
+            vremove(sinkfd->sub_topics, i, 1);
             break;
         }
     }

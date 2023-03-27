@@ -18,14 +18,14 @@ static void test_srrp_base(void **status)
 
     pac0 = srrp_new_request(0x3333, 0x8888, "/hello/x", "j:{\"err\":0,");
     pac1 = srrp_new_request(0x3333, 0x8888, "/hello/x", "\"msg\":\"ok\"}");
-    srrp_set_payload_fin(pac0, SRRP_PAYLOAD_FIN_0);
-    assert_true(srrp_get_payload_fin(pac0) == SRRP_PAYLOAD_FIN_0);
-    assert_true(srrp_get_payload_fin(pac1) == SRRP_PAYLOAD_FIN_1);
+    srrp_set_fin(pac0, SRRP_FIN_0);
+    assert_true(srrp_get_fin(pac0) == SRRP_FIN_0);
+    assert_true(srrp_get_fin(pac1) == SRRP_FIN_1);
 
     pac2 = srrp_cat(pac0, pac1);
     assert_true(strcmp((char *)srrp_get_payload(pac2),
                        "j:{\"err\":0,\"msg\":\"ok\"}") == 0);
-    assert_true(srrp_get_payload_fin(pac2) == 1);
+    assert_true(srrp_get_fin(pac2) == 1);
 
     assert_true(pac2 == pac0);
     srrp_free(pac2);
