@@ -111,8 +111,8 @@ void srrp_free(struct srrp_packet *pac)
     printf("srrp_free: %p\n", pac);
 #endif
 
-    str_delete(pac->anchor);
-    vec_delete(pac->raw);
+    str_free(pac->anchor);
+    vec_free(pac->raw);
 
     free(pac);
 }
@@ -120,8 +120,8 @@ void srrp_free(struct srrp_packet *pac)
 struct srrp_packet *srrp_move(struct srrp_packet *fst, struct srrp_packet *snd)
 {
     // should not call srrp_free as it will free snd ...
-    str_delete(snd->anchor);
-    vec_delete(snd->raw);
+    str_free(snd->anchor);
+    vec_free(snd->raw);
     *snd = *fst;
     bzero(fst, sizeof(*fst));
     free(fst);
@@ -155,7 +155,7 @@ struct srrp_packet *srrp_cat(
         sget(fst->anchor),
         vraw(v), vsize(v));
 
-    vec_delete(v);
+    vec_free(v);
     return retpac;
 }
 

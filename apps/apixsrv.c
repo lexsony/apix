@@ -98,7 +98,7 @@ static void *apix_thread(void *arg)
         apix_poll(ctx, 0);
     }
 
-    apix_destroy(ctx); // auto close all fds
+    apix_drop(ctx); // auto close all fds
 
     return NULL;
 }

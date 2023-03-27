@@ -9,7 +9,7 @@ pub struct Apix {
 impl Drop for Apix {
     fn drop(&mut self) {
         unsafe {
-            apix_sys::apix_destroy(self.ctx);
+            apix_sys::apix_drop(self.ctx);
         }
     }
 }

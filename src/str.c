@@ -36,7 +36,7 @@ str_t *str_new_len(const void *buf, uint32_t len)
     return self;
 }
 
-void str_delete(str_t *self)
+void str_free(str_t *self)
 {
 #ifdef DEBUG_STR
     printf("str_del: %p\n", self);

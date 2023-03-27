@@ -23,7 +23,7 @@ enum vec_alloc_type {
 
 vec_t *vec_new(uint32_t type_size, uint32_t cap);
 vec_t *vec_new_alloc(uint32_t type_size, uint32_t cap, enum vec_alloc_type alloc);
-void vec_delete(vec_t *self);
+void vec_free(vec_t *self);
 
 void *vat(vec_t *self, uint32_t idx);
 

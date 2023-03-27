@@ -11,7 +11,7 @@ typedef struct str str_t;
 
 str_t *str_new(const char *s);
 str_t *str_new_len(const void *buf, uint32_t len);
-void str_delete(str_t *self);
+void str_free(str_t *self);
 
 const char *sget(str_t *self);
 

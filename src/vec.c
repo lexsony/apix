@@ -40,7 +40,7 @@ vec_t *vec_new_alloc(uint32_t type_size, uint32_t cap, enum vec_alloc_type alloc
     return self;
 }
 
-void vec_delete(vec_t *self)
+void vec_free(vec_t *self)
 {
     if (self) {
         free(self->rawbuf);

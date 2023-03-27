@@ -34,7 +34,7 @@ static void test_svc(void **status)
     if (resp) srrp_free(resp);
 
     svcx_del_service(svcx, "8888:/echo");
-    svcx_destroy(svcx);
+    svcx_drop(svcx);
 }
 
 int main(void)

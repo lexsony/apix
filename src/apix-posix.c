@@ -42,7 +42,7 @@ static int __fd_close(struct apisink *sink, int fd)
         return -1;
 
     close(sinkfd->fd);
-    sinkfd_destroy(sinkfd);
+    sinkfd_free(sinkfd);
 
     struct posix_sink *unix_c_sink = container_of(sink, struct posix_sink, sink);
     FD_CLR(fd, &unix_c_sink->fds);

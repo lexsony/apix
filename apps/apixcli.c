@@ -325,7 +325,7 @@ static void *apix_thread(void *arg)
     }
 
     apix_disable_posix(ctx);
-    apix_destroy(ctx); // auto close all fds
+    apix_drop(ctx); // auto close all fds
 
     return NULL;
 }
@@ -958,6 +958,6 @@ int main(int argc, char *argv[])
     pthread_join(apix_pid, NULL);
     pthread_join(cli_pid, NULL);
     svcx_foreach(svcx, clean_srrp_service);
-    svcx_destroy(svcx);
+    svcx_drop(svcx);
     return 0;
 }

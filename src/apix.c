@@ -183,7 +183,7 @@ handle_unsubscribe(struct apix *ctx, struct sinkfd *sinkfd, struct apimsg *am)
     for (uint32_t i = 0; i < vsize(sinkfd->sub_topics); i++) {
         if (strcmp(sget(*(str_t **)vat(sinkfd->sub_topics, i)),
                    srrp_get_anchor(am->pac)) == 0) {
-            str_delete(*(str_t **)vat(sinkfd->sub_topics, i));
+            str_free(*(str_t **)vat(sinkfd->sub_topics, i));
             vremove(sinkfd->sub_topics, i, 1);
             break;
         }
@@ -327,7 +327,7 @@ static void clear_finished_apimsg(struct apix *ctx)
     struct apimsg *pos, *n;
     list_for_each_entry_safe(pos, n, &ctx->msgs, ln) {
         if (apimsg_is_finished(pos))
-            apimsg_delete(pos);
+            apimsg_free(pos);
     }
 }
 
@@ -358,18 +358,18 @@ struct apix *apix_new()
     return ctx;
 }
 
-void apix_destroy(struct apix *ctx)
+void apix_drop(struct apix *ctx)
 {
     {
         struct apimsg *pos, *n;
         list_for_each_entry_safe(pos, n, &ctx->msgs, ln)
-            apimsg_delete(pos);
+            apimsg_free(pos);
     }
 
     {
         struct sinkfd *pos, *n;
         list_for_each_entry_safe(pos, n, &ctx->sinkfds, ln_ctx)
-            sinkfd_destroy(pos);
+            sinkfd_free(pos);
     }
 
     {
@@ -705,7 +705,7 @@ void apisink_fini(struct apisink *sink)
 {
     struct sinkfd *pos, *n;
     list_for_each_entry_safe(pos, n, &sink->sinkfds, ln_sink)
-        sinkfd_destroy(pos);
+        sinkfd_free(pos);
 
     // delete from apix outside
     assert(sink->ctx == NULL);
@@ -756,21 +756,21 @@ struct sinkfd *sinkfd_new()
     return sinkfd;
 }
 
-void sinkfd_destroy(struct sinkfd *sinkfd)
+void sinkfd_free(struct sinkfd *sinkfd)
 {
     if (sinkfd->events.on_close)
         sinkfd->events.on_close(
             sinkfd->sink->ctx, sinkfd->fd, sinkfd->events_priv.priv_on_close);
 
-    vec_delete(sinkfd->txbuf);
-    vec_delete(sinkfd->rxbuf);
+    vec_free(sinkfd->txbuf);
+    vec_free(sinkfd->rxbuf);
 
     while (vsize(sinkfd->sub_topics)) {
         str_t *tmp = 0;
         vpop(sinkfd->sub_topics, &tmp);
-        str_delete(tmp);
+        str_free(tmp);
     }
-    vec_delete(sinkfd->sub_topics);
+    vec_free(sinkfd->sub_topics);
 
     sinkfd->sink = NULL;
     list_del_init(&sinkfd->ln_sink);

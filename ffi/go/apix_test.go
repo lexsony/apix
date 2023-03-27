@@ -31,5 +31,5 @@ func TestBase(T *testing.T) {
     }
 
     ctx.Close(fd)
-    ctx.Destroy()
+    ctx.Drop()
 }

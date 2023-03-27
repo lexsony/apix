@@ -15,7 +15,7 @@ class Apix():
         self.ctx = func()
 
     def __del__(self):
-        func = lib.apix_destroy
+        func = lib.apix_drop
         func.argtypes = [ctypes.c_void_p]
         func(self.ctx)
 

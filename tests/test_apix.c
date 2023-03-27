@@ -116,8 +116,7 @@ static void *requester_thread(void *args)
     sleep(1);
 
     apix_close(ctx, fd);
-    apix_disable_posix(ctx);
-    apix_destroy(ctx);
+    apix_drop(ctx);
 
     LOG_INFO("requester exit");
     return NULL;
@@ -166,8 +165,7 @@ static void *responser_thread(void *args)
     sleep(1);
 
     apix_close(ctx, fd);
-    apix_disable_posix(ctx);
-    apix_destroy(ctx);
+    apix_drop(ctx);
 
     LOG_INFO("responser exit");
     return NULL;
@@ -199,8 +197,7 @@ static void test_api_request_response(void **status)
     pthread_join(responser_pid, NULL);
 
     apix_close(ctx, fd);
-    apix_disable_posix(ctx);
-    apix_destroy(ctx);
+    apix_drop(ctx);
 }
 
 /**
@@ -296,8 +293,7 @@ static void *subscribe_thread(void *args)
     sleep(1);
 
     apix_close(ctx, fd);
-    apix_disable_posix(ctx);
-    apix_destroy(ctx);
+    apix_drop(ctx);
 
     subscribe_finished = 1;
     LOG_INFO("subscribe exit");
@@ -329,8 +325,7 @@ static void test_api_subscribe_publish(void **status)
     pthread_join(subscribe_pid, NULL);
 
     apix_close(ctx, fd);
-    apix_disable_posix(ctx);
-    apix_destroy(ctx);
+    apix_drop(ctx);
 }
 
 int main(void)

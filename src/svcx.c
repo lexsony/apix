@@ -25,7 +25,7 @@ struct svcx *svcx_new()
     return svcx;
 }
 
-void svcx_destroy(struct svcx *svcx)
+void svcx_drop(struct svcx *svcx)
 {
     struct service *pos, *n;
     list_for_each_entry_safe(pos, n, &svcx->services, ln) {

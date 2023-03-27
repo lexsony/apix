@@ -86,7 +86,7 @@ static int tcp_s_close(struct apisink *sink, int fd)
     close(sinkfd->fd);
     if (strcmp(sink->id, APISINK_STM32_TCP_S) == 0)
         unlink(sinkfd->addr);
-    sinkfd_destroy(sinkfd);
+    sinkfd_free(sinkfd);
     return 0;
 }
 
@@ -229,7 +229,7 @@ static int tcp_c_close(struct apisink *sink, int fd)
         return -1;
 
     close(sinkfd->fd);
-    sinkfd_destroy(sinkfd);
+    sinkfd_free(sinkfd);
 
     struct posix_sink *tcp_c_sink = container_of(sink, struct posix_sink, sink);
     FD_CLR(fd, &tcp_c_sink->fds);
@@ -328,7 +328,7 @@ static int com_close(struct apisink *sink, int fd)
     if (sinkfd == NULL)
         return -1;
     close(sinkfd->fd);
-    sinkfd_destroy(sinkfd);
+    sinkfd_free(sinkfd);
     return 0;
 }
 

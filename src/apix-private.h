@@ -128,7 +128,7 @@ struct sinkfd {
 };
 
 struct sinkfd *sinkfd_new();
-void sinkfd_destroy(struct sinkfd *sinkfd);
+void sinkfd_free(struct sinkfd *sinkfd);
 
 struct sinkfd *find_sinkfd_in_apix(struct apix *ctx, int fd);
 struct sinkfd *find_sinkfd_in_apisink(struct apisink *sink, int fd);
@@ -163,7 +163,7 @@ static inline void apimsg_finish(struct apimsg *msg)
     msg->state = APIMSG_ST_FINISHED;
 }
 
-static inline void apimsg_delete(struct apimsg *msg)
+static inline void apimsg_free(struct apimsg *msg)
 {
     list_del(&msg->ln);
     srrp_free(msg->pac);

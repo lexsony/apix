@@ -17,8 +17,8 @@ func New() (Apix) {
     return Apix{ctx: ctx}
 }
 
-func (self *Apix) Destroy() {
-    C.apix_destroy(self.ctx)
+func (self *Apix) Drop() {
+    C.apix_drop(self.ctx)
 }
 
 func (self *Apix) Close(fd int) (int) {

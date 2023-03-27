@@ -23,7 +23,7 @@ struct apix;
  */
 
 struct apix *apix_new();
-void apix_destroy(struct apix *ctx);
+void apix_drop(struct apix *ctx);
 
 /**
  * apix_open
