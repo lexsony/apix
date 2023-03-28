@@ -19,6 +19,8 @@
 #define PARSE_PACKET_TIMEOUT 1000 /*ms*/
 #define APIX_IDLE_MAX (1 * 1000 * 1000) /*us*/
 
+#define PAYLOAD_LIMIT 1400
+
 #ifdef __cplusplus
 extern "C" {
 #endif

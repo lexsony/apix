@@ -632,16 +632,22 @@ static void __apix_srrp_send(
     struct apix *ctx, int fd, const struct srrp_packet *pac)
 {
     uint32_t idx = 0;
-    const uint32_t cnt = 1400;
     struct srrp_packet *tmp_pac = NULL;
 
     LOG_TRACE("[%x] srrp send: %s", ctx, srrp_get_raw(pac));
 
+    // payload_len < cnt, maybe zero, should not remove this code
+    if (srrp_get_payload_len(pac) < PAYLOAD_LIMIT) {
+        apix_send_to_buffer(ctx, fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+        return;
+    }
+
+    // payload_len > cnt, can't be zero
     while (idx != srrp_get_payload_len(pac)) {
         uint32_t tmp_cnt = srrp_get_payload_len(pac) - idx;
         uint8_t fin = 0;
-        if (tmp_cnt > cnt) {
-            tmp_cnt = cnt;
+        if (tmp_cnt > PAYLOAD_LIMIT) {
+            tmp_cnt = PAYLOAD_LIMIT;
             fin = SRRP_FIN_0;
         } else {
             fin = SRRP_FIN_1;
