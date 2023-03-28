@@ -49,6 +49,9 @@ static int __log_message(int level, const char *format, va_list ap)
     case LOG_LV_NONE: // None
         strcpy(prefix, "");
         break;
+    case LOG_LV_TRACE: // Bright Cyan, important stuff!
+        strcpy(prefix, CL_CYAN"T"CL_RESET);
+        break;
     case LOG_LV_DEBUG: // Bright Cyan, important stuff!
         strcpy(prefix, CL_CYAN"D"CL_RESET);
         break;

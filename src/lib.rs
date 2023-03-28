@@ -2,6 +2,23 @@
  * Currently struct Apix & Srrp in this file
  */
 
+pub enum LogLevel {
+    None = 0,
+    Trace,
+    Debug,
+    Info,
+    Notice,
+    Warn,
+    Error,
+    Fatal,
+}
+
+pub fn log_set_level(level: LogLevel) {
+    unsafe {
+        apix_sys::log_set_level(level as i32);
+    }
+}
+
 pub struct Apix {
     pub ctx: *mut apix_sys::apix,
 }
@@ -15,12 +32,6 @@ impl Drop for Apix {
 }
 
 impl Apix {
-    pub fn log_set_debug() {
-        unsafe {
-            apix_sys::log_set_level(apix_sys::LOG_LV_DEBUG as i32);
-        }
-    }
-
     pub fn new() -> Result<Apix, std::io::Error> {
         unsafe {
             let ctx = apix_sys::apix_new();

@@ -7,6 +7,7 @@ extern "C" {
 
 enum {
     LOG_LV_NONE = 0,
+    LOG_LV_TRACE,
     LOG_LV_DEBUG,
     LOG_LV_INFO, /* default */
     LOG_LV_NOTICE,
@@ -23,6 +24,7 @@ int log_message(int level, const char *format, ...);
 
 /* Marcos wrapping log_level for convenient usage of log_message */
 #define LOG_NONE(format, ...) log_message(LOG_LV_NONE, format, ##__VA_ARGS__)
+#define LOG_TRACE(format, ...) log_message(LOG_LV_TRACE, format, ##__VA_ARGS__)
 #define LOG_DEBUG(format, ...) log_message(LOG_LV_DEBUG, format, ##__VA_ARGS__)
 #define LOG_INFO(format, ...) log_message(LOG_LV_INFO, format, ##__VA_ARGS__)
 #define LOG_NOTICE(format, ...) log_message(LOG_LV_NOTICE, format, ##__VA_ARGS__)

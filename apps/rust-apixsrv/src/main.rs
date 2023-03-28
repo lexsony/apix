@@ -43,7 +43,7 @@ fn init_fd(ctx: &Rc<apix::Apix>, fd: i32) {
 fn main() {
     simple_logger::SimpleLogger::new().env().init().unwrap();
 
-    apix::Apix::log_set_debug();
+    apix::log_set_level(apix::LogLevel::Trace);
 
     let ctx = Rc::new(apix::Apix::new().unwrap());
     ctx.enable_posix();
