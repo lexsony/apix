@@ -63,13 +63,10 @@ static int tcp_s_open(struct apisink *sink, const char *addr)
         return -1;
     }
 
-    struct sinkfd *sinkfd = sinkfd_new();
+    struct sinkfd *sinkfd = sinkfd_new(sink);
     sinkfd->fd = fd;
     sinkfd->type = SINKFD_T_LISTEN;
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
-    sinkfd->sink = sink;
-    list_add(&sinkfd->ln_sink, &sink->sinkfds);
-    list_add(&sinkfd->ln_ctx, &sink->ctx->sinkfds);
 
     struct posix_sink *tcp_s_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &tcp_s_sink->fds);
@@ -207,13 +204,10 @@ static int tcp_c_open(struct apisink *sink, const char *addr)
         return -1;
     }
 
-    struct sinkfd *sinkfd = sinkfd_new();
+    struct sinkfd *sinkfd = sinkfd_new(sink);
     sinkfd->fd = fd;
     sinkfd->type = SINKFD_T_LISTEN;
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
-    sinkfd->sink = sink;
-    list_add(&sinkfd->ln_sink, &sink->sinkfds);
-    list_add(&sinkfd->ln_ctx, &sink->ctx->sinkfds);
 
     struct posix_sink *tcp_c_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &tcp_c_sink->fds);
@@ -312,12 +306,9 @@ static int com_open(struct apisink *sink, const char *addr)
     int fd = open(addr, O_RDWR | O_NOCTTY);
     if (fd == -1) return -1;
 
-    struct sinkfd *sinkfd = sinkfd_new();
+    struct sinkfd *sinkfd = sinkfd_new(sink);
     sinkfd->fd = fd;
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
-    sinkfd->sink = sink;
-    list_add(&sinkfd->ln_sink, &sink->sinkfds);
-    list_add(&sinkfd->ln_ctx, &sink->ctx->sinkfds);
 
     return fd;
 }

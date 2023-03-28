@@ -78,13 +78,10 @@ static int unix_s_open(struct apisink *sink, const char *addr)
         return -1;
     }
 
-    struct sinkfd *sinkfd = sinkfd_new();
+    struct sinkfd *sinkfd = sinkfd_new(sink);
     sinkfd->fd = fd;
     sinkfd->type = SINKFD_T_LISTEN;
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
-    sinkfd->sink = sink;
-    list_add(&sinkfd->ln_sink, &sink->sinkfds);
-    list_add(&sinkfd->ln_ctx, &sink->ctx->sinkfds);
 
     struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &ps->fds);
@@ -153,22 +150,17 @@ static int unix_s_poll(struct apisink *sink)
             }
             LOG_DEBUG("[%x] accept: {fd:%d, newfd:%d}", sink->ctx, pos->fd, newfd);
 
-            struct sinkfd *sinkfd = sinkfd_new();
+            struct sinkfd *sinkfd = sinkfd_new(sink);
             sinkfd->fd = newfd;
             sinkfd->father = pos;
             sinkfd->type = SINKFD_T_ACCEPT;
             sinkfd->srrp_mode = pos->srrp_mode;
-            sinkfd->sink = sink;
-            list_add(&sinkfd->ln_sink, &sink->sinkfds);
-            list_add(&sinkfd->ln_ctx, &sink->ctx->sinkfds);
 
             if (ps->nfds < newfd + 1)
                 ps->nfds = newfd + 1;
             FD_SET(newfd, &ps->fds);
 
-            if (pos->events.on_accept)
-                pos->events.on_accept(
-                    sink->ctx, pos->fd, newfd, pos->events_priv.priv_on_accept);
+            pos->ev.bits.accept = 1;
         } else /* recv */ {
             char buf[1024] = {0};
             int nread = recv(pos->fd, buf, sizeof(buf), 0);
@@ -181,8 +173,10 @@ static int unix_s_poll(struct apisink *sink)
                 FD_CLR(pos->fd, &ps->fds);
                 sink->ops.close(sink, pos->fd);
             } else {
+                LOG_TRACE("[recv] fd:%d, packet in", pos->fd);
                 vpack(pos->rxbuf, buf, nread);
                 gettimeofday(&pos->ts_poll_recv, NULL);
+                pos->ev.bits.pollin = 1;
             }
         }
     }
@@ -220,12 +214,9 @@ static int unix_c_open(struct apisink *sink, const char *addr)
         return -1;
     }
 
-    struct sinkfd *sinkfd = sinkfd_new();
+    struct sinkfd *sinkfd = sinkfd_new(sink);
     sinkfd->fd = fd;
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
-    sinkfd->sink = sink;
-    list_add(&sinkfd->ln_sink, &sink->sinkfds);
-    list_add(&sinkfd->ln_ctx, &sink->ctx->sinkfds);
 
     struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &ps->fds);
@@ -282,8 +273,10 @@ static int unix_c_poll(struct apisink *sink)
             FD_CLR(pos->fd, &ps->fds);
             sink->ops.close(sink, pos->fd);
         } else {
+            LOG_TRACE("[recv] fd:%d, packet in", pos->fd);
             vpack(pos->rxbuf, buf, nread);
             gettimeofday(&pos->ts_poll_recv, NULL);
+            pos->ev.bits.pollin = 1;
         }
     }
 
@@ -336,13 +329,10 @@ static int tcp_s_open(struct apisink *sink, const char *addr)
         return -1;
     }
 
-    struct sinkfd *sinkfd = sinkfd_new();
+    struct sinkfd *sinkfd = sinkfd_new(sink);
     sinkfd->fd = fd;
     sinkfd->type = SINKFD_T_LISTEN;
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
-    sinkfd->sink = sink;
-    list_add(&sinkfd->ln_sink, &sink->sinkfds);
-    list_add(&sinkfd->ln_ctx, &sink->ctx->sinkfds);
 
     struct posix_sink *tcp_s_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &tcp_s_sink->fds);
@@ -391,13 +381,10 @@ static int tcp_c_open(struct apisink *sink, const char *addr)
         return -1;
     }
 
-    struct sinkfd *sinkfd = sinkfd_new();
+    struct sinkfd *sinkfd = sinkfd_new(sink);
     sinkfd->fd = fd;
     sinkfd->type = SINKFD_T_CONNECT;
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
-    sinkfd->sink = sink;
-    list_add(&sinkfd->ln_sink, &sink->sinkfds);
-    list_add(&sinkfd->ln_ctx, &sink->ctx->sinkfds);
 
     struct posix_sink *tcp_c_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &tcp_c_sink->fds);
@@ -426,12 +413,9 @@ static int com_open(struct apisink *sink, const char *addr)
     int fd = open(addr, O_RDWR | O_NOCTTY | O_NDELAY);
     if (fd == -1) return -1;
 
-    struct sinkfd *sinkfd = sinkfd_new();
+    struct sinkfd *sinkfd = sinkfd_new(sink);
     sinkfd->fd = fd;
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
-    sinkfd->sink = sink;
-    list_add(&sinkfd->ln_sink, &sink->sinkfds);
-    list_add(&sinkfd->ln_ctx, &sink->ctx->sinkfds);
 
     struct posix_sink *com_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &com_sink->fds);
@@ -546,8 +530,10 @@ static int com_poll(struct apisink *sink)
             LOG_DEBUG("[read] (%d) finished");
             sink->ops.close(sink, pos->fd);
         } else {
+            LOG_TRACE("[recv] fd:%d, packet in", pos->fd);
             vpack(pos->rxbuf, buf, nread);
             gettimeofday(&pos->ts_poll_recv, NULL);
+            pos->ev.bits.pollin = 1;
         }
     }
 
@@ -587,13 +573,10 @@ static int can_open(struct apisink *sink, const char *addr)
         return -1;
     }
 
-    struct sinkfd *sinkfd = sinkfd_new();
+    struct sinkfd *sinkfd = sinkfd_new(sink);
     sinkfd->fd = fd;
     sinkfd->type = SINKFD_T_CONNECT;
     snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
-    sinkfd->sink = sink;
-    list_add(&sinkfd->ln_sink, &sink->sinkfds);
-    list_add(&sinkfd->ln_ctx, &sink->ctx->sinkfds);
 
     struct posix_sink *tcp_c_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &tcp_c_sink->fds);
@@ -648,8 +631,10 @@ static int can_poll(struct apisink *sink)
             LOG_DEBUG("[read] (%d) finished");
             sink->ops.close(sink, pos->fd);
         } else {
+            LOG_TRACE("[recv] fd:%d, packet in", pos->fd);
             vpack(pos->rxbuf, &frame, sizeof(struct can_frame));
             gettimeofday(&pos->ts_poll_recv, NULL);
+            pos->ev.bits.pollin = 1;
         }
     }
 

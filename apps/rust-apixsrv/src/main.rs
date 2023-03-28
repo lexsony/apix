@@ -1,51 +1,16 @@
 use std::sync::Mutex;
-use std::rc::Rc;
-use log::{info, error};
+use log::{info, debug};
 use simple_logger;
 use apix;
 use ctrlc;
 
-static RUN_FLAG: Mutex<i32> = Mutex::new(1);
-
-fn init_fd(ctx: &Rc<apix::Apix>, fd: i32) {
-    info!("open #{}", fd);
-    ctx.on_fd_close(fd, move || {
-        info!("close #{}", fd);
-    });
-
-    let tmp = Rc::clone(ctx);
-    ctx.on_fd_accept(fd, move |newfd| {
-        info!("accept #{} from {}", newfd, fd);
-        tmp.on_fd_close(newfd, move || {
-            info!("close #{}", newfd);
-        });
-        let tmp2 = Rc::clone(&tmp);
-        tmp.on_srrp_packet(newfd, move |pac| {
-            info!("srrp_packet #{}: {}?{}", newfd, pac.anchor, pac.payload);
-            tmp2.srrp_forward(pac)
-        })
-    });
-
-    let tmp = Rc::clone(ctx);
-    ctx.on_srrp_packet(fd, move |pac| {
-        info!("srrp_packet #{} pac: srcid:{}, dstid:{}, {}?{}",
-              fd, pac.srcid, pac.dstid, pac.anchor, pac.payload);
-        let resp = apix::Srrp::new_response(
-            pac.dstid, pac.srcid, &pac.anchor,
-            "j:{\"err\":404,\"msg\":\"Service not found\"}")
-            .unwrap();
-        info!("srrp_packet #{} resp: srcid:{}, dstid:{}, {}?{}",
-              fd, resp.srcid, resp.dstid, resp.anchor, resp.payload);
-        tmp.srrp_send(fd, &resp);
-    });
-}
+static EXIT_FLANG: Mutex<i32> = Mutex::new(0);
 
 fn main() {
     simple_logger::SimpleLogger::new().env().init().unwrap();
-
     apix::log_set_level(apix::LogLevel::Trace);
 
-    let ctx = Rc::new(apix::Apix::new().unwrap());
+    let ctx = apix::Apix::new().unwrap();
     ctx.enable_posix();
 
     // fd_unix init
@@ -53,27 +18,62 @@ fn main() {
         Ok(x) => x,
         Err(e) => panic!("{}", e),
     };
-    ctx.enable_srrp_mode(fd_unix, 0x1);
-    init_fd(&ctx, fd_unix);
+    ctx.upgrade_to_srrp(fd_unix, 0x1);
 
     // fd_tcp init
     let fd_tcp = match ctx.open_tcp_server("127.0.0.1:3824") {
         Ok(x) => x,
         Err(e) => panic!("{}", e),
     };
-    ctx.enable_srrp_mode(fd_tcp, 0x2);
-    init_fd(&ctx, fd_tcp);
+    ctx.upgrade_to_srrp(fd_tcp, 0x2);
 
     // signal
     ctrlc::set_handler(move || {
-        *RUN_FLAG.lock().unwrap() = 0;
+        *EXIT_FLANG.lock().unwrap() = 1;
     }).expect("Error setting Ctrl-C handler");
 
     // main loop
-    while *RUN_FLAG.lock().unwrap() == 1 {
-        if let Err(ref err) = ctx.poll(1 * 1000) {
-            error!("Error: {}", err);
-            *RUN_FLAG.lock().unwrap() = 0;
+    loop {
+        if *EXIT_FLANG.lock().unwrap() == 1 {
+            break;
+        }
+
+        let fd = ctx.waiting(10 * 1000);
+        if fd == 0 {
+            continue;
+        }
+
+        match ctx.next_event(fd) {
+            x if x == apix::ApixEvent::Open as u8 => {
+                info!("#{} open", fd);
+            },
+            x if x == apix::ApixEvent::Close as u8 => {
+                info!("#{} close", fd);
+            },
+            x if x == apix::ApixEvent::Accept as u8 => {
+                info!("#{} accept", fd);
+            },
+            x if x == apix::ApixEvent::Pollin as u8 => {
+                debug!("#{} pollin", fd);
+            },
+            x if x == apix::ApixEvent::SrrpPacket as u8 => {
+                let pac = ctx.next_srrp_packet(fd).unwrap();
+                if fd == fd_unix || fd == fd_tcp {
+                    info!("#{} srrp_packet: srcid:{}, dstid:{}, {}?{}",
+                          fd, pac.srcid, pac.dstid, pac.anchor, pac.payload);
+                    let resp = apix::Srrp::new_response(
+                        pac.dstid, pac.srcid, &pac.anchor,
+                        "j:{\"err\":404,\"msg\":\"Service not found\"}")
+                        .unwrap();
+                    info!("#{} resp: srcid:{}, dstid:{}, {}?{}",
+                          fd, resp.srcid, resp.dstid, resp.anchor, resp.payload);
+                    ctx.srrp_send(fd, &resp);
+                } else {
+                    info!("#{} srrp_packet: {}?{}", fd, pac.anchor, pac.payload);
+                    ctx.srrp_forward(fd, &pac)
+                }
+            },
+            _ => {}
         }
     }
 

@@ -8,6 +8,14 @@ package apix
 import "C"
 import "unsafe"
 
+const (
+    EventNone uint = 0
+    EventOpen uint = 1
+    EventClose uint = 2
+    EventAccept uint = 3
+    EventPollin uint = 4
+)
+
 type Apix struct {
     ctx *C.struct_apix
 }
@@ -45,8 +53,12 @@ func (self *Apix) ReadFromBuffer(fd int, buf []byte) (int) {
         (*C.uchar)(unsafe.Pointer(&buf[0])), C.uint(len(buf))))
 }
 
-func (self *Apix) Poll(usec uint64) (int) {
-    return int(C.apix_poll(self.ctx, C.ulong(usec)))
+func (self *Apix) Waiting(usec uint64) (int) {
+    return int(C.apix_waiting(self.ctx, C.ulong(usec)))
+}
+
+func (self *Apix) NextEvent(fd int) (uint) {
+    return uint(C.apix_next_event(self.ctx, C.int(fd)))
 }
 
 func (self *Apix) EnablePosix() {

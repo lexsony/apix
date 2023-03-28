@@ -18,11 +18,23 @@ extern "C" {
 
 struct apix;
 
-/**
- * apix init & fini
- */
+enum apix_event {
+    AEC_NONE = 0,
+    AEC_OPEN,
+    AEC_CLOSE,
+    AEC_ACCEPT,
+    AEC_POLLIN,
+    AEC_SRRP_PACKET,
+};
 
+/**
+ * apix_new
+ */
 struct apix *apix_new();
+
+/**
+ * apix_drop
+ */
 void apix_drop(struct apix *ctx);
 
 /**
@@ -73,68 +85,42 @@ int apix_send_to_buffer(struct apix *ctx, int fd, const uint8_t *buf, uint32_t l
 int apix_read_from_buffer(struct apix *ctx, int fd, uint8_t *buf, uint32_t len);
 
 /**
- * apix is designed with poll mechanism
- * - usec: if > 0, sleelp usec while idle. if = 0, sleep less than 1s while idle
+ * apix_get_fd_father
  */
-int apix_poll(struct apix *ctx, uint64_t usec);
+int apix_get_fd_father(struct apix *ctx, int fd);
 
 /**
- * apix_on_fd_close
- * - called after fd is closed
+ * apix_waiting
  */
-typedef void (*fd_close_func_t)(struct apix *ctx, int fd, void *priv);
-int apix_on_fd_close(struct apix *ctx, int fd, fd_close_func_t func, void *priv);
+int apix_waiting(struct apix *ctx, uint64_t usec);
 
 /**
- * apix_on_fd_accept
- * - called after newfd is accepted
+ * apix_next_event
  */
-typedef void (*fd_accept_func_t)(
-    struct apix *ctx, int fd, int newfd, void *priv);
-int apix_on_fd_accept(struct apix *ctx, int fd, fd_accept_func_t func, void *priv);
+uint8_t apix_next_event(struct apix *ctx, int fd);
 
 /**
- * apix_on_fd_pollin
- * - called during apix_poll when rxbuf of fd is not empty
- * - return n(<=-1): unhandled
- * - return n(>=0): handled, and skip n bytes
+ * apix_next_srrp_packet
  */
-typedef int (*fd_pollin_func_t)(
-    struct apix *ctx, int fd, const uint8_t *buf, uint32_t len, void *priv);
-int apix_on_fd_pollin(struct apix *ctx, int fd, fd_pollin_func_t func, void *priv);
+struct srrp_packet *apix_next_srrp_packet(struct apix *ctx, int fd);
 
 /**
- * apix_enable_srrp_mode
+ * apix_upgrade_to_srrp
  * - enable srrp mode
  */
-int apix_enable_srrp_mode(struct apix *ctx, int fd, uint32_t nodeid);
-
-/**
- * apix_enable_srrp_mode
- * - enable srrp mode
- */
-int apix_disable_srrp_mode(struct apix *ctx, int fd);
+int apix_upgrade_to_srrp(struct apix *ctx, int fd, uint32_t nodeid);
 
 /**
  * apix_srrp_forward
  * - forward the srrp packet to the real destination through dstid
  */
-void apix_srrp_forward(struct apix *ctx, struct srrp_packet *pac);
+void apix_srrp_forward(struct apix *ctx, int fd, struct srrp_packet *pac);
 
 /**
  * apix_srrp_send
  * - send the srrp packet to the src fd and real destination through dstid
  */
 int apix_srrp_send(struct apix *ctx, int fd, struct srrp_packet *pac);
-
-/**
- * apix_on_srrp_packet
- * - called when received srrp packets
- */
-typedef void (*srrp_packet_func_t)(
-    struct apix *ctx, int fd, struct srrp_packet *pac, void *priv);
-int apix_on_srrp_packet(
-    struct apix *ctx, int fd, srrp_packet_func_t func, void *priv);
 
 #ifdef __cplusplus
 }

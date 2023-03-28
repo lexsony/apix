@@ -61,11 +61,17 @@ class Apix():
         nr = func(self.ctx, fd, ctypes.cast(buf, ctypes.c_void_p), len(buf))
         return ctypes.cast(buf, ctypes.POINTER(ctypes.c_ubyte * nr)).contents
 
-    def poll(self, usec):
-        func = lib.apix_poll
+    def waiting(self, usec):
+        func = lib.apix_waiting
         func.argtypes = [ctypes.c_void_p, ctypes.c_uint64]
         func.restype = ctypes.c_int32
         return func(self.ctx, usec)
+
+    def next_event(self, fd):
+        func = lib.apix_next_event
+        func.argtypes = [ctypes.c_void_p, ctypes.c_int32]
+        func.restype = ctypes.c_uint32
+        return func(self.ctx, fd)
 
     def enable_posix(self):
         func = lib.apix_enable_posix

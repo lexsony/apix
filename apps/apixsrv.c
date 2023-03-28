@@ -10,7 +10,6 @@
 #include <apix/apix.h>
 #include <apix/log.h>
 #include "opt.h"
-#include "srrp.h"
 
 static int exit_flag;
 static struct apix *ctx;
@@ -29,39 +28,6 @@ static struct opt opttab[] = {
     INIT_OPT_NONE(),
 };
 
-static void
-on_srrp_packet_listen(struct apix *ctx, int fd, struct srrp_packet *pac, void *priv)
-{
-    LOG_INFO("serv #%d: %s", fd, srrp_get_raw(pac));
-
-    struct srrp_packet *resp = srrp_new_response(
-        srrp_get_dstid(pac),
-        srrp_get_srcid(pac),
-        srrp_get_anchor(pac),
-        "j:{\"err\":404,\"msg\":\"Service not found\"}");
-    apix_srrp_send(ctx, fd, resp);
-    srrp_free(resp);
-}
-
-static void
-on_srrp_packet_accept(struct apix *ctx, int fd, struct srrp_packet *pac, void *priv)
-{
-    LOG_INFO("forward #%d: %s", fd, srrp_get_raw(pac));
-    apix_srrp_forward(ctx, pac);
-}
-
-static void on_fd_close(struct apix *ctx, int fd, void *priv)
-{
-    LOG_INFO("close #%d", fd);
-}
-
-static void on_fd_accept(struct apix *ctx, int _fd, int newfd, void *priv)
-{
-    apix_on_fd_close(ctx, newfd, on_fd_close, NULL);
-    apix_on_srrp_packet(ctx, newfd, on_srrp_packet_accept, NULL);
-    LOG_INFO("accept #%d from %d", newfd, _fd);
-}
-
 static void *apix_thread(void *arg)
 {
     ctx = apix_new();
@@ -75,10 +41,7 @@ static void *apix_thread(void *arg)
         LOG_ERROR("open unix socket at %s failed!", opt_string(opt));
         exit(-1);
     }
-    apix_enable_srrp_mode(ctx, fd_unix, 0x1);
-    apix_on_fd_close(ctx, fd_unix, on_fd_close, NULL);
-    apix_on_fd_accept(ctx, fd_unix, on_fd_accept, NULL);
-    apix_on_srrp_packet(ctx, fd_unix, on_srrp_packet_listen, NULL);
+    apix_upgrade_to_srrp(ctx, fd_unix, 0x1);
     LOG_INFO("open unix socket #%d at %s", fd_unix, opt_string(opt));
 
     opt = find_opt("tcp", opttab);
@@ -88,24 +51,53 @@ static void *apix_thread(void *arg)
         LOG_ERROR("open tcp socket at %s failed!", opt_string(opt));
         exit(-1);
     }
-    apix_enable_srrp_mode(ctx, fd_tcp, 0x2);
-    apix_on_fd_close(ctx, fd_tcp, on_fd_close, NULL);
-    apix_on_fd_accept(ctx, fd_tcp, on_fd_accept, NULL);
-    apix_on_srrp_packet(ctx, fd_tcp, on_srrp_packet_listen, NULL);
+    apix_upgrade_to_srrp(ctx, fd_tcp, 0x2);
     LOG_INFO("open tcp socket #%d at %s", fd_tcp, opt_string(opt));
 
-    while (exit_flag == 0) {
-        apix_poll(ctx, 0);
+    for (;;) {
+        if (exit_flag == 1) break;
+
+        int fd = apix_waiting(ctx, 100 * 1000);
+        if (fd == 0) continue;
+
+        switch (apix_next_event(ctx, fd)) {
+        case AEC_OPEN:
+            LOG_INFO("#%d open", fd);
+            break;
+        case AEC_CLOSE:
+            LOG_INFO("#%d close", fd);
+            break;
+        case AEC_ACCEPT:
+            LOG_INFO("#%d accept", fd);
+            break;
+        case AEC_SRRP_PACKET: {
+            struct srrp_packet *pac = apix_next_srrp_packet(ctx, fd);
+            if (fd == fd_unix || fd_tcp) {
+                struct srrp_packet *resp = srrp_new_response(
+                    srrp_get_dstid(pac),
+                    srrp_get_srcid(pac),
+                    srrp_get_anchor(pac),
+                    "j:{\"err\":404,\"msg\":\"Service not found\"}");
+                apix_srrp_send(ctx, fd, resp);
+                srrp_free(resp);
+                LOG_INFO("#%d serv packet: %s", fd, srrp_get_raw(pac));
+            } else {
+                apix_srrp_forward(ctx, fd, pac);
+                LOG_INFO("#%d forward packet: %s", fd, srrp_get_raw(pac));
+            }
+            break;
+        }
+        default:
+            break;
+        }
     }
 
     apix_drop(ctx); // auto close all fds
-
     return NULL;
 }
 
 int main(int argc, char *argv[])
 {
-    log_set_level(LOG_LV_INFO);
     opt_init_from_arg(opttab, argc, argv);
     signal(SIGINT, signal_handler);
     signal(SIGQUIT, signal_handler);
@@ -115,10 +107,7 @@ int main(int argc, char *argv[])
     if (opt_bool(opt))
         log_set_level(LOG_LV_DEBUG);
 
-    while (exit_flag == 0) {
-        apix_thread(NULL);
-        sleep(1);
-    }
+    apix_thread(NULL);
 
     return 0;
 }

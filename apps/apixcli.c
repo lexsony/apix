@@ -55,7 +55,7 @@ static int print_all = 0;
 
 static void signal_handler(int sig)
 {
-    exit_flag = 1;
+    //exit_flag = 1;
 }
 
 static struct opt opttab[] = {
@@ -100,20 +100,6 @@ static void log_hex_string(const char *buf, uint32_t len)
             printf("_0x%.2x", buf[i]);
     }
     printf("\n");
-}
-
-static void close_fd(int fd)
-{
-    if (fd >= 0 && fd < sizeof(fds) / sizeof(fds[0])) {
-        printf("close #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
-        if (cur_fd == fd)
-            cur_fd = -1;
-        fds[fd].fd = 0;
-        if (fds[fd].msg) {
-            atbuf_delete(fds[fd].msg);
-            fds[fd].msg = NULL;
-        }
-    }
 }
 
 static void
@@ -164,46 +150,6 @@ on_srrp_packet(struct apix *ctx, int fd, struct srrp_packet *pac, void *priv)
         rl_redisplay();
         free(saved_line);
     }
-}
-
-static int
-on_fd_pollin(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len, void *priv)
-{
-    if (fds[fd].srrp_mode == 1)
-        return -1;
-
-    if (fds[fd].msg == NULL) {
-        fds[fd].msg = atbuf_new(KBYTES);
-    }
-    if (atbuf_spare(fds[fd].msg) < len)
-        atbuf_clear(fds[fd].msg);
-    atbuf_write(fds[fd].msg, buf, len);
-
-    return len;
-}
-
-static void on_fd_close(struct apix *ctx, int fd, void *priv)
-{
-    close_fd(fd);
-}
-
-static void on_fd_accept(struct apix *ctx, int _fd, int newfd, void *priv)
-{
-    if (_fd > FD_MAX || newfd > FD_MAX) {
-        perror("fd is too big");
-        exit(-1);
-    }
-
-    apix_on_fd_close(ctx, newfd, on_fd_close, NULL);
-    apix_on_fd_pollin(ctx, newfd, on_fd_pollin, NULL);
-    apix_on_srrp_packet(ctx, newfd, on_srrp_packet, NULL);
-    assert(fds[newfd].fd == 0);
-    fds[newfd].fd = newfd;
-    strcpy(fds[newfd].addr, fds[_fd].addr);
-    fds[newfd].type = 'a';
-    fds[newfd].mode = fds[_fd].mode;
-    fds[newfd].srrp_mode = fds[_fd].srrp_mode;
-    printf("accept #%d, %s(%c)\n", newfd, fds[newfd].addr, fds[newfd].type);
 }
 
 #ifndef __APPLE__
@@ -311,22 +257,87 @@ static void print_all_msg(void)
     }
 }
 
+static void close_fd(int fd)
+{
+    if (fd >= 0 && fd < sizeof(fds) / sizeof(fds[0])) {
+        //printf("close #%d, %s(%c)\n", fd, fds[fd].addr, fds[fd].type);
+        if (cur_fd == fd)
+            cur_fd = -1;
+        fds[fd].fd = 0;
+        if (fds[fd].msg) {
+            atbuf_delete(fds[fd].msg);
+            fds[fd].msg = NULL;
+        }
+    }
+}
+
 static void *apix_thread(void *arg)
 {
     ctx = apix_new();
     apix_enable_posix(ctx);
 
-    while (exit_flag == 0) {
+    for (;;) {
+        if (exit_flag == 1) break;
+
         if (print_all)
             print_all_msg();
         else
             print_cur_msg();
-        apix_poll(ctx, 0);
+
+        int fd = apix_waiting(ctx, 100 * 1000);
+        if (fd == 0) continue;
+
+        switch (apix_next_event(ctx, fd)) {
+        case AEC_OPEN: {
+            int _fd = apix_get_fd_father(ctx, fd);
+            if (_fd) {
+                assert(fds[fd].fd == 0);
+                fds[fd].fd = fd;
+                strcpy(fds[fd].addr, fds[_fd].addr);
+                fds[fd].type = 'a';
+                fds[fd].mode = fds[_fd].mode;
+                fds[fd].srrp_mode = fds[_fd].srrp_mode;
+                printf("#%d open: %s, %c\n", fd, fds[fd].addr, fds[fd].type);
+            }
+            break;
+        }
+        case AEC_CLOSE:
+            close_fd(fd);
+            printf("#%d close\n", fd);
+            break;
+        case AEC_ACCEPT:
+            printf("#%d accept\n", fd);
+            break;
+        case AEC_POLLIN:
+            if (fds[fd].srrp_mode == 0) {
+                if (fds[fd].msg == NULL) {
+                    fds[fd].msg = atbuf_new(KBYTES);
+                }
+
+                uint8_t buf[2048] = {0};
+                uint32_t len = apix_read_from_buffer(ctx, fd, buf, sizeof(buf));
+
+                if (strcmp(fds[fd].mode, "can") == 0) {
+                    on_can_pollin(ctx, fd, buf, len, NULL);
+                } else {
+                    if (atbuf_spare(fds[fd].msg) < len)
+                        atbuf_clear(fds[fd].msg);
+                    atbuf_write(fds[fd].msg, buf, len);
+                }
+            }
+            break;
+        case AEC_SRRP_PACKET: {
+            struct srrp_packet *pac = apix_next_srrp_packet(ctx, fd);
+            on_srrp_packet(ctx, fd, pac, NULL);
+            printf("#%d srrp packet: %s\n", fd, srrp_get_raw(pac));
+            break;
+        }
+        default:
+            break;
+        }
     }
 
-    apix_disable_posix(ctx);
     apix_drop(ctx); // auto close all fds
-
     return NULL;
 }
 
@@ -443,9 +454,6 @@ static void on_cmd_unix_listen(const char *cmd)
             perror("listen_unix");
             return;
         }
-        apix_on_fd_close(ctx, fd, on_fd_close, NULL);
-        apix_on_fd_accept(ctx, fd, on_fd_accept, NULL);
-        apix_on_srrp_packet(ctx, fd, on_srrp_packet, NULL);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
@@ -470,9 +478,6 @@ static void on_cmd_tcp_listen(const char *cmd)
             perror("listen_tcp");
             return;
         }
-        apix_on_fd_close(ctx, fd, on_fd_close, NULL);
-        apix_on_fd_accept(ctx, fd, on_fd_accept, NULL);
-        apix_on_srrp_packet(ctx, fd, on_srrp_packet, NULL);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
@@ -506,9 +511,6 @@ static void on_cmd_unix_open(const char *cmd)
             perror("open_unix");
             return;
         }
-        apix_on_fd_close(ctx, fd, on_fd_close, NULL);
-        apix_on_fd_pollin(ctx, fd, on_fd_pollin, NULL);
-        apix_on_srrp_packet(ctx, fd, on_srrp_packet, NULL);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
@@ -537,9 +539,6 @@ static void on_cmd_tcp_open(const char *cmd)
         perror("open_tcp");
         return;
     }
-    apix_on_fd_close(ctx, fd, on_fd_close, NULL);
-    apix_on_fd_pollin(ctx, fd, on_fd_pollin, NULL);
-    apix_on_srrp_packet(ctx, fd, on_srrp_packet, NULL);
     assert(fds[fd].fd == 0);
     fds[fd].fd = fd;
     snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
@@ -584,9 +583,6 @@ static void on_cmd_com_open(const char *cmd)
         perror("ioctl_com");
         return;
     }
-    apix_on_fd_close(ctx, fd, on_fd_close, NULL);
-    apix_on_fd_pollin(ctx, fd, on_fd_pollin, NULL);
-    apix_on_srrp_packet(ctx, fd, on_srrp_packet, NULL);
     assert(fds[fd].fd == 0);
     fds[fd].fd = fd;
     snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", strstr(cmd, "open "));
@@ -622,9 +618,6 @@ static void on_cmd_can_open(const char *cmd)
         perror("open_can");
         return;
     }
-    apix_on_fd_close(ctx, fd, on_fd_close, NULL);
-    apix_on_fd_pollin(ctx, fd, on_can_pollin, NULL);
-    apix_on_srrp_packet(ctx, fd, on_srrp_packet, NULL);
     assert(fds[fd].fd == 0);
     fds[fd].fd = fd;
     snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", strstr(cmd, "open "));
@@ -746,12 +739,7 @@ static void on_cmd_srrpmode(const char *cmd)
     if (strcmp(msg, "on") == 0) {
         if (fds[cur_fd].srrp_mode == 0) {
             fds[cur_fd].srrp_mode = 1;
-            apix_enable_srrp_mode(ctx, fds[cur_fd].fd, fds[cur_fd].node_id);
-        }
-    } else if (strcmp(msg, "off") == 0) {
-        if (fds[cur_fd].srrp_mode == 1) {
-            fds[cur_fd].srrp_mode = 0;
-            apix_disable_srrp_mode(ctx, fds[cur_fd].fd);
+            apix_upgrade_to_srrp(ctx, fds[cur_fd].fd, fds[cur_fd].node_id);
         }
     } else {
         printf("param error\n");
@@ -928,7 +916,6 @@ static void *cli_thread(void *arg)
 
 int main(int argc, char *argv[])
 {
-    log_set_level(LOG_LV_INFO);
     opt_init_from_arg(opttab, argc, argv);
     signal(SIGINT, signal_handler);
     signal(SIGQUIT, signal_handler);

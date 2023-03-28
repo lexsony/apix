@@ -19,6 +19,15 @@ pub fn log_set_level(level: LogLevel) {
     }
 }
 
+pub enum ApixEvent {
+    None = 0,
+    Open,
+    Close,
+    Accept,
+    Pollin,
+    SrrpPacket,
+}
+
 pub struct Apix {
     pub ctx: *mut apix_sys::apix,
 }
@@ -77,122 +86,44 @@ impl Apix {
         }
     }
 
-    pub fn poll(&self, usec: u64) -> Result<(), std::io::Error> {
+    pub fn waiting(&self, usec: u64) -> i32 {
         unsafe {
-            match apix_sys::apix_poll(self.ctx, usec) {
-                0 => Ok(()),
-                _ => Err(std::io::Error::last_os_error()),
+            return apix_sys::apix_waiting(self.ctx, usec);
+        }
+    }
+
+    pub fn next_event(&self, fd: i32) -> u8 {
+        unsafe {
+            return apix_sys::apix_next_event(self.ctx, fd);
+        }
+    }
+
+    pub fn next_srrp_packet(&self, fd: i32) -> Option<SrrpPacket> {
+        unsafe {
+            let pac = apix_sys::apix_next_srrp_packet(self.ctx, fd);
+            if pac.is_null() {
+                None
+            } else {
+                Some(Srrp::from_raw_packet(pac))
             }
         }
     }
 
-    extern "C" fn __on_fd_close(_: *mut apix_sys::apix, _: i32,
-                                priv_data: *mut std::ffi::c_void) {
-        let closure: &mut Box<dyn FnMut()> = unsafe {
-            std::mem::transmute(priv_data)
-        };
-        closure();
-    }
-
-    pub fn on_fd_close<F>(&self, fd: i32, func: F)
-    where F: FnMut(),
-          F: 'static
-    {
-        let obj: Box<Box<dyn FnMut()>> = Box::new(Box::new(func));
+    pub fn upgrade_to_srrp(&self, fd: i32, nodeid: u32) {
         unsafe {
-            apix_sys::apix_on_fd_close(
-                self.ctx, fd, Some(Apix::__on_fd_close),
-                Box::into_raw(obj) as *mut std::ffi::c_void);
+            apix_sys::apix_upgrade_to_srrp(self.ctx, fd, nodeid);
         }
     }
 
-    extern "C" fn __on_fd_accept(_: *mut apix_sys::apix, _: i32, newfd: i32,
-                                 priv_data: *mut std::ffi::c_void) {
-        let closure: &mut Box<dyn FnMut(i32)> = unsafe {
-            std::mem::transmute(priv_data)
-        };
-        closure(newfd);
-    }
-
-    pub fn on_fd_accept<F>(&self, fd: i32, func: F)
-    where F: FnMut(i32),
-          F: 'static
-    {
-        let obj: Box<Box<dyn FnMut(i32)>> = Box::new(Box::new(func));
+    pub fn srrp_forward(&self, fd: i32, pac: &SrrpPacket) {
         unsafe {
-            apix_sys::apix_on_fd_accept(
-                self.ctx, fd, Some(Apix::__on_fd_accept),
-                Box::into_raw(obj) as *mut std::ffi::c_void);
-        }
-    }
-
-    extern "C" fn __on_fd_pollin(
-        _: *mut apix_sys::apix, _: i32,
-        buf: *const u8, len: u32, priv_data: *mut std::ffi::c_void) -> i32 {
-        let closure: &mut Box<dyn FnMut(&[u8]) -> i32> = unsafe {
-            std::mem::transmute(priv_data)
-        };
-        unsafe {
-            closure(std::slice::from_raw_parts(buf as *const u8, len as usize))
-        }
-    }
-
-    pub fn on_fd_pollin<F>(&self, fd: i32, func: F)
-        where F: FnMut(&[u8]) -> i32,
-              F: 'static
-    {
-        let obj: Box<Box<dyn FnMut(&[u8]) -> i32>> = Box::new(Box::new(func));
-        unsafe {
-            apix_sys::apix_on_fd_pollin(
-                self.ctx, fd, Some(Apix::__on_fd_pollin),
-                Box::into_raw(obj) as *mut std::ffi::c_void);
-        }
-    }
-
-    pub fn enable_srrp_mode(&self, fd: i32, nodeid: u32) {
-        unsafe {
-            apix_sys::apix_enable_srrp_mode(self.ctx, fd, nodeid);
-        }
-    }
-
-    pub fn disable_srrp_mode(&self, fd: i32) {
-        unsafe {
-            apix_sys::apix_disable_srrp_mode(self.ctx, fd);
-        }
-    }
-
-    pub fn srrp_forward(&self, pac: &SrrpPacket) {
-        unsafe {
-            apix_sys::apix_srrp_forward(self.ctx, pac.pac);
+            apix_sys::apix_srrp_forward(self.ctx, fd, pac.pac);
         }
     }
 
     pub fn srrp_send(&self, fd: i32, pac: &SrrpPacket) {
         unsafe {
             apix_sys::apix_srrp_send(self.ctx, fd, pac.pac);
-        }
-    }
-
-    extern "C" fn __on_srrp_packet(
-        _: *mut apix_sys::apix, _: i32,
-        pac: *mut apix_sys::srrp_packet,
-        priv_data: *mut std::ffi::c_void) {
-        let closure: &mut Box<dyn FnMut(&SrrpPacket)> = unsafe {
-            std::mem::transmute(priv_data)
-        };
-        let mut pac = Srrp::from_raw_packet(pac);
-        closure(&pac);
-        pac.pac = std::ptr::null_mut() as *mut apix_sys::srrp_packet;
-    }
-
-    pub fn on_srrp_packet<F>(&self, fd: i32, func: F)
-    where F: FnMut(&SrrpPacket)
-    {
-        let obj: Box<Box<dyn FnMut(&SrrpPacket)>> = Box::new(Box::new(func));
-        unsafe {
-            apix_sys::apix_on_srrp_packet(
-                self.ctx, fd, Some(Apix::__on_srrp_packet),
-                Box::into_raw(obj) as *mut std::ffi::c_void);
         }
     }
 

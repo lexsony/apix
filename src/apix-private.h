@@ -30,11 +30,10 @@ extern "C" {
  */
 
 struct apix {
-    struct list_head msgs;
     struct list_head sinkfds;
     struct list_head sinks;
     struct timeval poll_ts;
-    int poll_cnt;
+    uint8_t poll_cnt;
     uint64_t idle_usec;
 };
 
@@ -87,7 +86,6 @@ enum sinkfd_state {
     SINKFD_ST_NODEID_DUP,
     SINKFD_ST_NODEID_ZERO,
     SINKFD_ST_FINISHED,
-    SINKFD_ST_CLOSED,
 };
 
 struct sinkfd {
@@ -98,38 +96,37 @@ struct sinkfd {
     int state; /* sinkfd_state */
     time_t ts_sync_in;
     time_t ts_sync_out;
+    struct timeval ts_poll_recv;
 
     vec_8_t *txbuf;
     vec_8_t *rxbuf;
 
+    union {
+        uint8_t byte;
+        struct {
+            uint8_t open:1;
+            uint8_t close:1;
+            uint8_t accept:1;
+            uint8_t pollin:1;
+            uint8_t srrp_packet_in:1;
+        } bits;
+    } ev;
+
+    // only for srrp
     int srrp_mode;
     uint32_t l_nodeid; /* local nodeid */
     uint32_t r_nodeid; /* remote nodeid */
-    struct timeval ts_poll_recv;
     vec_p_t *sub_topics;
     struct srrp_packet *rxpac_unfin;
+    struct list_head msgs;
 
-    struct apix_events {
-        fd_close_func_t on_close;
-        fd_accept_func_t on_accept;
-        fd_pollin_func_t on_pollin;
-        /* TODO: implement on_pollout & on_pollerr */
-        srrp_packet_func_t on_srrp_packet;
-    } events;
-
-    struct apix_events_priv {
-        void *priv_on_close;
-        void *priv_on_accept;
-        void *priv_on_pollin;
-        void *priv_on_srrp_packet;
-    } events_priv;
-
+    struct apix *ctx;
     struct apisink *sink;
-    struct list_head ln_sink;
     struct list_head ln_ctx;
+    struct list_head ln_sink;
 };
 
-struct sinkfd *sinkfd_new();
+struct sinkfd *sinkfd_new(struct apisink *sink);
 void sinkfd_free(struct sinkfd *sinkfd);
 
 struct sinkfd *find_sinkfd_in_apix(struct apix *ctx, int fd);
