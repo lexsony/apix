@@ -1,13 +1,14 @@
 #ifndef _CRC_CRC16_H
 #define _CRC_CRC16_H
 
-#include <stdint.h>
+#include "types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus  */
 
-uint16_t crc16(const uint8_t *buf, int len);
-uint16_t crc16_crc(uint16_t crc, const uint8_t *buf, int len);
+u16 crc16(const u8 *buf, int len);
+u16 crc16_crc(u16 crc, const u8 *buf, int len);
 
 #ifdef __cplusplus
 }

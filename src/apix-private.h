@@ -1,13 +1,12 @@
 #ifndef __APIX_PRIVATE_H
 #define __APIX_PRIVATE_H
 
-#include <stdint.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <time.h>
 #include <sys/time.h>
 
 #include "apix.h"
+#include "types.h"
 #include "list.h"
 #include "vec.h"
 #include "srrp.h"
@@ -33,8 +32,8 @@ struct apix {
     struct list_head sinkfds;
     struct list_head sinks;
     struct timeval poll_ts;
-    uint8_t poll_cnt;
-    uint64_t idle_usec;
+    u8 poll_cnt;
+    u64 idle_usec;
 };
 
 /**
@@ -48,8 +47,8 @@ struct apisink_operations {
     int (*open)(struct apisink *sink, const char *addr);
     int (*close)(struct apisink *sink, int fd);
     int (*ioctl)(struct apisink *sink, int fd, unsigned int cmd, unsigned long arg);
-    int (*send)(struct apisink *sink, int fd, const uint8_t *buf, uint32_t len);
-    int (*recv)(struct apisink *sink, int fd, uint8_t *buf, uint32_t size);
+    int (*send)(struct apisink *sink, int fd, const u8 *buf, u32 len);
+    int (*recv)(struct apisink *sink, int fd, u8 *buf, u32 size);
     int (*poll)(struct apisink *sink);
 };
 
@@ -102,20 +101,20 @@ struct sinkfd {
     vec_8_t *rxbuf;
 
     union {
-        uint8_t byte;
+        u8 byte;
         struct {
-            uint8_t open:1;
-            uint8_t close:1;
-            uint8_t accept:1;
-            uint8_t pollin:1;
-            uint8_t srrp_packet_in:1;
+            u8 open:1;
+            u8 close:1;
+            u8 accept:1;
+            u8 pollin:1;
+            u8 srrp_packet_in:1;
         } bits;
     } ev;
 
     // only for srrp
     int srrp_mode;
-    uint32_t l_nodeid; /* local nodeid */
-    uint32_t r_nodeid; /* remote nodeid */
+    u32 l_nodeid; /* local nodeid */
+    u32 r_nodeid; /* remote nodeid */
     vec_p_t *sub_topics;
     struct srrp_packet *rxpac_unfin;
     struct list_head msgs;
@@ -131,9 +130,9 @@ void sinkfd_free(struct sinkfd *sinkfd);
 
 struct sinkfd *find_sinkfd_in_apix(struct apix *ctx, int fd);
 struct sinkfd *find_sinkfd_in_apisink(struct apisink *sink, int fd);
-struct sinkfd *find_sinkfd_by_l_nodeid(struct apix *ctx, uint32_t nodeid);
-struct sinkfd *find_sinkfd_by_r_nodeid(struct apix *ctx, uint32_t nodeid);
-struct sinkfd *find_sinkfd_by_nodeid(struct apix *ctx, uint32_t nodeid);
+struct sinkfd *find_sinkfd_by_l_nodeid(struct apix *ctx, u32 nodeid);
+struct sinkfd *find_sinkfd_by_r_nodeid(struct apix *ctx, u32 nodeid);
+struct sinkfd *find_sinkfd_by_nodeid(struct apix *ctx, u32 nodeid);
 
 /**
  * apimsg

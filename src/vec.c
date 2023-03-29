@@ -5,19 +5,19 @@
 
 struct vec {
     char *rawbuf;
-    uint32_t type_size;
-    uint32_t size;
-    uint32_t cap;
+    size_t type_size;
+    size_t size;
+    size_t cap;
     enum vec_alloc_type alloc_type;
-    uint32_t offset;
+    size_t offset;
 };
 
-vec_t *vec_new(uint32_t type_size, uint32_t cap)
+vec_t *vec_new(size_t type_size, size_t cap)
 {
     return vec_new_alloc(type_size, cap, VEC_ALLOC_LINEAR);
 }
 
-vec_t *vec_new_alloc(uint32_t type_size, uint32_t cap, enum vec_alloc_type alloc)
+vec_t *vec_new_alloc(size_t type_size, size_t cap, enum vec_alloc_type alloc)
 {
     vec_t *self = (vec_t*)calloc(1, sizeof(vec_t));
     if (!self) return NULL;
@@ -48,7 +48,7 @@ void vec_free(vec_t *self)
     }
 }
 
-static int vec_realloc(vec_t *self, uint32_t new_cap)
+static int vec_realloc(vec_t *self, size_t new_cap)
 {
     void *newbuf = realloc(self->rawbuf, new_cap * self->type_size);
     if (newbuf) {
@@ -60,7 +60,7 @@ static int vec_realloc(vec_t *self, uint32_t new_cap)
     }
 }
 
-static int vec_check_cap(vec_t *self, uint32_t cnt)
+static int vec_check_cap(vec_t *self, size_t cnt)
 {
     if (self->offset + self->size + cnt > self->cap) {
         if (self->offset) {
@@ -68,14 +68,14 @@ static int vec_check_cap(vec_t *self, uint32_t cnt)
             self->offset = 0;
         }
         if (self->offset + self->size + cnt > self->cap) {
-            uint32_t new_cap = (self->cap + cnt) << 1;
+            size_t new_cap = (self->cap + cnt) << 1;
             return vec_realloc(self, new_cap);
         }
     }
     return 0;
 }
 
-void *vat(vec_t *self, uint32_t idx)
+void *vat(vec_t *self, size_t idx)
 {
     assert(idx <= self->size);
     return self->rawbuf + (self->offset + idx) * self->type_size;
@@ -107,7 +107,7 @@ void vpop_back(vec_t *self, /* out */ void *value)
     self->size -= 1;
 }
 
-void vpack(vec_t *self, const void *value, uint32_t cnt)
+void vpack(vec_t *self, const void *value, size_t cnt)
 {
     assert(vec_check_cap(self, cnt) == 0);
 
@@ -116,7 +116,7 @@ void vpack(vec_t *self, const void *value, uint32_t cnt)
     assert(self->offset + self->size <= self->cap);
 }
 
-void vdump(vec_t *self, /* out */ void *value, uint32_t cnt)
+void vdump(vec_t *self, /* out */ void *value, size_t cnt)
 {
     assert(self->offset + self->size <= self->cap);
     assert(self->size > 0);
@@ -125,7 +125,7 @@ void vdump(vec_t *self, /* out */ void *value, uint32_t cnt)
     self->offset += cnt;
 }
 
-void vdrop(vec_t *self, uint32_t cnt)
+void vdrop(vec_t *self, size_t cnt)
 {
     assert(self->offset + self->size <= self->cap);
     assert(self->size > 0);
@@ -145,7 +145,7 @@ void vshrink(vec_t *self)
     }
 }
 
-void vinsert(vec_t *self, uint32_t idx, const void *value, uint32_t cnt)
+void vinsert(vec_t *self, size_t idx, const void *value, size_t cnt)
 {
     if (idx > self->size) {
         assert(vec_check_cap(self, idx - self->size + cnt) == 0);
@@ -153,7 +153,7 @@ void vinsert(vec_t *self, uint32_t idx, const void *value, uint32_t cnt)
         vpack(self, value, cnt);
     } else {
         assert(vec_check_cap(self, cnt) == 0);
-        for (uint32_t i = 0; i < self->size - idx; i++) {
+        for (size_t i = 0; i < self->size - idx; i++) {
             memcpy(self->rawbuf + (self->size + cnt - 1 - i) * self->type_size,
                    self->rawbuf + (self->size - 1 - i) * self->type_size,
                    self->type_size);
@@ -164,7 +164,7 @@ void vinsert(vec_t *self, uint32_t idx, const void *value, uint32_t cnt)
     }
 }
 
-void vremove(vec_t *self, uint32_t idx, uint32_t cnt)
+void vremove(vec_t *self, size_t idx, size_t cnt)
 {
     assert(idx + cnt <= self->size);
     memmove(vat(self, idx), vat(self, idx + cnt),
@@ -177,17 +177,17 @@ void *vraw(vec_t *self)
     return vat(self, 0);
 }
 
-uint32_t vtype(vec_t *self)
+size_t vtype(vec_t *self)
 {
     return self->type_size;
 }
 
-uint32_t vsize(vec_t *self)
+size_t vsize(vec_t *self)
 {
     return self->size;
 }
 
-uint32_t vcap(vec_t *self)
+size_t vcap(vec_t *self)
 {
     return self->cap;
 }

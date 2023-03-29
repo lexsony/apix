@@ -3,7 +3,7 @@
 
 #if defined __arm__ && !defined __unix__
 
-#include <stdint.h>
+#include "types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,7 +31,7 @@ extern "C" {
 struct apix;
 
 struct ioctl_com_param {
-    uint32_t baud;
+    u32 baud;
     char bits;
     char parity;
     char stop;

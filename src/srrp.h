@@ -1,7 +1,7 @@
 #ifndef __SRRP_H // simple request response protocol
 #define __SRRP_H
 
-#include <stdint.h>
+#include "types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -62,18 +62,18 @@ extern "C" {
 struct srrp_packet;
 
 char srrp_get_leader(const struct srrp_packet *pac);
-uint8_t srrp_get_fin(const struct srrp_packet *pac);
-uint16_t srrp_get_ver(const struct srrp_packet *pac);
-uint16_t srrp_get_packet_len(const struct srrp_packet *pac);
-uint32_t srrp_get_payload_len(const struct srrp_packet *pac);
-uint32_t srrp_get_srcid(const struct srrp_packet *pac);
-uint32_t srrp_get_dstid(const struct srrp_packet *pac);
+u8 srrp_get_fin(const struct srrp_packet *pac);
+u16 srrp_get_ver(const struct srrp_packet *pac);
+u16 srrp_get_packet_len(const struct srrp_packet *pac);
+u32 srrp_get_payload_len(const struct srrp_packet *pac);
+u32 srrp_get_srcid(const struct srrp_packet *pac);
+u32 srrp_get_dstid(const struct srrp_packet *pac);
 const char *srrp_get_anchor(const struct srrp_packet *pac);
-const uint8_t *srrp_get_payload(const struct srrp_packet *pac);
-uint16_t srrp_get_crc16(const struct srrp_packet *pac);
-const uint8_t *srrp_get_raw(const struct srrp_packet *pac);
+const u8 *srrp_get_payload(const struct srrp_packet *pac);
+u16 srrp_get_crc16(const struct srrp_packet *pac);
+const u8 *srrp_get_raw(const struct srrp_packet *pac);
 
-void srrp_set_fin(struct srrp_packet *pac, uint8_t fin);
+void srrp_set_fin(struct srrp_packet *pac, u8 fin);
 
 /**
  * srrp_free
@@ -103,21 +103,21 @@ struct srrp_packet *srrp_cat(
  * - find offset of start position of next packet
  * - call it before srrp_parse
  */
-uint32_t srrp_next_packet_offset(const uint8_t *buf, uint32_t len);
+u32 srrp_next_packet_offset(const u8 *buf, u32 len);
 
 /**
  * srrp_parse
  * - read one packet from buffer
  */
-struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len);
+struct srrp_packet *srrp_parse(const u8 *buf, u32 len);
 
 /**
  * srrp_new
  * - create new srrp packet
  */
 struct srrp_packet *
-srrp_new(char leader, uint8_t fin, uint32_t srcid, uint32_t dstid,
-         const char *anchor, const uint8_t *payload, uint32_t payload_len);
+srrp_new(char leader, u8 fin, u32 srcid, u32 dstid,
+         const char *anchor, const u8 *payload, u32 payload_len);
 
 /**
  * srrp_new_ctrl
@@ -125,7 +125,7 @@ srrp_new(char leader, uint8_t fin, uint32_t srcid, uint32_t dstid,
  */
 #define srrp_new_ctrl(srcid, anchor, payload)                   \
     srrp_new(SRRP_CTRL_LEADER, SRRP_FIN_1, srcid, 0,            \
-             anchor, (const uint8_t *)payload, strlen(payload))
+             anchor, (const u8 *)payload, strlen(payload))
 
 /**
  * srrp_new_request
@@ -133,7 +133,7 @@ srrp_new(char leader, uint8_t fin, uint32_t srcid, uint32_t dstid,
  */
 #define srrp_new_request(srcid, dstid, anchor, payload)          \
     srrp_new(SRRP_REQUEST_LEADER, SRRP_FIN_1, srcid, dstid,      \
-             anchor, (const uint8_t *)payload, strlen(payload))
+             anchor, (const u8 *)payload, strlen(payload))
 
 /**
  * srrp_new_response
@@ -141,7 +141,7 @@ srrp_new(char leader, uint8_t fin, uint32_t srcid, uint32_t dstid,
  */
 #define srrp_new_response(srcid, dstid, anchor, payload)          \
     srrp_new(SRRP_RESPONSE_LEADER, SRRP_FIN_1, srcid, dstid,      \
-             anchor, (const uint8_t *)payload, strlen(payload))
+             anchor, (const u8 *)payload, strlen(payload))
 
 /**
  * srrp_new_subscribe
@@ -149,7 +149,7 @@ srrp_new(char leader, uint8_t fin, uint32_t srcid, uint32_t dstid,
  */
 #define srrp_new_subscribe(anchor, payload)                     \
     srrp_new(SRRP_SUBSCRIBE_LEADER, SRRP_FIN_1, 0, 0,           \
-             anchor, (const uint8_t *)payload, strlen(payload))
+             anchor, (const u8 *)payload, strlen(payload))
 
 /**
  * srrp_new_unsubscribe
@@ -157,7 +157,7 @@ srrp_new(char leader, uint8_t fin, uint32_t srcid, uint32_t dstid,
  */
 #define srrp_new_unsubscribe(anchor, payload)                     \
     srrp_new(SRRP_UNSUBSCRIBE_LEADER, SRRP_FIN_1, 0, 0,           \
-             anchor, (const uint8_t *)payload, strlen(payload))
+             anchor, (const u8 *)payload, strlen(payload))
 
 /**
  * srrp_new_publish
@@ -165,7 +165,7 @@ srrp_new(char leader, uint8_t fin, uint32_t srcid, uint32_t dstid,
  */
 #define srrp_new_publish(anchor, payload)                   \
     srrp_new(SRRP_PUBLISH_LEADER, 1, 0, 0,                  \
-             anchor, (const uint8_t *)payload, strlen(payload))
+             anchor, (const u8 *)payload, strlen(payload))
 
 #ifdef __cplusplus
 }

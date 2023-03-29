@@ -8,7 +8,7 @@
 
 struct str {
     char *rawbuf;
-    uint32_t size;
+    size_t size;
 };
 
 str_t *str_new(const char *s)
@@ -16,7 +16,7 @@ str_t *str_new(const char *s)
     return str_new_len(s, strlen(s));
 }
 
-str_t *str_new_len(const void *buf, uint32_t len)
+str_t *str_new_len(const void *buf, size_t len)
 {
     str_t *self = (str_t*)calloc(1, sizeof(str_t));
     if (!self) return NULL;

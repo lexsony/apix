@@ -14,24 +14,24 @@
 #define CRC_SIZE 5 /* <crc16>\0 */
 
 static vec_t *__srrp_new_raw(
-    char leader, uint8_t fin, uint32_t srcid, uint32_t dstid,
-    const char *anchor, const uint8_t *payload, uint32_t payload_len);
+    char leader, u8 fin, u32 srcid, u32 dstid,
+    const char *anchor, const u8 *payload, u32 payload_len);
 
 struct srrp_packet {
     char leader;
-    uint8_t fin;
-    uint16_t ver;
+    u8 fin;
+    u16 ver;
 
-    uint16_t packet_len;
-    uint32_t payload_len;
+    u16 packet_len;
+    u32 payload_len;
 
-    uint32_t srcid;
-    uint32_t dstid;
+    u32 srcid;
+    u32 dstid;
 
     str_t *anchor;
-    const uint8_t *payload;
+    const u8 *payload;
 
-    uint16_t crc16;
+    u16 crc16;
     vec_t *raw;
 };
 
@@ -40,32 +40,32 @@ char srrp_get_leader(const struct srrp_packet *pac)
     return pac->leader;
 }
 
-uint8_t srrp_get_fin(const struct srrp_packet *pac)
+u8 srrp_get_fin(const struct srrp_packet *pac)
 {
     return pac->fin;
 }
 
-uint16_t srrp_get_ver(const struct srrp_packet *pac)
+u16 srrp_get_ver(const struct srrp_packet *pac)
 {
     return pac->ver;
 }
 
-uint16_t srrp_get_packet_len(const struct srrp_packet *pac)
+u16 srrp_get_packet_len(const struct srrp_packet *pac)
 {
     return pac->packet_len;
 }
 
-uint32_t srrp_get_payload_len(const struct srrp_packet *pac)
+u32 srrp_get_payload_len(const struct srrp_packet *pac)
 {
     return pac->payload_len;
 }
 
-uint32_t srrp_get_srcid(const struct srrp_packet *pac)
+u32 srrp_get_srcid(const struct srrp_packet *pac)
 {
     return pac->srcid;
 }
 
-uint32_t srrp_get_dstid(const struct srrp_packet *pac)
+u32 srrp_get_dstid(const struct srrp_packet *pac)
 {
     return pac->dstid;
 }
@@ -75,22 +75,22 @@ const char *srrp_get_anchor(const struct srrp_packet *pac)
     return sget(pac->anchor);
 }
 
-const uint8_t *srrp_get_payload(const struct srrp_packet *pac)
+const u8 *srrp_get_payload(const struct srrp_packet *pac)
 {
     return pac->payload;
 }
 
-uint16_t srrp_get_crc16(const struct srrp_packet *pac)
+u16 srrp_get_crc16(const struct srrp_packet *pac)
 {
     return pac->crc16;
 }
 
-const uint8_t *srrp_get_raw(const struct srrp_packet *pac)
+const u8 *srrp_get_raw(const struct srrp_packet *pac)
 {
     return vraw(pac->raw);
 }
 
-void srrp_set_fin(struct srrp_packet *pac, uint8_t fin)
+void srrp_set_fin(struct srrp_packet *pac, u8 fin)
 {
     assert(fin == SRRP_FIN_0 || fin == SRRP_FIN_1);
 
@@ -100,7 +100,7 @@ void srrp_set_fin(struct srrp_packet *pac, uint8_t fin)
     pac->fin = fin;
     *((char *)vraw(pac->raw) + 1) = fin + '0';
 
-    uint16_t crc = crc16(vraw(pac->raw), vsize(pac->raw) - CRC_SIZE);
+    u16 crc = crc16(vraw(pac->raw), vsize(pac->raw) - CRC_SIZE);
     snprintf((char *)vraw(pac->raw) + vsize(pac->raw) - CRC_SIZE,
              CRC_SIZE, "%.4x", crc);
 }
@@ -159,9 +159,9 @@ struct srrp_packet *srrp_cat(
     return retpac;
 }
 
-uint32_t srrp_next_packet_offset(const uint8_t *buf, uint32_t len)
+u32 srrp_next_packet_offset(const u8 *buf, u32 len)
 {
-    for (uint32_t i = 0; i < len; i++) {
+    for (u32 i = 0; i < len; i++) {
         if (isdigit(buf[i + 1])) {
             if (buf[i] == SRRP_CTRL_LEADER)
                 return i;
@@ -179,12 +179,12 @@ uint32_t srrp_next_packet_offset(const uint8_t *buf, uint32_t len)
     return len;
 }
 
-struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len)
+struct srrp_packet *srrp_parse(const u8 *buf, u32 len)
 {
     char leader;
-    uint8_t fin;
-    uint16_t ver, packet_len;
-    uint32_t payload_len, srcid, dstid;
+    u8 fin;
+    u16 ver, packet_len;
+    u32 payload_len, srcid, dstid;
     char anchor[SRRP_ANCHOR_MAX] = {0};
 
     leader = buf[0];
@@ -209,7 +209,7 @@ struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len)
     if (packet_len > len)
         return NULL;
 
-    uint16_t crc = 0;
+    u16 crc = 0;
 
     if (sscanf((char *)buf + packet_len - CRC_SIZE, "%4hx", &crc) != 1)
         return NULL;
@@ -238,7 +238,7 @@ struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len)
     if (pac->payload_len == 0)
         pac->payload = vraw(pac->raw) + strlen(vraw(pac->raw));
     else
-        pac->payload = (uint8_t *)strstr(vraw(pac->raw), "?") + 1;
+        pac->payload = (u8 *)strstr(vraw(pac->raw), "?") + 1;
 
     pac->crc16 = crc;
 #ifdef DEBUG_SRRP
@@ -248,8 +248,8 @@ struct srrp_packet *srrp_parse(const uint8_t *buf, uint32_t len)
 }
 
 static vec_t *__srrp_new_raw(
-    char leader, uint8_t fin, uint32_t srcid, uint32_t dstid,
-    const char *anchor, const uint8_t *payload, uint32_t payload_len)
+    char leader, u8 fin, u32 srcid, u32 dstid,
+    const char *anchor, const u8 *payload, u32 payload_len)
 {
     char tmp[32] = {0};
 
@@ -260,7 +260,7 @@ static vec_t *__srrp_new_raw(
     vpush(v, &leader);
 
     // fin
-    uint8_t tmp_fin = fin + '0';
+    u8 tmp_fin = fin + '0';
     vpush(v, &tmp_fin);
 
     // ver2
@@ -306,13 +306,13 @@ static vec_t *__srrp_new_raw(
 
     // packet_len
 #ifndef VINSERT
-    uint16_t packet_len = vsize(v) + CRC_SIZE;
+    u16 packet_len = vsize(v) + CRC_SIZE;
     assert(packet_len < SRRP_PACKET_MAX);
     snprintf(tmp, sizeof(tmp), "%.4x", packet_len);
     assert(strlen(tmp) == 4);
     memcpy((char *)vraw(v) + 5, tmp, 4);
 #else
-    uint16_t packet_len = vsize(v) + CRC_SIZE + 4;
+    u16 packet_len = vsize(v) + CRC_SIZE + 4;
     assert(packet_len < SRRP_PACKET_MAX);
     snprintf(tmp, sizeof(tmp), "%.4x", packet_len);
     assert(strlen(tmp) == 4);
@@ -320,7 +320,7 @@ static vec_t *__srrp_new_raw(
 #endif
 
     // crc16
-    uint16_t crc = crc16(vraw(v), vsize(v));
+    u16 crc = crc16(vraw(v), vsize(v));
     snprintf(tmp, sizeof(tmp), "%.4x", crc);
     assert(strlen(tmp) == 4);
     vpack(v, tmp, strlen(tmp));
@@ -331,8 +331,8 @@ static vec_t *__srrp_new_raw(
 }
 
 struct srrp_packet *srrp_new(
-    char leader, uint8_t fin, uint32_t srcid, uint32_t dstid,
-    const char *anchor, const uint8_t *payload, uint32_t payload_len)
+    char leader, u8 fin, u32 srcid, u32 dstid,
+    const char *anchor, const u8 *payload, u32 payload_len)
 {
     vec_t *v = __srrp_new_raw(
         leader, fin, srcid, dstid, anchor, payload, payload_len);
@@ -355,7 +355,7 @@ struct srrp_packet *srrp_new(
     if (pac->payload_len == 0)
         pac->payload = vraw(pac->raw) + strlen(vraw(pac->raw));
     else
-        pac->payload = (uint8_t *)strstr(vraw(pac->raw), "?") + 1;
+        pac->payload = (u8 *)strstr(vraw(pac->raw), "?") + 1;
 
     sscanf(vraw(v) + vsize(v) - CRC_SIZE, "%4hx", &pac->crc16);
 

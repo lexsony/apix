@@ -103,13 +103,13 @@ static int unix_s_close(struct apisink *sink, int fd)
     return 0;
 }
 
-static int unix_s_send(struct apisink *sink, int fd, const uint8_t *buf, uint32_t len)
+static int unix_s_send(struct apisink *sink, int fd, const u8 *buf, u32 len)
 {
     UNUSED(sink);
     return send(fd, buf, len, MSG_NOSIGNAL);
 }
 
-static int unix_s_recv(struct apisink *sink, int fd, uint8_t *buf, uint32_t len)
+static int unix_s_recv(struct apisink *sink, int fd, u8 *buf, u32 len)
 {
     UNUSED(sink);
     return recv(fd, buf, len, 0);
@@ -225,13 +225,13 @@ static int unix_c_open(struct apisink *sink, const char *addr)
     return fd;
 }
 
-static int unix_c_send(struct apisink *sink, int fd, const uint8_t *buf, uint32_t len)
+static int unix_c_send(struct apisink *sink, int fd, const u8 *buf, u32 len)
 {
     UNUSED(sink);
     return send(fd, buf, len, MSG_NOSIGNAL);
 }
 
-static int unix_c_recv(struct apisink *sink, int fd, uint8_t *buf, uint32_t len)
+static int unix_c_recv(struct apisink *sink, int fd, u8 *buf, u32 len)
 {
     UNUSED(sink);
     return recv(fd, buf, len, 0);
@@ -302,8 +302,8 @@ static int tcp_s_open(struct apisink *sink, const char *addr)
     if (fd == -1)
         return -1;
 
-    uint32_t host;
-    uint16_t port;
+    u32 host;
+    u16 port;
     char *tmp = strdup(addr);
     char *colon = strchr(tmp, ':');
     *colon = 0;
@@ -360,8 +360,8 @@ static int tcp_c_open(struct apisink *sink, const char *addr)
     if (fd == -1)
         return -1;
 
-    uint32_t host;
-    uint16_t port;
+    u32 host;
+    u16 port;
     char *tmp = strdup(addr);
     char *colon = strchr(tmp, ':');
     *colon = 0;
@@ -484,13 +484,13 @@ com_ioctl(struct apisink *sink, int fd, unsigned int cmd, unsigned long arg)
     return 0;
 }
 
-static int com_send(struct apisink *sink, int fd, const uint8_t *buf, uint32_t len)
+static int com_send(struct apisink *sink, int fd, const u8 *buf, u32 len)
 {
     UNUSED(sink);
     return write(fd, buf, len);
 }
 
-static int com_recv(struct apisink *sink, int fd, uint8_t *buf, uint32_t len)
+static int com_recv(struct apisink *sink, int fd, u8 *buf, u32 len)
 {
     UNUSED(sink);
     return read(fd, buf, len);
@@ -585,13 +585,13 @@ static int can_open(struct apisink *sink, const char *addr)
     return fd;
 }
 
-static int can_send(struct apisink *sink, int fd, const uint8_t *buf, uint32_t len)
+static int can_send(struct apisink *sink, int fd, const u8 *buf, u32 len)
 {
     UNUSED(sink);
     return write(fd, buf, len);
 }
 
-static int can_recv(struct apisink *sink, int fd, uint8_t *buf, uint32_t len)
+static int can_recv(struct apisink *sink, int fd, u8 *buf, u32 len)
 {
     UNUSED(sink);
     return read(fd, buf, len);

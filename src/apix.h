@@ -1,7 +1,7 @@
 #ifndef __APIX_H
 #define __APIX_H
 
-#include <stdint.h>
+#include "types.h"
 #include "srrp.h"
 
 #if defined __arm__ && !defined __unix__
@@ -62,27 +62,27 @@ int apix_ioctl(struct apix *ctx, int fd, unsigned int cmd, unsigned long arg);
  * - set MSG_NOSIGNAL
  * - not set O_NONBLOCK by fctrl
  */
-int apix_send(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len);
+int apix_send(struct apix *ctx, int fd, const u8 *buf, u32 len);
 
 /**
  * apix_recv
  * - inner call recv or write in blocking-mode
  * - not set O_NONBLOCK by fctrl
  */
-int apix_recv(struct apix *ctx, int fd, uint8_t *buf, uint32_t len);
+int apix_recv(struct apix *ctx, int fd, u8 *buf, u32 len);
 
 /**
  * apix_send_to_buffer
  * - a nonblocking-mode send
  */
-int apix_send_to_buffer(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len);
+int apix_send_to_buffer(struct apix *ctx, int fd, const u8 *buf, u32 len);
 
 /**
  * apix_read_from_buffer
  * - call this func after poll if not set on_fd_pollin and not in srrpmode,
  * - as the inner rx buffer has no chance to reduce.
  */
-int apix_read_from_buffer(struct apix *ctx, int fd, uint8_t *buf, uint32_t len);
+int apix_read_from_buffer(struct apix *ctx, int fd, u8 *buf, u32 len);
 
 /**
  * apix_get_fd_father
@@ -92,12 +92,12 @@ int apix_get_fd_father(struct apix *ctx, int fd);
 /**
  * apix_waiting
  */
-int apix_waiting(struct apix *ctx, uint64_t usec);
+int apix_waiting(struct apix *ctx, u64 usec);
 
 /**
  * apix_next_event
  */
-uint8_t apix_next_event(struct apix *ctx, int fd);
+u8 apix_next_event(struct apix *ctx, int fd);
 
 /**
  * apix_next_srrp_packet
@@ -108,7 +108,7 @@ struct srrp_packet *apix_next_srrp_packet(struct apix *ctx, int fd);
  * apix_upgrade_to_srrp
  * - enable srrp mode
  */
-int apix_upgrade_to_srrp(struct apix *ctx, int fd, uint32_t nodeid);
+int apix_upgrade_to_srrp(struct apix *ctx, int fd, u32 nodeid);
 
 /**
  * apix_srrp_forward

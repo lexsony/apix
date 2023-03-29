@@ -21,7 +21,7 @@
  * apix
  */
 
-static void log_hex_string(const char *buf, uint32_t len)
+static void log_hex_string(const char *buf, u32 len)
 {
     printf("len: %d, data: ", (int)len);
     for (int i = 0; i < (int)len; i++) {
@@ -36,7 +36,7 @@ static void log_hex_string(const char *buf, uint32_t len)
 static void parse_packet(struct apix *ctx, struct sinkfd *sinkfd)
 {
     while (vsize(sinkfd->rxbuf)) {
-        uint32_t offset = srrp_next_packet_offset(
+        u32 offset = srrp_next_packet_offset(
             vraw(sinkfd->rxbuf), vsize(sinkfd->rxbuf));
         if (offset != 0) {
             LOG_WARN("[%p] broken packet:", ctx);
@@ -53,7 +53,7 @@ static void parse_packet(struct apix *ctx, struct sinkfd *sinkfd)
                 break;
 
             LOG_ERROR("[%p] parse packet failed: %s", ctx, vraw(sinkfd->rxbuf));
-            uint32_t offset = srrp_next_packet_offset(
+            u32 offset = srrp_next_packet_offset(
                 vraw(sinkfd->rxbuf) + 1,
                 vsize(sinkfd->rxbuf) - 1) + 1;
             vdrop(sinkfd->rxbuf, offset);
@@ -121,7 +121,7 @@ handle_ctrl(struct sinkfd *sinkfd, struct apimsg *am)
 {
     assert(sinkfd->type != SINKFD_T_LISTEN);
 
-    uint32_t nodeid = 0;
+    u32 nodeid = 0;
     if (sinkfd->type == SINKFD_T_ACCEPT) {
         assert(sinkfd->father);
         nodeid = sinkfd->father->l_nodeid;
@@ -162,7 +162,7 @@ handle_subscribe(struct sinkfd *sinkfd, struct apimsg *am)
 {
     assert(sinkfd->type != SINKFD_T_LISTEN);
 
-    for (uint32_t i = 0; i < vsize(sinkfd->sub_topics); i++) {
+    for (u32 i = 0; i < vsize(sinkfd->sub_topics); i++) {
         if (strcmp(sget(vat(sinkfd->sub_topics, i)), srrp_get_anchor(am->pac)) == 0) {
             apix_response(sinkfd->ctx, am->fd, am->pac, "j:{\"err\":0}");
             apimsg_finish(am);
@@ -181,7 +181,7 @@ handle_unsubscribe(struct sinkfd *sinkfd, struct apimsg *am)
 {
     assert(sinkfd->type != SINKFD_T_LISTEN);
 
-    for (uint32_t i = 0; i < vsize(sinkfd->sub_topics); i++) {
+    for (u32 i = 0; i < vsize(sinkfd->sub_topics); i++) {
         if (strcmp(sget(*(str_t **)vat(sinkfd->sub_topics, i)),
                    srrp_get_anchor(am->pac)) == 0) {
             str_free(*(str_t **)vat(sinkfd->sub_topics, i));
@@ -225,7 +225,7 @@ static void forward_publish(struct apix *ctx, struct apimsg *am)
 {
     struct sinkfd *pos;
     list_for_each_entry(pos, &ctx->sinkfds, ln_ctx) {
-        for (uint32_t i = 0; i < vsize(pos->sub_topics); i++) {
+        for (u32 i = 0; i < vsize(pos->sub_topics); i++) {
             if (strcmp(sget(*(str_t **)vat(pos->sub_topics, i)),
                        srrp_get_anchor(am->pac)) == 0) {
                 apix_srrp_send(ctx, pos->fd, am->pac);
@@ -313,7 +313,7 @@ static void sync_sinkfd(struct sinkfd *sinkfd)
 
     LOG_TRACE("[%p] sync sinkfd:%p", sinkfd->ctx, sinkfd);
 
-    uint32_t nodeid = 0;
+    u32 nodeid = 0;
     if (sinkfd->type == SINKFD_T_ACCEPT) {
         assert(sinkfd->father);
         nodeid = sinkfd->father->l_nodeid;
@@ -385,7 +385,7 @@ int apix_ioctl(struct apix *ctx, int fd, unsigned int cmd, unsigned long arg)
     return sinkfd->sink->ops.ioctl(sinkfd->sink, fd, cmd, arg);
 }
 
-int apix_send(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len)
+int apix_send(struct apix *ctx, int fd, const u8 *buf, u32 len)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
@@ -397,7 +397,7 @@ int apix_send(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len)
     return sinkfd->sink->ops.send(sinkfd->sink, fd, buf, len);
 }
 
-int apix_recv(struct apix *ctx, int fd, uint8_t *buf, uint32_t len)
+int apix_recv(struct apix *ctx, int fd, u8 *buf, u32 len)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
@@ -407,7 +407,7 @@ int apix_recv(struct apix *ctx, int fd, uint8_t *buf, uint32_t len)
     return sinkfd->sink->ops.recv(sinkfd->sink, fd, buf, len);
 }
 
-int apix_send_to_buffer(struct apix *ctx, int fd, const uint8_t *buf, uint32_t len)
+int apix_send_to_buffer(struct apix *ctx, int fd, const u8 *buf, u32 len)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
@@ -420,12 +420,12 @@ int apix_send_to_buffer(struct apix *ctx, int fd, const uint8_t *buf, uint32_t l
     return 0;
 }
 
-int apix_read_from_buffer(struct apix *ctx, int fd, uint8_t *buf, uint32_t len)
+int apix_read_from_buffer(struct apix *ctx, int fd, u8 *buf, u32 len)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
         return -1;
-    uint32_t less = len < vsize(sinkfd->rxbuf) ? len : vsize(sinkfd->rxbuf);
+    u32 less = len < vsize(sinkfd->rxbuf) ? len : vsize(sinkfd->rxbuf);
     if (less) vdump(sinkfd->rxbuf, buf, less);
     return less;
 }
@@ -478,7 +478,7 @@ static int apix_poll(struct apix *ctx)
             if (vsize(pos_fd->txbuf)) {
                 int nr = apix_send(
                     ctx, pos_fd->fd, vraw(pos_fd->txbuf), vsize(pos_fd->txbuf));
-                if (nr > 0) assert((uint32_t)nr <= vsize(pos_fd->txbuf));
+                if (nr > 0) assert((u32)nr <= vsize(pos_fd->txbuf));
                 vdrop(pos_fd->txbuf, nr);
             }
         }
@@ -501,7 +501,7 @@ static int apix_poll(struct apix *ctx)
     return 0;
 }
 
-int apix_waiting(struct apix *ctx, uint64_t usec)
+int apix_waiting(struct apix *ctx, u64 usec)
 {
     apix_poll(ctx);
 
@@ -534,7 +534,7 @@ int apix_waiting(struct apix *ctx, uint64_t usec)
     return 0;
 }
 
-uint8_t apix_next_event(struct apix *ctx, int fd)
+u8 apix_next_event(struct apix *ctx, int fd)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     assert(sinkfd);
@@ -591,7 +591,7 @@ struct srrp_packet *apix_next_srrp_packet(struct apix *ctx, int fd)
     return NULL;
 }
 
-int apix_upgrade_to_srrp(struct apix *ctx, int fd, uint32_t nodeid)
+int apix_upgrade_to_srrp(struct apix *ctx, int fd, u32 nodeid)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
     if (sinkfd == NULL)
@@ -620,7 +620,7 @@ void apix_srrp_forward(struct apix *ctx, int fd, struct srrp_packet *pac)
 static void __apix_srrp_send(
     struct apix *ctx, int fd, const struct srrp_packet *pac)
 {
-    uint32_t idx = 0;
+    u32 idx = 0;
     struct srrp_packet *tmp_pac = NULL;
 
     LOG_TRACE("[%p] srrp send: %s", ctx, srrp_get_raw(pac));
@@ -633,8 +633,8 @@ static void __apix_srrp_send(
 
     // payload_len > cnt, can't be zero
     while (idx != srrp_get_payload_len(pac)) {
-        uint32_t tmp_cnt = srrp_get_payload_len(pac) - idx;
-        uint8_t fin = 0;
+        u32 tmp_cnt = srrp_get_payload_len(pac) - idx;
+        u8 fin = 0;
         if (tmp_cnt > PAYLOAD_LIMIT) {
             tmp_cnt = PAYLOAD_LIMIT;
             fin = SRRP_FIN_0;
@@ -813,7 +813,7 @@ struct sinkfd *find_sinkfd_in_apisink(struct apisink *sink, int fd)
     return NULL;
 }
 
-struct sinkfd *find_sinkfd_by_l_nodeid(struct apix *ctx, uint32_t nodeid)
+struct sinkfd *find_sinkfd_by_l_nodeid(struct apix *ctx, u32 nodeid)
 {
     if (nodeid == 0) return NULL;
     struct sinkfd *pos, *n;
@@ -824,7 +824,7 @@ struct sinkfd *find_sinkfd_by_l_nodeid(struct apix *ctx, uint32_t nodeid)
     return NULL;
 }
 
-struct sinkfd *find_sinkfd_by_r_nodeid(struct apix *ctx, uint32_t nodeid)
+struct sinkfd *find_sinkfd_by_r_nodeid(struct apix *ctx, u32 nodeid)
 {
     if (nodeid == 0) return NULL;
     struct sinkfd *pos, *n;
@@ -835,7 +835,7 @@ struct sinkfd *find_sinkfd_by_r_nodeid(struct apix *ctx, uint32_t nodeid)
     return NULL;
 }
 
-struct sinkfd *find_sinkfd_by_nodeid(struct apix *ctx, uint32_t nodeid)
+struct sinkfd *find_sinkfd_by_nodeid(struct apix *ctx, u32 nodeid)
 {
     if (nodeid == 0) return NULL;
     struct sinkfd *pos, *n;
