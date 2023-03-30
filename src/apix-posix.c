@@ -127,7 +127,7 @@ static int unix_s_poll(struct apisink *sink)
     if (nr_recv_fds == -1) {
         if (errno == EINTR)
             return 0;
-        LOG_ERROR("[select] %s", strerror(errno));
+        LOG_ERROR("[%p:select] %s(%d)", sink->ctx, strerror(errno), errno);
         return -1;
     }
 
@@ -144,11 +144,11 @@ static int unix_s_poll(struct apisink *sink)
         if (pos->type == SINKFD_T_LISTEN) {
             int newfd = accept(pos->fd, NULL, NULL);
             if (newfd == -1) {
-                LOG_ERROR("[%x] accept: {fd:%d, err:%s}",
-                          sink->ctx, pos->fd, strerror(errno));
+                LOG_ERROR("[%p:accept] #%d %s(%d)",
+                          sink->ctx, pos->fd, strerror(errno), errno);
                 continue;
             }
-            LOG_DEBUG("[%x] accept: {fd:%d, newfd:%d}", sink->ctx, pos->fd, newfd);
+            LOG_DEBUG("[%p:accept] #%d accept #%d", sink->ctx, pos->fd, newfd);
 
             struct sinkfd *sinkfd = sinkfd_new(sink);
             sinkfd->fd = newfd;
@@ -165,15 +165,15 @@ static int unix_s_poll(struct apisink *sink)
             char buf[1024] = {0};
             int nread = recv(pos->fd, buf, sizeof(buf), 0);
             if (nread == -1) {
-                LOG_DEBUG("[recv] fd:%d, %s", pos->fd, strerror(errno));
+                LOG_DEBUG("[%p:recv] #%d %s(%d)", sink->ctx, pos->fd, strerror(errno), errno);
                 FD_CLR(pos->fd, &ps->fds);
                 sink->ops.close(sink, pos->fd);
             } else if (nread == 0) {
-                LOG_DEBUG("[recv] fd:%d, finished", pos->fd);
+                LOG_DEBUG("[%p:recv] #%d finished", sink->ctx, pos->fd);
                 FD_CLR(pos->fd, &ps->fds);
                 sink->ops.close(sink, pos->fd);
             } else {
-                LOG_TRACE("[recv] fd:%d, packet in", pos->fd);
+                LOG_TRACE("[%p:recv] #%d packet in", sink->ctx, pos->fd);
                 vpack(pos->rxbuf, buf, nread);
                 gettimeofday(&pos->ts_poll_recv, NULL);
                 pos->ev.bits.pollin = 1;
@@ -249,7 +249,7 @@ static int unix_c_poll(struct apisink *sink)
     if (nr_recv_fds == -1) {
         if (errno == EINTR)
             return 0;
-        LOG_ERROR("[select] %s", strerror(errno));
+        LOG_ERROR("[%p:select] %s(%d)", sink->ctx, strerror(errno), errno);
         return -1;
     }
 
@@ -265,15 +265,15 @@ static int unix_c_poll(struct apisink *sink)
         char buf[1024] = {0};
         int nread = recv(pos->fd, buf, sizeof(buf), 0);
         if (nread == -1) {
-            LOG_DEBUG("[recv] fd:%d, %s", pos->fd, strerror(errno));
+            LOG_DEBUG("[%p:recv] #%d %s(%d)", sink->ctx, pos->fd, strerror(errno), errno);
             FD_CLR(pos->fd, &ps->fds);
             sink->ops.close(sink, pos->fd);
         } else if (nread == 0) {
-            LOG_DEBUG("[recv] fd:%d, finished", pos->fd);
+            LOG_DEBUG("[%p:recv] #%d finished", sink->ctx, pos->fd);
             FD_CLR(pos->fd, &ps->fds);
             sink->ops.close(sink, pos->fd);
         } else {
-            LOG_TRACE("[recv] fd:%d, packet in", pos->fd);
+            LOG_TRACE("[%p:recv] #%d packet in", sink->ctx, pos->fd);
             vpack(pos->rxbuf, buf, nread);
             gettimeofday(&pos->ts_poll_recv, NULL);
             pos->ev.bits.pollin = 1;
@@ -508,7 +508,7 @@ static int com_poll(struct apisink *sink)
     if (nr_recv_fds == -1) {
         if (errno == EINTR)
             return 0;
-        LOG_ERROR("[select] (%d) %s", errno, strerror(errno));
+        LOG_ERROR("[%p:select] %s(%d)", sink->ctx, strerror(errno), errno);
         return -1;
     }
 
@@ -524,13 +524,13 @@ static int com_poll(struct apisink *sink)
         char buf[1024] = {0};
         int nread = read(pos->fd, buf, sizeof(buf));
         if (nread == -1) {
-            LOG_DEBUG("[read] (%d) %s", errno, strerror(errno));
+            LOG_DEBUG("[%p:read] #%d %s(%d)", sink->ctx, pos->fd, strerror(errno), errno);
             sink->ops.close(sink, pos->fd);
         } else if (nread == 0) {
-            LOG_DEBUG("[read] (%d) finished");
+            LOG_DEBUG("[%p:read] #%d finished", sink->ctx, pos->fd);
             sink->ops.close(sink, pos->fd);
         } else {
-            LOG_TRACE("[recv] fd:%d, packet in", pos->fd);
+            LOG_TRACE("[%p:read] #%d packet in", sink->ctx, pos->fd);
             vpack(pos->rxbuf, buf, nread);
             gettimeofday(&pos->ts_poll_recv, NULL);
             pos->ev.bits.pollin = 1;
@@ -609,7 +609,7 @@ static int can_poll(struct apisink *sink)
     if (nr_recv_fds == -1) {
         if (errno == EINTR)
             return 0;
-        LOG_ERROR("[select] (%d) %s", errno, strerror(errno));
+        LOG_ERROR("[%p:select] %s(%d)", sink->ctx, strerror(errno), errno);
         return -1;
     }
 
@@ -625,13 +625,13 @@ static int can_poll(struct apisink *sink)
         struct can_frame frame = {0};
         int nread = read(pos->fd, &frame, sizeof(struct can_frame));
         if (nread == -1) {
-            LOG_DEBUG("[read] (%d) %s", errno, strerror(errno));
+            LOG_DEBUG("[%p:read] #%d %s(%d)", sink->ctx, pos->fd, strerror(errno), errno);
             sink->ops.close(sink, pos->fd);
         } else if (nread == 0) {
-            LOG_DEBUG("[read] (%d) finished");
+            LOG_DEBUG("[%p:read] #%d finished", sink->ctx, pos->fd);
             sink->ops.close(sink, pos->fd);
         } else {
-            LOG_TRACE("[recv] fd:%d, packet in", pos->fd);
+            LOG_TRACE("[%p:read] #%d packet in", sink->ctx, pos->fd);
             vpack(pos->rxbuf, &frame, sizeof(struct can_frame));
             gettimeofday(&pos->ts_poll_recv, NULL);
             pos->ev.bits.pollin = 1;
