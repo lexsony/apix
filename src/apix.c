@@ -183,7 +183,12 @@ handle_subscribe(struct sinkfd *sinkfd, struct apimsg *am)
 
     str_t *topic = str_new(srrp_get_anchor(am->pac));
     vpush(sinkfd->sub_topics, &topic);
-    apix_response(sinkfd->ctx, am->fd, am->pac, "j:{\"err\":0}");
+
+    struct srrp_packet *pub = srrp_new_publish(
+        srrp_get_anchor(am->pac), "j:{\"state\":\"sub\"}");
+    apix_srrp_send(sinkfd->ctx, am->fd, pub);
+    srrp_free(pub);
+
     apimsg_finish(am);
 }
 
@@ -201,7 +206,11 @@ handle_unsubscribe(struct sinkfd *sinkfd, struct apimsg *am)
         }
     }
 
-    apix_response(sinkfd->ctx, am->fd, am->pac, "j:{\"err\":0}");
+    struct srrp_packet *pub = srrp_new_publish(
+        srrp_get_anchor(am->pac), "j:{\"state\":\"unsub\"}");
+    apix_srrp_send(sinkfd->ctx, am->fd, pub);
+    srrp_free(pub);
+
     apimsg_finish(am);
 }
 
