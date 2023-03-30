@@ -266,7 +266,7 @@ static void handle_apimsg(struct sinkfd *sinkfd)
 {
     struct apimsg *pos;
     list_for_each_entry(pos, &sinkfd->msgs, ln) {
-        if (apimsg_is_finished(pos))
+        if (apimsg_is_finished(pos) || pos->state == APIMSG_ST_WAITING)
             continue;
 
         assert(srrp_get_ver(pos->pac) == SRRP_VERSION);
@@ -308,6 +308,7 @@ static void handle_apimsg(struct sinkfd *sinkfd)
         }
 
         sinkfd->ev.bits.srrp_packet_in = 1;
+        pos->state = APIMSG_ST_WAITING;
         //LOG_TRACE("[%p:handle_apimsg] set srrp_packet_in", sinkfd->ctx);
     }
 }
@@ -579,7 +580,7 @@ u8 apix_next_event(struct apix *ctx, int fd)
         sinkfd->ev.bits.srrp_packet_in = 0;
         struct apimsg *pos;
         list_for_each_entry(pos,&sinkfd->msgs, ln) {
-            if (pos->state == APIMSG_ST_NONE)
+            if (pos->state == APIMSG_ST_WAITING)
                 sinkfd->ev.bits.srrp_packet_in = 1;
         }
         // check again
@@ -598,8 +599,12 @@ struct srrp_packet *apix_next_srrp_packet(struct apix *ctx, int fd)
 
     struct apimsg *pos;
     list_for_each_entry(pos,&sinkfd->msgs, ln) {
-        apimsg_finish(pos);
-        return pos->pac;
+        //LOG_TRACE("[%p:apix_next_srrp_packet] #%d msg:%p, state:%d, raw:%s",
+        //          ctx, fd, pos, pos->state, srrp_get_raw(pos->pac));
+        if (pos->state == APIMSG_ST_WAITING) {
+            apimsg_finish(pos);
+            return pos->pac;
+        }
     }
 
     return NULL;

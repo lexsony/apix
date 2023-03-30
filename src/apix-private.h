@@ -140,6 +140,7 @@ struct sinkfd *find_sinkfd_by_nodeid(struct apix *ctx, u32 nodeid);
 
 enum apimsg_state {
     APIMSG_ST_NONE = 0,
+    APIMSG_ST_WAITING,
     APIMSG_ST_FINISHED,
     APIMSG_ST_FORWARD,
 };
