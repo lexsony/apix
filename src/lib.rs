@@ -219,12 +219,13 @@ pub struct SrrpPacket {
     pub crc16: u16,
     pub raw: Vec<u8>,
     pub pac: *mut apix_sys::srrp_packet,
+    pub owned: bool,
 }
 
 impl Drop for SrrpPacket {
     fn drop(&mut self) {
         unsafe {
-            if !self.pac.is_null() {
+            if self.owned {
                 apix_sys::srrp_free(self.pac);
             }
         }
@@ -263,6 +264,7 @@ impl Srrp {
                     v
                 },
                 pac: pac,
+                owned: false,
             }
         }
     }
@@ -298,7 +300,9 @@ impl Srrp {
             if pac.is_null() {
                 None
             } else {
-                Some(Srrp::from_raw_packet(pac))
+                let mut tmp = Srrp::from_raw_packet(pac);
+                tmp.owned = true;
+                Some(tmp)
             }
         }
     }
