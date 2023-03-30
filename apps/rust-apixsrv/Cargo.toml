@@ -10,3 +10,4 @@ apix = { path = "../../" }
 log = "0.4"
 simple_logger = "4.1"
 ctrlc = "3.2"
+clap = { version = "4.2.1", features = ["derive"] }

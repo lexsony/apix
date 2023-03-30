@@ -3,13 +3,43 @@ use log::{info, debug};
 use simple_logger;
 use apix;
 use ctrlc;
+use clap::Parser;
 
 static EXIT_FLANG: Mutex<i32> = Mutex::new(0);
 
-fn main() {
-    simple_logger::SimpleLogger::new().env().init().unwrap();
-    apix::log_set_level(apix::LogLevel::Trace);
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    debug: u8,
+}
 
+fn main() {
+    // parse args
+    let args = Args::parse();
+    match args.debug {
+        0 => {
+            std::env::set_var("RUST_LOG", "info");
+            apix::log_set_level(apix::LogLevel::Info);
+            println!("Debug mode is off");
+        }
+        1 => {
+            std::env::set_var("RUST_LOG", "debug");
+            apix::log_set_level(apix::LogLevel::Debug);
+            println!("Debug mode is on");
+        }
+        2 => {
+            std::env::set_var("RUST_LOG", "trace");
+            apix::log_set_level(apix::LogLevel::Trace);
+            println!("Trace mode is on");
+        }
+        _ => println!("Don't be crazy"),
+    }
+
+    // logger init
+    simple_logger::SimpleLogger::new().env().init().unwrap();
+
+    // apix init
     let ctx = apix::Apix::new().unwrap();
     ctx.enable_posix();
 
@@ -59,17 +89,17 @@ fn main() {
             x if x == apix::ApixEvent::SrrpPacket as u8 => {
                 let pac = ctx.next_srrp_packet(fd).unwrap();
                 if fd == fd_unix || fd == fd_tcp {
-                    info!("#{} srrp_packet: srcid:{}, dstid:{}, {}?{}",
+                    debug!("#{} srrp_packet: srcid:{}, dstid:{}, {}?{}",
                           fd, pac.srcid, pac.dstid, pac.anchor, pac.payload);
                     let resp = apix::Srrp::new_response(
                         pac.dstid, pac.srcid, &pac.anchor,
                         "j:{\"err\":404,\"msg\":\"Service not found\"}")
                         .unwrap();
-                    info!("#{} resp: srcid:{}, dstid:{}, {}?{}",
+                    debug!("#{} resp: srcid:{}, dstid:{}, {}?{}",
                           fd, resp.srcid, resp.dstid, resp.anchor, resp.payload);
                     ctx.srrp_send(fd, &resp);
                 } else {
-                    info!("#{} srrp_packet: {}?{}", fd, pac.anchor, pac.payload);
+                    debug!("#{} srrp_packet: {}?{}", fd, pac.anchor, pac.payload);
                     ctx.srrp_forward(fd, &pac)
                 }
             },
