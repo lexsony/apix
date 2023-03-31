@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/select.h>
+#include <regex.h>
 
 #include "apix-private.h"
 #include "list.h"
@@ -243,15 +244,24 @@ static void forward_request_or_response(struct apix *ctx, struct apimsg *am)
 
 static void forward_publish(struct apix *ctx, struct apimsg *am)
 {
+    regex_t regex;
+    int rc;
+
     struct sinkfd *pos;
     list_for_each_entry(pos, &ctx->sinkfds, ln_ctx) {
         for (u32 i = 0; i < vsize(pos->sub_topics); i++) {
-            if (strcmp(sget(*(str_t **)vat(pos->sub_topics, i)),
-                       srrp_get_anchor(am->pac)) == 0) {
+            //LOG_TRACE("[%p:forward_publish] topic:%s, sub:%s",
+            //          ctx, srrp_get_anchor(am->pac), sget(*(str_t **)vat(pos->sub_topics, i)));
+            rc = regcomp(&regex, sget(*(str_t **)vat(pos->sub_topics, i)), 0);
+            if (rc != 0) continue;
+            rc = regexec(&regex, srrp_get_anchor(am->pac), 0, NULL, 0);
+            if (rc == 0) {
                 apix_srrp_send(ctx, pos->fd, am->pac);
             }
+            regfree(&regex);
         }
     }
+
     apimsg_finish(am);
 }
 
