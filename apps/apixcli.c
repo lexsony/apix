@@ -118,7 +118,7 @@ on_srrp_packet(struct stream *stream, struct srrp_packet *pac, void *priv)
         rl_redisplay();
     }
 
-    int fd = apix_raw_fd(stream);
+    int fd = apix_get_raw_fd(stream);
 
     if (srrp_get_leader(pac) == SRRP_REQUEST_LEADER) {
         char hdr[1024];
@@ -288,18 +288,18 @@ static void *apix_thread(void *arg)
         else
             print_cur_msg();
 
-        struct stream *stream = apix_waiting(ctx, 100 * 1000);
+        struct stream *stream = apix_wait_stream(ctx);
         if (stream == NULL) continue;
-        int fd = apix_raw_fd(stream);
+        int fd = apix_get_raw_fd(stream);
 
-        switch (apix_next_event(stream)) {
+        switch (apix_wait_event(stream)) {
         case AEC_CLOSE:
             close_fd(fd);
             printf("#%d close\n", fd);
             break;
         case AEC_ACCEPT: {
             struct stream *new_stream = apix_accept(stream);
-            int _fd = apix_raw_fd(new_stream);
+            int _fd = apix_get_raw_fd(new_stream);
             if (_fd) {
                 assert(fds[fd].fd == 0);
                 fds[fd].fd = fd;
@@ -332,7 +332,7 @@ static void *apix_thread(void *arg)
             }
             break;
         case AEC_SRRP_PACKET: {
-            struct srrp_packet *pac = apix_next_srrp_packet(stream);
+            struct srrp_packet *pac = apix_wait_srrp_packet(stream);
             on_srrp_packet(stream, pac, NULL);
             //printf("#%d srrp packet: %s\n", fd, srrp_get_raw(pac));
             break;
@@ -459,7 +459,7 @@ static void on_cmd_unix_listen(const char *cmd)
             perror("listen_unix");
             return;
         }
-        int fd = apix_raw_fd(stream);
+        int fd = apix_get_raw_fd(stream);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         fds[fd].stream = stream;
@@ -485,7 +485,7 @@ static void on_cmd_tcp_listen(const char *cmd)
             perror("listen_tcp");
             return;
         }
-        int fd = apix_raw_fd(stream);
+        int fd = apix_get_raw_fd(stream);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         fds[fd].stream = stream;
@@ -520,7 +520,7 @@ static void on_cmd_unix_open(const char *cmd)
             perror("open_unix");
             return;
         }
-        int fd = apix_raw_fd(stream);
+        int fd = apix_get_raw_fd(stream);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
         fds[fd].stream = stream;
@@ -550,7 +550,7 @@ static void on_cmd_tcp_open(const char *cmd)
         perror("open_tcp");
         return;
     }
-    int fd = apix_raw_fd(stream);
+    int fd = apix_get_raw_fd(stream);
     assert(fds[fd].fd == 0);
     fds[fd].fd = fd;
     fds[fd].stream = stream;
@@ -596,7 +596,7 @@ static void on_cmd_com_open(const char *cmd)
         perror("ioctl_com");
         return;
     }
-    int fd = apix_raw_fd(stream);
+    int fd = apix_get_raw_fd(stream);
     assert(fds[fd].fd == 0);
     fds[fd].fd = fd;
     fds[fd].stream = stream;
@@ -633,7 +633,7 @@ static void on_cmd_can_open(const char *cmd)
         perror("open_can");
         return;
     }
-    int fd = apix_raw_fd(stream);
+    int fd = apix_get_raw_fd(stream);
     assert(fds[fd].fd == 0);
     fds[fd].fd = fd;
     fds[fd].stream = stream;

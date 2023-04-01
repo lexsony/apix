@@ -43,7 +43,7 @@ static void *apix_thread(void *arg)
         exit(-1);
     }
     apix_upgrade_to_srrp(server_unix, 0x1);
-    LOG_INFO("open unix socket #%d at %s", apix_raw_fd(server_unix), opt_string(opt));
+    LOG_INFO("open unix socket #%d at %s", apix_get_raw_fd(server_unix), opt_string(opt));
 
     opt = find_opt("tcp", opttab);
     struct stream *server_tcp = apix_open_tcp_server(ctx, opt_string(opt));
@@ -53,27 +53,27 @@ static void *apix_thread(void *arg)
         exit(-1);
     }
     apix_upgrade_to_srrp(server_tcp, 0x2);
-    LOG_INFO("open tcp socket #%d at %s", apix_raw_fd(server_tcp), opt_string(opt));
+    LOG_INFO("open tcp socket #%d at %s", apix_get_raw_fd(server_tcp), opt_string(opt));
 
     for (;;) {
         if (exit_flag == 1) break;
 
-        struct stream *stream = apix_waiting(ctx, 100 * 1000);
+        struct stream *stream = apix_wait_stream(ctx);
         if (stream == NULL) continue;
 
-        switch (apix_next_event(stream)) {
+        switch (apix_wait_event(stream)) {
         case AEC_OPEN:
-            LOG_INFO("#%d open", apix_raw_fd(stream));
+            LOG_INFO("#%d open", apix_get_raw_fd(stream));
             break;
         case AEC_CLOSE:
-            LOG_INFO("#%d close", apix_raw_fd(stream));
+            LOG_INFO("#%d close", apix_get_raw_fd(stream));
             break;
         case AEC_ACCEPT:
             apix_accept(stream);
-            LOG_INFO("#%d accept", apix_raw_fd(stream));
+            LOG_INFO("#%d accept", apix_get_raw_fd(stream));
             break;
         case AEC_SRRP_PACKET: {
-            struct srrp_packet *pac = apix_next_srrp_packet(stream);
+            struct srrp_packet *pac = apix_wait_srrp_packet(stream);
             if (stream == server_unix || stream == server_tcp) {
                 struct srrp_packet *resp = srrp_new_response(
                     srrp_get_dstid(pac),
@@ -82,10 +82,10 @@ static void *apix_thread(void *arg)
                     "j:{\"err\":404,\"msg\":\"Service not found\"}");
                 apix_srrp_send(stream, resp);
                 srrp_free(resp);
-                LOG_INFO("#%d serv packet: %s", apix_raw_fd(stream), srrp_get_raw(pac));
+                LOG_INFO("#%d serv packet: %s", apix_get_raw_fd(stream), srrp_get_raw(pac));
             } else {
                 apix_srrp_forward(stream, pac);
-                LOG_INFO("#%d forward packet: %s", apix_raw_fd(stream), srrp_get_raw(pac));
+                LOG_INFO("#%d forward packet: %s", apix_get_raw_fd(stream), srrp_get_raw(pac));
             }
             break;
         }

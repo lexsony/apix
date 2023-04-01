@@ -38,6 +38,7 @@ struct apix {
     struct timeval poll_ts;
     u8 poll_cnt;
     u64 idle_usec;
+    u64 idle_usec_max;
 };
 
 /**

@@ -78,6 +78,7 @@ static void *requester_thread(void *args)
     struct apix *ctx = apix_new();
     LOG_INFO("requester ctx: %x", ctx);
     apix_enable_posix(ctx);
+    apix_set_wait_timeout(ctx, 0);
     struct stream *stream = apix_open_unix_client(ctx, UNIX_ADDR);
     assert_true(stream);
     apix_upgrade_to_srrp(stream, 0x3333);
@@ -93,18 +94,18 @@ static void *requester_thread(void *args)
         if (requester_finished)
             break;
 
-        struct stream *stream = apix_waiting(ctx, 100 * 1000);
+        struct stream *stream = apix_wait_stream(ctx);
         if (stream == NULL) continue;
 
-        switch (apix_next_event(stream)) {
+        switch (apix_wait_event(stream)) {
         case AEC_OPEN:
-            LOG_INFO("#%d open", apix_raw_fd(stream));
+            LOG_INFO("#%d open", apix_get_raw_fd(stream));
             break;
         case AEC_CLOSE:
-            LOG_INFO("#%d close", apix_raw_fd(stream));
+            LOG_INFO("#%d close", apix_get_raw_fd(stream));
             break;
         case AEC_SRRP_PACKET: {
-            struct srrp_packet *pac = apix_next_srrp_packet(stream);
+            struct srrp_packet *pac = apix_wait_srrp_packet(stream);
             assert_true(pac);
             assert_true(srrp_get_leader(pac) == SRRP_RESPONSE_LEADER);
             LOG_INFO("requester on response: %s", srrp_get_raw(pac));
@@ -144,18 +145,18 @@ static void *responser_thread(void *args)
         if (responser_finished)
             break;
 
-        struct stream *stream = apix_waiting(ctx, 100 * 1000);
+        struct stream *stream = apix_wait_stream(ctx);
         if (stream == NULL) continue;
 
-        switch (apix_next_event(stream)) {
+        switch (apix_wait_event(stream)) {
         case AEC_OPEN:
-            LOG_INFO("#%d open", apix_raw_fd(stream));
+            LOG_INFO("#%d open", apix_get_raw_fd(stream));
             break;
         case AEC_CLOSE:
-            LOG_INFO("#%d close", apix_raw_fd(stream));
+            LOG_INFO("#%d close", apix_get_raw_fd(stream));
             break;
         case AEC_SRRP_PACKET: {
-            struct srrp_packet *pac = apix_next_srrp_packet(stream);
+            struct srrp_packet *pac = apix_wait_srrp_packet(stream);
             assert_true(pac);
             if (srrp_get_leader(pac) == SRRP_REQUEST_LEADER) {
                 LOG_INFO("responser on request: %s", srrp_get_raw(pac));
@@ -211,26 +212,26 @@ static void test_api_request_response(void **status)
         if (requester_finished && responser_finished)
             break;
 
-        struct stream *stream = apix_waiting(ctx, 100 * 1000);
+        struct stream *stream = apix_wait_stream(ctx);
         if (stream == NULL) continue;
 
-        switch (apix_next_event(stream)) {
+        switch (apix_wait_event(stream)) {
         case AEC_OPEN:
-            LOG_INFO("#%d open", apix_raw_fd(stream));
+            LOG_INFO("#%d open", apix_get_raw_fd(stream));
             break;
         case AEC_CLOSE:
-            LOG_INFO("#%d close", apix_raw_fd(stream));
+            LOG_INFO("#%d close", apix_get_raw_fd(stream));
             break;
         case AEC_ACCEPT: {
             struct stream * new_stream = apix_accept(stream);
-            LOG_INFO("#%d accept #%d", apix_raw_fd(stream), apix_raw_fd(new_stream));
+            LOG_INFO("#%d accept #%d", apix_get_raw_fd(stream), apix_get_raw_fd(new_stream));
             break;
         }
         case AEC_SRRP_PACKET: {
-            struct srrp_packet *pac = apix_next_srrp_packet(stream);
+            struct srrp_packet *pac = apix_wait_srrp_packet(stream);
             assert_true(pac);
             apix_srrp_forward(stream, pac);
-            LOG_INFO("#%d forward packet: %s", apix_raw_fd(stream), srrp_get_raw(pac));
+            LOG_INFO("#%d forward packet: %s", apix_get_raw_fd(stream), srrp_get_raw(pac));
             break;
         }
         default:
@@ -322,18 +323,18 @@ static void *subscribe_thread(void *args)
         if (subscribe_finished)
             break;
 
-        struct stream *stream = apix_waiting(ctx, 100 * 1000);
+        struct stream *stream = apix_wait_stream(ctx);
         if (stream == NULL) continue;
 
-        switch (apix_next_event(stream)) {
+        switch (apix_wait_event(stream)) {
         case AEC_OPEN:
-            LOG_INFO("#%d open", apix_raw_fd(stream));
+            LOG_INFO("#%d open", apix_get_raw_fd(stream));
             break;
         case AEC_CLOSE:
-            LOG_INFO("#%d close", apix_raw_fd(stream));
+            LOG_INFO("#%d close", apix_get_raw_fd(stream));
             break;
         case AEC_SRRP_PACKET: {
-            struct srrp_packet *pac = apix_next_srrp_packet(stream);
+            struct srrp_packet *pac = apix_wait_srrp_packet(stream);
             assert_true(pac);
             if (srrp_get_leader(pac) == SRRP_PUBLISH_LEADER) {
                 subscribe_finished = 1;
@@ -385,26 +386,26 @@ static void test_api_subscribe_publish(void **status)
         if (publish_finished && subscribe_finished)
             break;
 
-        struct stream *stream = apix_waiting(ctx, 100 * 1000);
+        struct stream *stream = apix_wait_stream(ctx);
         if (stream == NULL) continue;
 
-        switch (apix_next_event(stream)) {
+        switch (apix_wait_event(stream)) {
         case AEC_OPEN:
-            LOG_INFO("#%d open", apix_raw_fd(stream));
+            LOG_INFO("#%d open", apix_get_raw_fd(stream));
             break;
         case AEC_CLOSE:
-            LOG_INFO("#%d close", apix_raw_fd(stream));
+            LOG_INFO("#%d close", apix_get_raw_fd(stream));
             break;
         case AEC_ACCEPT: {
             struct stream *new_stream = apix_accept(stream);
-            LOG_INFO("#%d accept #%d", apix_raw_fd(stream), apix_raw_fd(new_stream));
+            LOG_INFO("#%d accept #%d", apix_get_raw_fd(stream), apix_get_raw_fd(new_stream));
             break;
         }
         case AEC_SRRP_PACKET: {
-            struct srrp_packet *pac = apix_next_srrp_packet(stream);
+            struct srrp_packet *pac = apix_wait_srrp_packet(stream);
             assert_true(pac);
             apix_srrp_forward(stream, pac);
-            LOG_INFO("#%d forward packet: %s", apix_raw_fd(stream), srrp_get_raw(pac));
+            LOG_INFO("#%d forward packet: %s", apix_get_raw_fd(stream), srrp_get_raw(pac));
             break;
         }
         default:

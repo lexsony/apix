@@ -93,24 +93,30 @@ int apix_send_to_buffer(struct stream *stream, const u8 *buf, u32 len);
 int apix_read_from_buffer(struct stream *stream, u8 *buf, u32 len);
 
 /**
- * apix_raw_fd
+ * apix_get_raw_fd
  */
-int apix_raw_fd(struct stream *stream);
+int apix_get_raw_fd(struct stream *stream);
 
 /**
- * apix_waiting
+ * apix_set_wait_timeout
+ * - usec: 0 => no timeout, apix_wait_* return immediately
  */
-struct stream *apix_waiting(struct apix *ctx, u64 usec);
+void apix_set_wait_timeout(struct apix *ctx, u64 usec);
 
 /**
- * apix_next_event
+ * apix_wait_stream
  */
-u8 apix_next_event(struct stream *stream);
+struct stream *apix_wait_stream(struct apix *ctx);
 
 /**
- * apix_next_srrp_packet
+ * apix_wait_event
  */
-struct srrp_packet *apix_next_srrp_packet(struct stream *stream);
+u8 apix_wait_event(struct stream *stream);
+
+/**
+ * apix_wait_srrp_packet
+ */
+struct srrp_packet *apix_wait_srrp_packet(struct stream *stream);
 
 /**
  * apix_upgrade_to_srrp

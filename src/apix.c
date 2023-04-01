@@ -456,9 +456,15 @@ int apix_read_from_buffer(struct stream *stream, u8 *buf, u32 len)
     return less;
 }
 
-int apix_raw_fd(struct stream *stream)
+int apix_get_raw_fd(struct stream *stream)
 {
     return stream->fd;
+}
+
+void apix_set_wait_timeout(struct apix *ctx, u64 usec)
+{
+    ctx->idle_usec = usec;
+    ctx->idle_usec_max = usec;
 }
 
 static int apix_poll(struct apix *ctx)
@@ -520,10 +526,25 @@ static int apix_poll(struct apix *ctx)
         clear_finished_message(pos_fd);
     }
 
+    //LOG_TRACE("[%p:apix_poll] poll_cnt:%d", ctx, ctx->poll_cnt);
     return 0;
 }
 
-struct stream *apix_waiting(struct apix *ctx, u64 usec)
+static void apix_idle(struct apix *ctx)
+{
+    if (ctx->poll_cnt == 0) {
+        usleep(ctx->idle_usec);
+        if (ctx->idle_usec != ctx->idle_usec_max) {
+            ctx->idle_usec += ctx->idle_usec_max / 10;
+            if (ctx->idle_usec > ctx->idle_usec_max)
+                ctx->idle_usec = ctx->idle_usec_max;
+        }
+    } else {
+        ctx->idle_usec = ctx->idle_usec_max / 10;
+    }
+}
+
+struct stream *apix_wait_stream(struct apix *ctx)
 {
     apix_poll(ctx);
 
@@ -534,26 +555,15 @@ struct stream *apix_waiting(struct apix *ctx, u64 usec)
         }
     }
 
-    //LOG_TRACE("[%p:apix_waiting] poll_cnt:%d", ctx, ctx->poll_cnt);
-    if (usec == 0)
-        usec = APIX_IDLE_MAX;
-    if (ctx->poll_cnt == 0) {
-        usleep(ctx->idle_usec);
-        if (ctx->idle_usec != usec) {
-            ctx->idle_usec += usec / 10;
-            if (ctx->idle_usec > usec)
-                ctx->idle_usec = usec;
-        }
-    } else {
-        ctx->idle_usec = usec / 10;
-    }
-
-    return 0;
+    apix_idle(ctx);
+    return NULL;
 }
 
-u8 apix_next_event(struct stream *stream)
+u8 apix_wait_event(struct stream *stream)
 {
-    //LOG_TRACE("[%p:apix_next_event] #%d event %d", ctx, stream->fd, stream->ev.byte);
+    apix_poll(stream->ctx);
+
+    //LOG_TRACE("[%p:apix_wait_event] #%d event %d", ctx, stream->fd, stream->ev.byte);
 
     if (stream->ev.bits.open) {
         stream->ev.bits.open = 0;
@@ -589,21 +599,23 @@ u8 apix_next_event(struct stream *stream)
         }
     }
 
+    apix_idle(stream->ctx);
     return AEC_NONE;
 }
 
-struct srrp_packet *apix_next_srrp_packet(struct stream *stream)
+struct srrp_packet *apix_wait_srrp_packet(struct stream *stream)
 {
+    apix_poll(stream->ctx);
+
     struct message *pos;
     list_for_each_entry(pos,&stream->msgs, ln) {
-        //LOG_TRACE("[%p:apix_next_srrp_packet] #%d msg:%p, state:%d, raw:%s",
-        //          ctx, fd, pos, pos->state, srrp_get_raw(pos->pac));
         if (pos->state == MESSAGE_ST_WAITING) {
             message_finish(pos);
             return pos->pac;
         }
     }
 
+    apix_idle(stream->ctx);
     return NULL;
 }
 

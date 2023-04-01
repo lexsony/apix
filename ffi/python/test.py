@@ -5,17 +5,14 @@ run_flag = 1
 
 ctx = apix.Apix()
 ctx.enable_posix()
+ctx.set_wait_timeout(0)
 
-client = ctx.open_unix_client("/tmp/apix")
+stream = ctx.open_unix_client("/tmp/apix")
 pac = srrp.srrp_new_ctrl(0xff01, "/sync", "")
-client.send(pac.raw())
+stream.send(pac.raw())
 
 while run_flag:
-    stream = ctx.waiting(10 * 1000)
-    if stream.is_null():
-        continue
-
-    match stream.next_event():
+    match stream.wait_event():
         case 1:
             print("open")
         case 2:
@@ -34,4 +31,4 @@ while run_flag:
                 else:
                     print("recv srrp:", pac.raw())
 
-client.close()
+stream.close()

@@ -23,7 +23,7 @@ class ApixStream():
         self.fd = self.__raw_fd() if stream is not None else -1
 
     def __raw_fd(self):
-        func = lib.apix_raw_fd
+        func = lib.apix_get_raw_fd
         func.argtypes = [ctypes.c_void_p]
         func.restype = ctypes.c_int32
         return func(self.stream)
@@ -82,14 +82,14 @@ class ApixStream():
         nr = func(self.stream, ctypes.cast(buf, ctypes.c_void_p), len(buf))
         return ctypes.cast(buf, ctypes.POINTER(ctypes.c_ubyte * nr)).contents
 
-    def next_event(self):
-        func = lib.apix_next_event
+    def wait_event(self):
+        func = lib.apix_wait_event
         func.argtypes = [ctypes.c_void_p]
         func.restype = ctypes.c_uint32
         return func(self.stream)
 
-    def next_srrp_packet(self):
-        func = lib.apix_next_srrp_packet
+    def wait_srrp_packet(self):
+        func = lib.apix_wait_srrp_packet
         func.argtypes = [ctypes.c_void_p]
         func.restype = ctypes.c_void_p
         return srrp.Srrp(func(self.stream), False)
@@ -122,11 +122,16 @@ class Apix():
         func.argtypes = [ctypes.c_void_p]
         func(self.ctx)
 
-    def waiting(self, usec):
-        func = lib.apix_waiting
+    def set_wait_timeout(self, usec):
+        func = lib.apix_set_wait_timeout
         func.argtypes = [ctypes.c_void_p, ctypes.c_uint64]
+        func(self.ctx, usec)
+
+    def wait_stream(self):
+        func = lib.apix_wait_stream
+        func.argtypes = [ctypes.c_void_p]
         func.restype = ctypes.c_void_p
-        return ApixStream(func(self.ctx, usec))
+        return ApixStream(func(self.ctx))
 
     def enable_posix(self):
         func = lib.apix_enable_posix

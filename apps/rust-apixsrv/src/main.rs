@@ -42,15 +42,16 @@ fn main() {
     // apix init
     let ctx = apix::Apix::new().unwrap();
     ctx.enable_posix();
+    ctx.set_wait_timeout(10 * 1000);
 
-    // fd_unix init
+    // server_unix init
     let server_unix = match ctx.open_unix_server("/tmp/apix") {
         Ok(x) => x,
         Err(e) => panic!("{}", e),
     };
     server_unix.upgrade_to_srrp(0x1);
 
-    // fd_tcp init
+    // server_tcp init
     let server_tcp = match ctx.open_tcp_server("127.0.0.1:3824") {
         Ok(x) => x,
         Err(e) => panic!("{}", e),
@@ -68,10 +69,10 @@ fn main() {
             break;
         }
 
-        let stream = ctx.waiting(10 * 1000);
+        let stream = ctx.wait_stream();
         match stream {
             Some(s) => {
-                match s.next_event() {
+                match s.wait_event() {
                     x if x == apix::ApixEvent::Open as u8 => {
                         info!("#{} open", s.fd);
                     },
@@ -86,7 +87,7 @@ fn main() {
                         debug!("#{} pollin", s.fd);
                     },
                     x if x == apix::ApixEvent::SrrpPacket as u8 => {
-                        let pac = s.next_srrp_packet().unwrap();
+                        let pac = s.wait_srrp_packet().unwrap();
                         if s.fd == server_unix.fd || s.fd == server_tcp.fd {
                             debug!("#{} srrp_packet: srcid:{}, dstid:{}, {}?{}",
                                 s.fd, pac.srcid, pac.dstid, pac.anchor, pac.payload);

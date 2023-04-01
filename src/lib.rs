@@ -50,7 +50,7 @@ impl ApixStream {
             } else {
                 Ok(ApixStream {
                     stream: new_stream,
-                    fd: apix_sys::apix_raw_fd(new_stream),
+                    fd: apix_sys::apix_get_raw_fd(new_stream),
                 })
             }
         }
@@ -84,15 +84,15 @@ impl ApixStream {
         }
     }
 
-    pub fn next_event(&self) -> u8 {
+    pub fn wait_event(&self) -> u8 {
         unsafe {
-            return apix_sys::apix_next_event(self.stream);
+            return apix_sys::apix_wait_event(self.stream);
         }
     }
 
-    pub fn next_srrp_packet(&self) -> Option<SrrpPacket> {
+    pub fn wait_srrp_packet(&self) -> Option<SrrpPacket> {
         unsafe {
-            let pac = apix_sys::apix_next_srrp_packet(self.stream);
+            let pac = apix_sys::apix_wait_srrp_packet(self.stream);
             if pac.is_null() {
                 None
             } else {
@@ -144,15 +144,21 @@ impl Apix {
         }
     }
 
-    pub fn waiting(&self, usec: u64) -> Option<ApixStream> {
+    pub fn set_wait_timeout(&self, usec: u64) {
         unsafe {
-            let stream = apix_sys::apix_waiting(self.ctx, usec);
+            apix_sys::apix_set_wait_timeout(self.ctx, usec);
+        }
+    }
+
+    pub fn wait_stream(&self) -> Option<ApixStream> {
+        unsafe {
+            let stream = apix_sys::apix_wait_stream(self.ctx);
             if stream.is_null() {
                 None
             } else {
                 Some(ApixStream {
                     stream: stream,
-                    fd: apix_sys::apix_raw_fd(stream),
+                    fd: apix_sys::apix_get_raw_fd(stream),
                 })
             }
         }
@@ -180,7 +186,7 @@ impl Apix {
             } else {
                 Ok(ApixStream {
                     stream: stream,
-                    fd: apix_sys::apix_raw_fd(stream),
+                    fd: apix_sys::apix_get_raw_fd(stream),
                 })
             }
         }

@@ -37,7 +37,7 @@ func (self *ApixStream) Accept() (ApixStream) {
     new_stream := C.apix_accept(self.stream)
     return ApixStream {
         stream: new_stream,
-            fd: int(C.apix_raw_fd(new_stream)),
+            fd: int(C.apix_get_raw_fd(new_stream)),
     }
 }
 
@@ -61,8 +61,8 @@ func (self *ApixStream) ReadFromBuffer(buf []byte) (int) {
         (*C.uchar)(unsafe.Pointer(&buf[0])), C.uint(len(buf))))
 }
 
-func (self *ApixStream) NextEvent() (uint) {
-    return uint(C.apix_next_event(self.stream))
+func (self *ApixStream) WaitEvent() (uint) {
+    return uint(C.apix_wait_event(self.stream))
 }
 
 type Apix struct {
@@ -77,12 +77,16 @@ func (self *Apix) Drop() {
     C.apix_drop(self.ctx)
 }
 
-func (self *Apix) Waiting(usec uint64) (ApixStream) {
-    stream := C.apix_waiting(self.ctx, C.ulong(usec))
+func (self *Apix) SetWaitTimeout(usec uint64) () {
+    C.apix_set_wait_timeout(self.ctx, C.ulong(usec))
+}
+
+func (self *Apix) WaitStream() (ApixStream) {
+    stream := C.apix_wait_stream(self.ctx)
     if stream == nil {
         return ApixStream{nil, -1}
     } else {
-        return ApixStream{stream, int(C.apix_raw_fd(stream))}
+        return ApixStream{stream, int(C.apix_get_raw_fd(stream))}
     }
 }
 
@@ -98,7 +102,7 @@ func (self *Apix) Open(sinkid string, addr string) (ApixStream) {
     stream := C.apix_open(self.ctx, C.CString(sinkid), C.CString(addr))
     return ApixStream {
         stream: stream,
-            fd: int(C.apix_raw_fd(stream)),
+            fd: int(C.apix_get_raw_fd(stream)),
     }
 }
 
