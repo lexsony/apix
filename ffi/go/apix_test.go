@@ -29,6 +29,7 @@ func TestBase(T *testing.T) {
             fmt.Println("close")
             break;
         case apix.EventAccept:
+            ctx.Accept(fd)
             fmt.Println("accept")
             break;
         case apix.EventPollin:

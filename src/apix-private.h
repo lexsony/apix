@@ -46,6 +46,7 @@ struct apisink;
 struct apisink_operations {
     int (*open)(struct apisink *sink, const char *addr);
     int (*close)(struct apisink *sink, int fd);
+    int (*accept)(struct apisink *sink, int fd);
     int (*ioctl)(struct apisink *sink, int fd, unsigned int cmd, unsigned long arg);
     int (*send)(struct apisink *sink, int fd, const u8 *buf, u32 len);
     int (*recv)(struct apisink *sink, int fd, u8 *buf, u32 size);

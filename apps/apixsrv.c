@@ -68,11 +68,12 @@ static void *apix_thread(void *arg)
             LOG_INFO("#%d close", fd);
             break;
         case AEC_ACCEPT:
+            apix_accept(ctx, fd);
             LOG_INFO("#%d accept", fd);
             break;
         case AEC_SRRP_PACKET: {
             struct srrp_packet *pac = apix_next_srrp_packet(ctx, fd);
-            if (fd == fd_unix || fd_tcp) {
+            if (fd == fd_unix || fd == fd_tcp) {
                 struct srrp_packet *resp = srrp_new_response(
                     srrp_get_dstid(pac),
                     srrp_get_srcid(pac),

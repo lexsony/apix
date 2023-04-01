@@ -81,6 +81,7 @@ fn main() {
                 info!("#{} close", fd);
             },
             x if x == apix::ApixEvent::Accept as u8 => {
+                ctx.accept(fd);
                 info!("#{} accept", fd);
             },
             x if x == apix::ApixEvent::Pollin as u8 => {

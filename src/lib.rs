@@ -58,6 +58,12 @@ impl Apix {
         }
     }
 
+    pub fn accept(&self, fd: i32) {
+        unsafe {
+            apix_sys::apix_accept(self.ctx, fd);
+        }
+    }
+
     pub fn send(&self, fd: i32, buf: &[u8]) {
         unsafe {
             apix_sys::apix_send(

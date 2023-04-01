@@ -20,7 +20,8 @@ while run_flag:
         case 2:
             print("close")
         case 3:
-            print("accept")
+            ctx.accept(fd);
+            print("error, client never accept")
         case 4:
             data = ctx.read_from_buffer(fd)
             if len(data):

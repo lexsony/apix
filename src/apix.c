@@ -409,6 +409,16 @@ int apix_close(struct apix *ctx, int fd)
     return 0;
 }
 
+int apix_accept(struct apix *ctx, int fd)
+{
+    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
+    if (sinkfd == NULL)
+        return -1;
+    if (sinkfd->sink && sinkfd->sink->ops.accept)
+        sinkfd->sink->ops.accept(sinkfd->sink, fd);
+    return 0;
+}
+
 int apix_ioctl(struct apix *ctx, int fd, unsigned int cmd, unsigned long arg)
 {
     struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
@@ -462,15 +472,6 @@ int apix_read_from_buffer(struct apix *ctx, int fd, u8 *buf, u32 len)
     u32 less = len < vsize(sinkfd->rxbuf) ? len : vsize(sinkfd->rxbuf);
     if (less) vdump(sinkfd->rxbuf, buf, less);
     return less;
-}
-
-int apix_get_fd_father(struct apix *ctx, int fd)
-{
-    struct sinkfd *sinkfd = find_sinkfd_in_apix(ctx, fd);
-    assert(sinkfd);
-    if (sinkfd->father)
-        return sinkfd->father->fd;
-    return 0;
 }
 
 static int apix_poll(struct apix *ctx)

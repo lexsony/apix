@@ -288,8 +288,12 @@ static void *apix_thread(void *arg)
         if (fd == 0) continue;
 
         switch (apix_next_event(ctx, fd)) {
-        case AEC_OPEN: {
-            int _fd = apix_get_fd_father(ctx, fd);
+        case AEC_CLOSE:
+            close_fd(fd);
+            printf("#%d close\n", fd);
+            break;
+        case AEC_ACCEPT: {
+            int _fd = apix_accept(ctx, fd);
             if (_fd) {
                 assert(fds[fd].fd == 0);
                 fds[fd].fd = fd;
@@ -299,15 +303,9 @@ static void *apix_thread(void *arg)
                 fds[fd].srrp_mode = fds[_fd].srrp_mode;
                 printf("#%d open: %s, %c\n", fd, fds[fd].addr, fds[fd].type);
             }
-            break;
-        }
-        case AEC_CLOSE:
-            close_fd(fd);
-            printf("#%d close\n", fd);
-            break;
-        case AEC_ACCEPT:
             printf("#%d accept\n", fd);
             break;
+        }
         case AEC_POLLIN:
             if (fds[fd].srrp_mode == 0) {
                 if (fds[fd].msg == NULL) {

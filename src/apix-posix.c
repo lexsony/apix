@@ -103,6 +103,35 @@ static int unix_s_close(struct apisink *sink, int fd)
     return 0;
 }
 
+static int unix_s_accept(struct apisink *sink, int fd)
+{
+    struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
+
+    struct sinkfd *sinkfd = find_sinkfd_in_apisink(sink, fd);
+    if (sinkfd == NULL)
+        return -1;
+
+    int newfd = accept(sinkfd->fd, NULL, NULL);
+    if (newfd == -1) {
+        LOG_ERROR("[%p:accept] #%d %s(%d)",
+                  sink->ctx, sinkfd->fd, strerror(errno), errno);
+        return -1;
+    }
+    LOG_DEBUG("[%p:accept] #%d accept #%d", sink->ctx, sinkfd->fd, newfd);
+
+    struct sinkfd *new_sinkfd = sinkfd_new(sink);
+    new_sinkfd->fd = newfd;
+    new_sinkfd->father = sinkfd;
+    new_sinkfd->type = SINKFD_T_ACCEPT;
+    new_sinkfd->srrp_mode = sinkfd->srrp_mode;
+
+    if (ps->nfds < newfd + 1)
+        ps->nfds = newfd + 1;
+    FD_SET(newfd, &ps->fds);
+
+    return newfd;
+}
+
 static int unix_s_send(struct apisink *sink, int fd, const u8 *buf, u32 len)
 {
     UNUSED(sink);
@@ -142,24 +171,6 @@ static int unix_s_poll(struct apisink *sink)
 
         // accept
         if (pos->type == SINKFD_T_LISTEN) {
-            int newfd = accept(pos->fd, NULL, NULL);
-            if (newfd == -1) {
-                LOG_ERROR("[%p:accept] #%d %s(%d)",
-                          sink->ctx, pos->fd, strerror(errno), errno);
-                continue;
-            }
-            LOG_DEBUG("[%p:accept] #%d accept #%d", sink->ctx, pos->fd, newfd);
-
-            struct sinkfd *sinkfd = sinkfd_new(sink);
-            sinkfd->fd = newfd;
-            sinkfd->father = pos;
-            sinkfd->type = SINKFD_T_ACCEPT;
-            sinkfd->srrp_mode = pos->srrp_mode;
-
-            if (ps->nfds < newfd + 1)
-                ps->nfds = newfd + 1;
-            FD_SET(newfd, &ps->fds);
-
             pos->ev.bits.accept = 1;
         } else /* recv */ {
             char buf[1024] = {0};
@@ -187,6 +198,7 @@ static int unix_s_poll(struct apisink *sink)
 static struct apisink_operations unix_s_ops = {
     .open = unix_s_open,
     .close = unix_s_close,
+    .accept = unix_s_accept,
     .ioctl = NULL,
     .send = unix_s_send,
     .recv = unix_s_recv,
@@ -286,6 +298,7 @@ static int unix_c_poll(struct apisink *sink)
 static struct apisink_operations unix_c_ops = {
     .open = unix_c_open,
     .close = __fd_close,
+    .accept = NULL,
     .ioctl = NULL,
     .send = unix_c_send,
     .recv = unix_c_recv,
@@ -344,6 +357,7 @@ static int tcp_s_open(struct apisink *sink, const char *addr)
 static struct apisink_operations tcp_s_ops = {
     .open = tcp_s_open,
     .close = __fd_close,
+    .accept = unix_s_accept,
     .ioctl = NULL,
     .send = unix_s_send,
     .recv = unix_s_recv,
@@ -396,6 +410,7 @@ static int tcp_c_open(struct apisink *sink, const char *addr)
 static struct apisink_operations tcp_c_ops = {
     .open = tcp_c_open,
     .close = __fd_close,
+    .accept = NULL,
     .ioctl = NULL,
     .send = unix_c_send,
     .recv = unix_c_recv,
@@ -543,6 +558,7 @@ static int com_poll(struct apisink *sink)
 static struct apisink_operations com_ops = {
     .open = com_open,
     .close = __fd_close,
+    .accept = NULL,
     .ioctl = com_ioctl,
     .send = com_send,
     .recv = com_recv,
@@ -644,6 +660,7 @@ static int can_poll(struct apisink *sink)
 static struct apisink_operations can_ops = {
     .open = can_open,
     .close = __fd_close,
+    .accept = NULL,
     .ioctl = NULL,
     .send = can_send,
     .recv = can_recv,

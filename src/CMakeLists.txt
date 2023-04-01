@@ -1,5 +1,5 @@
 file(GLOB SRC *.c)
-file(GLOB INC apix.h apix-posix.h srrp.h svcx.h log.h)
+file(GLOB INC types.h apix.h apix-posix.h srrp.h svcx.h log.h)
 
 if (BUILD_STATIC)
     add_library(apix-static STATIC ${SRC} ${SRC_POSIX})

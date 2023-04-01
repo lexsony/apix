@@ -51,6 +51,12 @@ int apix_open(struct apix *ctx, const char *sinkid, const char *addr);
 int apix_close(struct apix *ctx, int fd);
 
 /**
+ * apix_accept
+ * - inner call the accept systemcall
+ */
+int apix_accept(struct apix *ctx, int fd);
+
+/**
  * apix_ioctl
  * - inner call the ioctl systemcall
  */
@@ -83,11 +89,6 @@ int apix_send_to_buffer(struct apix *ctx, int fd, const u8 *buf, u32 len);
  * - as the inner rx buffer has no chance to reduce.
  */
 int apix_read_from_buffer(struct apix *ctx, int fd, u8 *buf, u32 len);
-
-/**
- * apix_get_fd_father
- */
-int apix_get_fd_father(struct apix *ctx, int fd);
 
 /**
  * apix_waiting

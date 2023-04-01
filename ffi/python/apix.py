@@ -33,6 +33,11 @@ class Apix():
         func.argtypes = [ctypes.c_void_p, ctypes.c_int32]
         func(self.ctx, fd)
 
+    def accept(self, fd):
+        func = lib.apix_accept
+        func.argtypes = [ctypes.c_void_p, ctypes.c_int32]
+        func(self.ctx, fd)
+
     def send(self, fd, buf):
         func = lib.apix_send
         func.argtypes = [ctypes.c_void_p, ctypes.c_int32, ctypes.c_void_p, ctypes.c_uint32]

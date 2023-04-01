@@ -33,6 +33,10 @@ func (self *Apix) Close(fd int) (int) {
     return int(C.apix_close(self.ctx, C.int(fd)))
 }
 
+func (self *Apix) Accept(fd int) (int) {
+    return int(C.apix_accept(self.ctx, C.int(fd)))
+}
+
 func (self *Apix) Send(fd int, buf []byte) (int) {
     return int(C.apix_send(self.ctx, C.int(fd),
         (*C.uchar)(unsafe.Pointer(&buf[0])), C.uint(len(buf))))
