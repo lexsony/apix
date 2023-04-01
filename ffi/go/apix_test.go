@@ -10,18 +10,18 @@ func TestBase(T *testing.T) {
 
     ctx := apix.New()
     ctx.EnablePosix()
-    fd := ctx.OpenUnixClient("/tmp/apix")
+    client := ctx.OpenUnixClient("/tmp/apix")
 
     pac, _ := srrp.NewCtrl(0xff00, "/sync", "")
-    ctx.Send(fd, pac.Raw)
+    client.Send(pac.Raw)
 
     for true {
-        fd := ctx.Waiting(10 * 1000);
-        if fd == 0 {
+        stream := ctx.Waiting(10 * 1000);
+        if stream.IsNull() {
             continue;
         }
 
-        switch ctx.NextEvent(fd) {
+        switch stream.NextEvent() {
         case apix.EventOpen:
             fmt.Println("open")
             break;
@@ -29,12 +29,11 @@ func TestBase(T *testing.T) {
             fmt.Println("close")
             break;
         case apix.EventAccept:
-            ctx.Accept(fd)
-            fmt.Println("accept")
+            fmt.Println("never enter accept")
             break;
         case apix.EventPollin:
             buf := make([]byte, 256)
-            nr := ctx.ReadFromBuffer(fd, buf)
+            nr := stream.ReadFromBuffer( buf)
             if nr > 0 {
                 pac, err := srrp.Parse(buf)
                 if err == nil {
@@ -49,6 +48,6 @@ func TestBase(T *testing.T) {
         }
     }
 
-    ctx.Close(fd)
+    client.Close()
     ctx.Drop()
 }

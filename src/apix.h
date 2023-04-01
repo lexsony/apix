@@ -17,6 +17,7 @@ extern "C" {
 #endif
 
 struct apix;
+struct stream;
 
 enum apix_event {
     AEC_NONE = 0,
@@ -42,25 +43,26 @@ void apix_drop(struct apix *ctx);
  * - return the file descriptor(fd) from system
  * - never call fctrl or setsockopt inner, so the state of fd is default
  */
-int apix_open(struct apix *ctx, const char *sinkid, const char *addr);
+struct stream *
+apix_open(struct apix *ctx, const char *sinkid, const char *addr);
 
 /**
  * apix_close
  * - inner call the close systemcall
  */
-int apix_close(struct apix *ctx, int fd);
+int apix_close(struct stream *stream);
 
 /**
  * apix_accept
  * - inner call the accept systemcall
  */
-int apix_accept(struct apix *ctx, int fd);
+struct stream *apix_accept(struct stream *stream);
 
 /**
  * apix_ioctl
  * - inner call the ioctl systemcall
  */
-int apix_ioctl(struct apix *ctx, int fd, unsigned int cmd, unsigned long arg);
+int apix_ioctl(struct stream *stream, unsigned int cmd, unsigned long arg);
 
 /**
  * apix_send
@@ -68,60 +70,65 @@ int apix_ioctl(struct apix *ctx, int fd, unsigned int cmd, unsigned long arg);
  * - set MSG_NOSIGNAL
  * - not set O_NONBLOCK by fctrl
  */
-int apix_send(struct apix *ctx, int fd, const u8 *buf, u32 len);
+int apix_send(struct stream *stream, const u8 *buf, u32 len);
 
 /**
  * apix_recv
  * - inner call recv or write in blocking-mode
  * - not set O_NONBLOCK by fctrl
  */
-int apix_recv(struct apix *ctx, int fd, u8 *buf, u32 len);
+int apix_recv(struct stream *stream, u8 *buf, u32 len);
 
 /**
  * apix_send_to_buffer
  * - a nonblocking-mode send
  */
-int apix_send_to_buffer(struct apix *ctx, int fd, const u8 *buf, u32 len);
+int apix_send_to_buffer(struct stream *stream, const u8 *buf, u32 len);
 
 /**
  * apix_read_from_buffer
  * - call this func after poll if not set on_fd_pollin and not in srrpmode,
  * - as the inner rx buffer has no chance to reduce.
  */
-int apix_read_from_buffer(struct apix *ctx, int fd, u8 *buf, u32 len);
+int apix_read_from_buffer(struct stream *stream, u8 *buf, u32 len);
+
+/**
+ * apix_raw_fd
+ */
+int apix_raw_fd(struct stream *stream);
 
 /**
  * apix_waiting
  */
-int apix_waiting(struct apix *ctx, u64 usec);
+struct stream *apix_waiting(struct apix *ctx, u64 usec);
 
 /**
  * apix_next_event
  */
-u8 apix_next_event(struct apix *ctx, int fd);
+u8 apix_next_event(struct stream *stream);
 
 /**
  * apix_next_srrp_packet
  */
-struct srrp_packet *apix_next_srrp_packet(struct apix *ctx, int fd);
+struct srrp_packet *apix_next_srrp_packet(struct stream *stream);
 
 /**
  * apix_upgrade_to_srrp
  * - enable srrp mode
  */
-int apix_upgrade_to_srrp(struct apix *ctx, int fd, u32 nodeid);
+int apix_upgrade_to_srrp(struct stream *stream, u32 nodeid);
 
 /**
  * apix_srrp_forward
  * - forward the srrp packet to the real destination through dstid
  */
-void apix_srrp_forward(struct apix *ctx, int fd, struct srrp_packet *pac);
+void apix_srrp_forward(struct stream *stream, struct srrp_packet *pac);
 
 /**
  * apix_srrp_send
  * - send the srrp packet to the src fd and real destination through dstid
  */
-int apix_srrp_send(struct apix *ctx, int fd, struct srrp_packet *pac);
+int apix_srrp_send(struct stream *stream, struct srrp_packet *pac);
 
 #ifdef __cplusplus
 }

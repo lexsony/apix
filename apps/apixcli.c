@@ -30,6 +30,7 @@
 
 struct fd_struct {
     int fd;
+    struct stream *stream;
     char addr[64];
     const char *mode; /* unix, tcp, com, can */
     atbuf_t *msg;
@@ -103,7 +104,7 @@ static void log_hex_string(const char *buf, uint32_t len)
 }
 
 static void
-on_srrp_packet(struct apix *ctx, int fd, struct srrp_packet *pac, void *priv)
+on_srrp_packet(struct stream *stream, struct srrp_packet *pac, void *priv)
 {
     int need_hack = (rl_readline_state & RL_STATE_READCMD) > 0;
     char *saved_line;
@@ -116,6 +117,8 @@ on_srrp_packet(struct apix *ctx, int fd, struct srrp_packet *pac, void *priv)
         rl_replace_line("", 0);
         rl_redisplay();
     }
+
+    int fd = apix_raw_fd(stream);
 
     if (srrp_get_leader(pac) == SRRP_REQUEST_LEADER) {
         char hdr[1024];
@@ -131,7 +134,7 @@ on_srrp_packet(struct apix *ctx, int fd, struct srrp_packet *pac, void *priv)
                 srrp_get_dstid(pac), srrp_get_srcid(pac),
                 srrp_get_anchor(pac), "{msg:'...'}");
         }
-        apix_send(ctx, fd, srrp_get_raw(resp), srrp_get_packet_len(resp));
+        apix_send(stream, srrp_get_raw(resp), srrp_get_packet_len(resp));
 
         printf("request(%d): %s\n", fd, (char *)srrp_get_raw(resp));
         srrp_free(resp);
@@ -264,6 +267,7 @@ static void close_fd(int fd)
         if (cur_fd == fd)
             cur_fd = -1;
         fds[fd].fd = 0;
+        fds[fd].stream = NULL;
         if (fds[fd].msg) {
             atbuf_delete(fds[fd].msg);
             fds[fd].msg = NULL;
@@ -284,19 +288,22 @@ static void *apix_thread(void *arg)
         else
             print_cur_msg();
 
-        int fd = apix_waiting(ctx, 100 * 1000);
-        if (fd == 0) continue;
+        struct stream *stream = apix_waiting(ctx, 100 * 1000);
+        if (stream == NULL) continue;
+        int fd = apix_raw_fd(stream);
 
-        switch (apix_next_event(ctx, fd)) {
+        switch (apix_next_event(stream)) {
         case AEC_CLOSE:
             close_fd(fd);
             printf("#%d close\n", fd);
             break;
         case AEC_ACCEPT: {
-            int _fd = apix_accept(ctx, fd);
+            struct stream *new_stream = apix_accept(stream);
+            int _fd = apix_raw_fd(new_stream);
             if (_fd) {
                 assert(fds[fd].fd == 0);
                 fds[fd].fd = fd;
+                fds[fd].stream = new_stream;
                 strcpy(fds[fd].addr, fds[_fd].addr);
                 fds[fd].type = 'a';
                 fds[fd].mode = fds[_fd].mode;
@@ -313,7 +320,7 @@ static void *apix_thread(void *arg)
                 }
 
                 uint8_t buf[2048] = {0};
-                uint32_t len = apix_read_from_buffer(ctx, fd, buf, sizeof(buf));
+                uint32_t len = apix_read_from_buffer(stream, buf, sizeof(buf));
 
                 if (strcmp(fds[fd].mode, "can") == 0) {
                     on_can_pollin(ctx, fd, buf, len, NULL);
@@ -325,9 +332,9 @@ static void *apix_thread(void *arg)
             }
             break;
         case AEC_SRRP_PACKET: {
-            struct srrp_packet *pac = apix_next_srrp_packet(ctx, fd);
-            on_srrp_packet(ctx, fd, pac, NULL);
-            printf("#%d srrp packet: %s\n", fd, srrp_get_raw(pac));
+            struct srrp_packet *pac = apix_next_srrp_packet(stream);
+            on_srrp_packet(stream, pac, NULL);
+            //printf("#%d srrp packet: %s\n", fd, srrp_get_raw(pac));
             break;
         }
         default:
@@ -447,13 +454,15 @@ static void on_cmd_unix_listen(const char *cmd)
     char addr[64] = {0};
     int nr = sscanf(cmd, "listen %s", addr);
     if (nr == 1) {
-        int fd = apix_open_unix_server(ctx, addr);
-        if (fd == -1) {
+        struct stream *stream = apix_open_unix_server(ctx, addr);
+        if (stream == NULL) {
             perror("listen_unix");
             return;
         }
+        int fd = apix_raw_fd(stream);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
+        fds[fd].stream = stream;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'l';
         fds[fd].mode = "unix";
@@ -471,13 +480,15 @@ static void on_cmd_tcp_listen(const char *cmd)
     char addr[64] = {0};
     int nr = sscanf(cmd, "listen %s", addr);
     if (nr == 1) {
-        int fd = apix_open_tcp_server(ctx, addr);
-        if (fd == -1) {
+        struct stream *stream = apix_open_tcp_server(ctx, addr);
+        if (stream == NULL) {
             perror("listen_tcp");
             return;
         }
+        int fd = apix_raw_fd(stream);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
+        fds[fd].stream = stream;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'l';
         fds[fd].mode = "tcp";
@@ -504,13 +515,15 @@ static void on_cmd_unix_open(const char *cmd)
     char addr[64] = {0};
     int nr = sscanf(cmd, "open %s", addr);
     if (nr == 1) {
-        int fd = apix_open_unix_client(ctx, addr);
-        if (fd == -1) {
+        struct stream *stream = apix_open_unix_client(ctx, addr);
+        if (stream == NULL) {
             perror("open_unix");
             return;
         }
+        int fd = apix_raw_fd(stream);
         assert(fds[fd].fd == 0);
         fds[fd].fd = fd;
+        fds[fd].stream = stream;
         snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
         fds[fd].type = 'c';
         fds[fd].mode = "unix";
@@ -532,13 +545,15 @@ static void on_cmd_tcp_open(const char *cmd)
         return;
     }
 
-    int fd = apix_open_tcp_client(ctx, addr);
-    if (fd == -1) {
+    struct stream *stream = apix_open_tcp_client(ctx, addr);
+    if (stream == NULL) {
         perror("open_tcp");
         return;
     }
+    int fd = apix_raw_fd(stream);
     assert(fds[fd].fd == 0);
     fds[fd].fd = fd;
+    fds[fd].stream = stream;
     snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", addr);
     fds[fd].type = 'c';
     fds[fd].mode = "tcp";
@@ -564,8 +579,8 @@ static void on_cmd_com_open(const char *cmd)
         return;
     }
 
-    int fd = apix_open_com(ctx, addr);
-    if (fd == -1) {
+    struct stream *stream = apix_open_com(ctx, addr);
+    if (stream == NULL) {
         perror("open_com");
         return;
     }
@@ -575,14 +590,16 @@ static void on_cmd_com_open(const char *cmd)
         .parity = parity,
         .stop = stop_bits,
     };
-    int rc = apix_ioctl(ctx, fd, 0, (unsigned long)&sp);
+    int rc = apix_ioctl(stream, 0, (unsigned long)&sp);
     if (rc == -1) {
-        apix_close(ctx, fd);
+        apix_close(stream);
         perror("ioctl_com");
         return;
     }
+    int fd = apix_raw_fd(stream);
     assert(fds[fd].fd == 0);
     fds[fd].fd = fd;
+    fds[fd].stream = stream;
     snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", strstr(cmd, "open "));
     fds[fd].type = 'c';
     fds[fd].mode = "com";
@@ -611,13 +628,15 @@ static void on_cmd_can_open(const char *cmd)
     }
 
     printf("can_id = 0x%x\n", can_id);
-    int fd = apix_open_can(ctx, addr);
-    if (fd == -1) {
+    struct stream *stream = apix_open_can(ctx, addr);
+    if (stream == NULL) {
         perror("open_can");
         return;
     }
+    int fd = apix_raw_fd(stream);
     assert(fds[fd].fd == 0);
     fds[fd].fd = fd;
+    fds[fd].stream = stream;
     snprintf(fds[fd].addr, sizeof(fds[fd].addr), "%s", strstr(cmd, "open "));
     fds[fd].type = 'c';
     fds[fd].mode = "can";
@@ -649,9 +668,10 @@ static void on_cmd_close(const char *cmd)
     int fd = 0;
     int nr = sscanf(cmd, "close %d", &fd);
     if (nr == 1) {
-        apix_close(ctx, fd);
+        apix_close(fds[fd].stream);
     } else if (strcmp(cmd, "close") == 0) {
-        apix_close(ctx, cur_fd);
+        if (cur_fd != -1)
+            apix_close(fds[cur_fd].stream);
     }
 }
 
@@ -675,12 +695,12 @@ static void on_cmd_send(const char *cmd)
         memcpy(frame.data, msg, len);
         frame.can_dlc = strlen(msg);
         frame.can_id = fds[cur_fd].can_id | CAN_EFF_FLAG;
-        apix_send(ctx, cur_fd, (uint8_t *)&frame, sizeof(frame));
+        apix_send(fds[cur_fd].stream, (uint8_t *)&frame, sizeof(frame));
     } else {
-        apix_send(ctx, cur_fd, (uint8_t *)msg, len);
+        apix_send(fds[cur_fd].stream, (uint8_t *)msg, len);
     }
 #else
-    apix_send(ctx, cur_fd, (uint8_t *)msg, len);
+    apix_send(fds[cur_fd].stream, (uint8_t *)msg, len);
 #endif
 }
 
@@ -737,7 +757,7 @@ static void on_cmd_srrpmode(const char *cmd)
     if (strcmp(msg, "on") == 0) {
         if (fds[cur_fd].srrp_mode == 0) {
             fds[cur_fd].srrp_mode = 1;
-            apix_upgrade_to_srrp(ctx, fds[cur_fd].fd, fds[cur_fd].node_id);
+            apix_upgrade_to_srrp(fds[cur_fd].stream, fds[cur_fd].node_id);
         }
     } else {
         printf("param error\n");
@@ -770,12 +790,12 @@ static void on_cmd_srrpget(const char *cmd)
         memcpy(frame.data, srrp_get_raw(pac), srrp_get_packet_len(pac));
         frame.can_dlc = strlen(msg);
         frame.can_id = fds[cur_fd].can_id | CAN_EFF_FLAG;
-        apix_send(ctx, cur_fd, (uint8_t *)&frame, sizeof(frame));
+        apix_send(fds[cur_fd].stream, (uint8_t *)&frame, sizeof(frame));
     } else {
-        apix_send(ctx, cur_fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+        apix_send(fds[cur_fd].stream, srrp_get_raw(pac), srrp_get_packet_len(pac));
     }
 #else
-    apix_send(ctx, cur_fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+    apix_send(fds[cur_fd].stream, srrp_get_raw(pac), srrp_get_packet_len(pac));
 #endif
     srrp_free(pac);
 }

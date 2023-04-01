@@ -35,17 +35,14 @@ struct posix_sink {
     int nfds;
 };
 
-static int __fd_close(struct sink *sink, int fd)
+static int __fd_close(struct stream *stream)
 {
-    struct stream *stream = find_stream_in_sink(sink, fd);
-    if (stream == NULL)
-        return -1;
-
     close(stream->fd);
     stream_free(stream);
 
-    struct posix_sink *unix_c_sink = container_of(sink, struct posix_sink, sink);
-    FD_CLR(fd, &unix_c_sink->fds);
+    struct posix_sink *unix_c_sink =
+        container_of(stream->sink, struct posix_sink, sink);
+    FD_CLR(stream->fd, &unix_c_sink->fds);
 
     return 0;
 }
@@ -54,11 +51,11 @@ static int __fd_close(struct sink *sink, int fd)
  * unix domain socket server
  */
 
-static int unix_s_open(struct sink *sink, const char *addr)
+static struct stream *unix_s_open(struct sink *sink, const char *addr)
 {
     int fd = socket(PF_UNIX, SOCK_STREAM, 0);
     if (fd == -1)
-        return -1;
+        return NULL;
 
     int rc = 0;
     struct sockaddr_un sockaddr = {0};
@@ -69,13 +66,13 @@ static int unix_s_open(struct sink *sink, const char *addr)
     rc = bind(fd, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
     if (rc == -1) {
         close(fd);
-        return -1;
+        return NULL;
     }
 
     rc = listen(fd, 100);
     if (rc == -1) {
         close(fd);
-        return -1;
+        return NULL;
     }
 
     struct stream *stream = stream_new(sink);
@@ -87,39 +84,31 @@ static int unix_s_open(struct sink *sink, const char *addr)
     FD_SET(fd, &ps->fds);
     ps->nfds = fd + 1;
 
-    return fd;
+    return stream;
 }
 
-static int unix_s_close(struct sink *sink, int fd)
+static int unix_s_close(struct stream *stream)
 {
-    struct stream *stream = find_stream_in_sink(sink, fd);
-    if (stream == NULL)
-        return -1;
-
-    if (strcmp(sink->id, SINK_UNIX_S) == 0)
+    if (strcmp(stream->sink->id, SINK_UNIX_S) == 0)
         unlink(stream->addr);
 
-    __fd_close(sink, fd);
+    __fd_close(stream);
     return 0;
 }
 
-static int unix_s_accept(struct sink *sink, int fd)
+static struct stream *unix_s_accept(struct stream *stream)
 {
-    struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
-
-    struct stream *stream = find_stream_in_sink(sink, fd);
-    if (stream == NULL)
-        return -1;
+    struct posix_sink *ps = container_of(stream->sink, struct posix_sink, sink);
 
     int newfd = accept(stream->fd, NULL, NULL);
     if (newfd == -1) {
         LOG_ERROR("[%p:accept] #%d %s(%d)",
-                  sink->ctx, stream->fd, strerror(errno), errno);
-        return -1;
+                  stream->ctx, stream->fd, strerror(errno), errno);
+        return NULL;
     }
-    LOG_DEBUG("[%p:accept] #%d accept #%d", sink->ctx, stream->fd, newfd);
+    LOG_DEBUG("[%p:accept] #%d accept #%d", stream->ctx, stream->fd, newfd);
 
-    struct stream *new_stream = stream_new(sink);
+    struct stream *new_stream = stream_new(stream->sink);
     new_stream->fd = newfd;
     new_stream->father = stream;
     new_stream->type = STREAM_T_ACCEPT;
@@ -129,19 +118,17 @@ static int unix_s_accept(struct sink *sink, int fd)
         ps->nfds = newfd + 1;
     FD_SET(newfd, &ps->fds);
 
-    return newfd;
+    return new_stream;
 }
 
-static int unix_s_send(struct sink *sink, int fd, const u8 *buf, u32 len)
+static int unix_s_send(struct stream *stream, const u8 *buf, u32 len)
 {
-    UNUSED(sink);
-    return send(fd, buf, len, MSG_NOSIGNAL);
+    return send(stream->fd, buf, len, MSG_NOSIGNAL);
 }
 
-static int unix_s_recv(struct sink *sink, int fd, u8 *buf, u32 len)
+static int unix_s_recv(struct stream *stream, u8 *buf, u32 len)
 {
-    UNUSED(sink);
-    return recv(fd, buf, len, 0);
+    return recv(stream->fd, buf, len, 0);
 }
 
 static int unix_s_poll(struct sink *sink)
@@ -177,10 +164,10 @@ static int unix_s_poll(struct sink *sink)
             int nread = recv(pos->fd, buf, sizeof(buf), 0);
             if (nread == -1) {
                 LOG_DEBUG("[%p:recv] #%d %s(%d)", sink->ctx, pos->fd, strerror(errno), errno);
-                sink->ops.close(sink, pos->fd);
+                sink->ops.close(pos);
             } else if (nread == 0) {
                 LOG_DEBUG("[%p:recv] #%d finished", sink->ctx, pos->fd);
-                sink->ops.close(sink, pos->fd);
+                sink->ops.close(pos);
             } else {
                 LOG_TRACE("[%p:recv] #%d packet in", sink->ctx, pos->fd);
                 vpack(pos->rxbuf, buf, nread);
@@ -207,11 +194,11 @@ static struct sink_operations unix_s_ops = {
  * unix domain socket client
  */
 
-static int unix_c_open(struct sink *sink, const char *addr)
+static struct stream *unix_c_open(struct sink *sink, const char *addr)
 {
     int fd = socket(PF_UNIX, SOCK_STREAM, 0);
     if (fd == -1)
-        return -1;
+        return NULL;
 
     int rc = 0;
     struct sockaddr_un sockaddr = {0};
@@ -221,7 +208,7 @@ static int unix_c_open(struct sink *sink, const char *addr)
     rc = connect(fd, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
     if (rc == -1) {
         close(fd);
-        return -1;
+        return NULL;
     }
 
     struct stream *stream = stream_new(sink);
@@ -232,19 +219,17 @@ static int unix_c_open(struct sink *sink, const char *addr)
     FD_SET(fd, &ps->fds);
     ps->nfds = fd + 1;
 
-    return fd;
+    return stream;
 }
 
-static int unix_c_send(struct sink *sink, int fd, const u8 *buf, u32 len)
+static int unix_c_send(struct stream *stream, const u8 *buf, u32 len)
 {
-    UNUSED(sink);
-    return send(fd, buf, len, MSG_NOSIGNAL);
+    return send(stream->fd, buf, len, MSG_NOSIGNAL);
 }
 
-static int unix_c_recv(struct sink *sink, int fd, u8 *buf, u32 len)
+static int unix_c_recv(struct stream *stream, u8 *buf, u32 len)
 {
-    UNUSED(sink);
-    return recv(fd, buf, len, 0);
+    return recv(stream->fd, buf, len, 0);
 }
 
 static int unix_c_poll(struct sink *sink)
@@ -276,10 +261,10 @@ static int unix_c_poll(struct sink *sink)
         int nread = recv(pos->fd, buf, sizeof(buf), 0);
         if (nread == -1) {
             LOG_DEBUG("[%p:recv] #%d %s(%d)", sink->ctx, pos->fd, strerror(errno), errno);
-            sink->ops.close(sink, pos->fd);
+            sink->ops.close(pos);
         } else if (nread == 0) {
             LOG_DEBUG("[%p:recv] #%d finished", sink->ctx, pos->fd);
-            sink->ops.close(sink, pos->fd);
+            sink->ops.close(pos);
         } else {
             LOG_TRACE("[%p:recv] #%d packet in", sink->ctx, pos->fd);
             vpack(pos->rxbuf, buf, nread);
@@ -305,11 +290,11 @@ static struct sink_operations unix_c_ops = {
  * tcp server
  */
 
-static int tcp_s_open(struct sink *sink, const char *addr)
+static struct stream *tcp_s_open(struct sink *sink, const char *addr)
 {
     int fd = socket(PF_INET, SOCK_STREAM, 0);
     if (fd == -1)
-        return -1;
+        return NULL;
 
     u32 host;
     u16 port;
@@ -329,13 +314,13 @@ static int tcp_s_open(struct sink *sink, const char *addr)
     rc = bind(fd, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
     if (rc == -1) {
         close(fd);
-        return -1;
+        return NULL;
     }
 
     rc = listen(fd, 100);
     if (rc == -1) {
         close(fd);
-        return -1;
+        return NULL;
     }
 
     struct stream *stream = stream_new(sink);
@@ -347,7 +332,7 @@ static int tcp_s_open(struct sink *sink, const char *addr)
     FD_SET(fd, &tcp_s_sink->fds);
     tcp_s_sink->nfds = fd + 1;
 
-    return fd;
+    return stream;
 }
 
 static struct sink_operations tcp_s_ops = {
@@ -364,11 +349,11 @@ static struct sink_operations tcp_s_ops = {
  * tcp client
  */
 
-static int tcp_c_open(struct sink *sink, const char *addr)
+static struct stream *tcp_c_open(struct sink *sink, const char *addr)
 {
     int fd = socket(PF_INET, SOCK_STREAM, 0);
     if (fd == -1)
-        return -1;
+        return NULL;
 
     u32 host;
     u16 port;
@@ -388,7 +373,7 @@ static int tcp_c_open(struct sink *sink, const char *addr)
     rc = connect(fd, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
     if (rc == -1) {
         close(fd);
-        return -1;
+        return NULL;
     }
 
     struct stream *stream = stream_new(sink);
@@ -400,7 +385,7 @@ static int tcp_c_open(struct sink *sink, const char *addr)
     FD_SET(fd, &tcp_c_sink->fds);
     tcp_c_sink->nfds = fd + 1;
 
-    return fd;
+    return stream;
 }
 
 static struct sink_operations tcp_c_ops = {
@@ -419,10 +404,11 @@ static struct sink_operations tcp_c_ops = {
  * com
  */
 
-static int com_open(struct sink *sink, const char *addr)
+static struct stream *com_open(struct sink *sink, const char *addr)
 {
     int fd = open(addr, O_RDWR | O_NOCTTY | O_NDELAY);
-    if (fd == -1) return -1;
+    if (fd == -1)
+        return NULL;
 
     struct stream *stream = stream_new(sink);
     stream->fd = fd;
@@ -432,18 +418,17 @@ static int com_open(struct sink *sink, const char *addr)
     FD_SET(fd, &com_sink->fds);
     com_sink->nfds = fd + 1;
 
-    return fd;
+    return stream;
 }
 
 static int
-com_ioctl(struct sink *sink, int fd, unsigned int cmd, unsigned long arg)
+com_ioctl(struct stream *stream, unsigned int cmd, unsigned long arg)
 {
-    UNUSED(sink);
     UNUSED(cmd);
     struct ioctl_com_param *sp = (struct ioctl_com_param *)arg;
     struct termios newtio, oldtio;
 
-    if (tcgetattr(fd, &oldtio) != 0)
+    if (tcgetattr(stream->fd, &oldtio) != 0)
         return -1;
 
     bzero(&newtio, sizeof(newtio));
@@ -487,24 +472,22 @@ com_ioctl(struct sink *sink, int fd, unsigned int cmd, unsigned long arg)
 
     newtio.c_cc[VTIME] = 0;
     newtio.c_cc[VMIN] = 0;
-    tcflush(fd, TCIFLUSH);
+    tcflush(stream->fd, TCIFLUSH);
 
-    if (tcsetattr(fd, TCSANOW, &newtio) != 0)
+    if (tcsetattr(stream->fd, TCSANOW, &newtio) != 0)
         return -1;
 
     return 0;
 }
 
-static int com_send(struct sink *sink, int fd, const u8 *buf, u32 len)
+static int com_send(struct stream *stream, const u8 *buf, u32 len)
 {
-    UNUSED(sink);
-    return write(fd, buf, len);
+    return write(stream->fd, buf, len);
 }
 
-static int com_recv(struct sink *sink, int fd, u8 *buf, u32 len)
+static int com_recv(struct stream *stream, u8 *buf, u32 len)
 {
-    UNUSED(sink);
-    return read(fd, buf, len);
+    return read(stream->fd, buf, len);
 }
 
 static int com_poll(struct sink *sink)
@@ -536,10 +519,10 @@ static int com_poll(struct sink *sink)
         int nread = read(pos->fd, buf, sizeof(buf));
         if (nread == -1) {
             LOG_DEBUG("[%p:read] #%d %s(%d)", sink->ctx, pos->fd, strerror(errno), errno);
-            sink->ops.close(sink, pos->fd);
+            sink->ops.close(pos);
         } else if (nread == 0) {
             LOG_DEBUG("[%p:read] #%d finished", sink->ctx, pos->fd);
-            sink->ops.close(sink, pos->fd);
+            sink->ops.close(pos);
         } else {
             LOG_TRACE("[%p:read] #%d packet in", sink->ctx, pos->fd);
             vpack(pos->rxbuf, buf, nread);
@@ -565,11 +548,11 @@ static struct sink_operations com_ops = {
  * can
  */
 
-static int can_open(struct sink *sink, const char *addr)
+static struct stream *can_open(struct sink *sink, const char *addr)
 {
     int fd = socket(PF_CAN, SOCK_RAW, CAN_RAW);
     if (fd == -1)
-        return -1;
+        return NULL;
 
     int rc = 0;
     struct ifreq ifr;
@@ -582,7 +565,7 @@ static int can_open(struct sink *sink, const char *addr)
     rc = bind(fd, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
     if (rc == -1) {
         close(fd);
-        return -1;
+        return NULL;
     }
 
     struct stream *stream = stream_new(sink);
@@ -594,19 +577,17 @@ static int can_open(struct sink *sink, const char *addr)
     FD_SET(fd, &tcp_c_sink->fds);
     tcp_c_sink->nfds = fd + 1;
 
-    return fd;
+    return stream;
 }
 
-static int can_send(struct sink *sink, int fd, const u8 *buf, u32 len)
+static int can_send(struct stream *stream, const u8 *buf, u32 len)
 {
-    UNUSED(sink);
-    return write(fd, buf, len);
+    return write(stream->fd, buf, len);
 }
 
-static int can_recv(struct sink *sink, int fd, u8 *buf, u32 len)
+static int can_recv(struct stream *stream, u8 *buf, u32 len)
 {
-    UNUSED(sink);
-    return read(fd, buf, len);
+    return read(stream->fd, buf, len);
 }
 
 static int can_poll(struct sink *sink)
@@ -638,10 +619,10 @@ static int can_poll(struct sink *sink)
         int nread = read(pos->fd, &frame, sizeof(struct can_frame));
         if (nread == -1) {
             LOG_DEBUG("[%p:read] #%d %s(%d)", sink->ctx, pos->fd, strerror(errno), errno);
-            sink->ops.close(sink, pos->fd);
+            sink->ops.close(pos);
         } else if (nread == 0) {
             LOG_DEBUG("[%p:read] #%d finished", sink->ctx, pos->fd);
-            sink->ops.close(sink, pos->fd);
+            sink->ops.close(pos);
         } else {
             LOG_TRACE("[%p:read] #%d packet in", sink->ctx, pos->fd);
             vpack(pos->rxbuf, &frame, sizeof(struct can_frame));

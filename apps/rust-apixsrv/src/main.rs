@@ -44,18 +44,18 @@ fn main() {
     ctx.enable_posix();
 
     // fd_unix init
-    let fd_unix = match ctx.open_unix_server("/tmp/apix") {
+    let server_unix = match ctx.open_unix_server("/tmp/apix") {
         Ok(x) => x,
         Err(e) => panic!("{}", e),
     };
-    ctx.upgrade_to_srrp(fd_unix, 0x1);
+    server_unix.upgrade_to_srrp(0x1);
 
     // fd_tcp init
-    let fd_tcp = match ctx.open_tcp_server("127.0.0.1:3824") {
+    let server_tcp = match ctx.open_tcp_server("127.0.0.1:3824") {
         Ok(x) => x,
         Err(e) => panic!("{}", e),
     };
-    ctx.upgrade_to_srrp(fd_tcp, 0x2);
+    server_tcp.upgrade_to_srrp(0x2);
 
     // signal
     ctrlc::set_handler(move || {
@@ -68,46 +68,47 @@ fn main() {
             break;
         }
 
-        let fd = ctx.waiting(10 * 1000);
-        if fd == 0 {
-            continue;
-        }
-
-        match ctx.next_event(fd) {
-            x if x == apix::ApixEvent::Open as u8 => {
-                info!("#{} open", fd);
-            },
-            x if x == apix::ApixEvent::Close as u8 => {
-                info!("#{} close", fd);
-            },
-            x if x == apix::ApixEvent::Accept as u8 => {
-                ctx.accept(fd);
-                info!("#{} accept", fd);
-            },
-            x if x == apix::ApixEvent::Pollin as u8 => {
-                debug!("#{} pollin", fd);
-            },
-            x if x == apix::ApixEvent::SrrpPacket as u8 => {
-                let pac = ctx.next_srrp_packet(fd).unwrap();
-                if fd == fd_unix || fd == fd_tcp {
-                    debug!("#{} srrp_packet: srcid:{}, dstid:{}, {}?{}",
-                          fd, pac.srcid, pac.dstid, pac.anchor, pac.payload);
-                    let resp = apix::Srrp::new_response(
-                        pac.dstid, pac.srcid, &pac.anchor,
-                        "j:{\"err\":404,\"msg\":\"Service not found\"}")
-                        .unwrap();
-                    debug!("#{} resp: srcid:{}, dstid:{}, {}?{}",
-                          fd, resp.srcid, resp.dstid, resp.anchor, resp.payload);
-                    ctx.srrp_send(fd, &resp);
-                } else {
-                    debug!("#{} srrp_packet: {}?{}", fd, pac.anchor, pac.payload);
-                    ctx.srrp_forward(fd, &pac)
+        let stream = ctx.waiting(10 * 1000);
+        match stream {
+            Some(s) => {
+                match s.next_event() {
+                    x if x == apix::ApixEvent::Open as u8 => {
+                        info!("#{} open", s.fd);
+                    },
+                    x if x == apix::ApixEvent::Close as u8 => {
+                        info!("#{} close", s.fd);
+                    },
+                    x if x == apix::ApixEvent::Accept as u8 => {
+                        let new_stream = s.accept().unwrap();
+                        info!("#{} accept", new_stream.fd);
+                    },
+                    x if x == apix::ApixEvent::Pollin as u8 => {
+                        debug!("#{} pollin", s.fd);
+                    },
+                    x if x == apix::ApixEvent::SrrpPacket as u8 => {
+                        let pac = s.next_srrp_packet().unwrap();
+                        if s.fd == server_unix.fd || s.fd == server_tcp.fd {
+                            debug!("#{} srrp_packet: srcid:{}, dstid:{}, {}?{}",
+                                s.fd, pac.srcid, pac.dstid, pac.anchor, pac.payload);
+                            let resp = apix::Srrp::new_response(
+                                pac.dstid, pac.srcid, &pac.anchor,
+                                "j:{\"err\":404,\"msg\":\"Service not found\"}")
+                                .unwrap();
+                            debug!("#{} resp: srcid:{}, dstid:{}, {}?{}",
+                                s.fd, resp.srcid, resp.dstid, resp.anchor, resp.payload);
+                            s.srrp_send(&resp);
+                        } else {
+                            debug!("#{} srrp_packet: {}?{}", s.fd, pac.anchor, pac.payload);
+                            s.srrp_forward(&pac)
+                        }
+                    },
+                    _ => {}
                 }
-            },
-            _ => {}
+            }
+            _ => (),
         }
     }
 
-    ctx.close(fd_unix);
-    ctx.close(fd_tcp);
+    server_unix.close();
+    server_tcp.close();
 }

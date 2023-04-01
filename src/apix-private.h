@@ -24,6 +24,10 @@
 extern "C" {
 #endif
 
+struct apix;
+struct sink;
+struct stream;
+
 /**
  * apix
  */
@@ -41,15 +45,13 @@ struct apix {
  * - apix low level implement, maybe unix domain, bsd socket, uart, can ...
  */
 
-struct sink;
-
 struct sink_operations {
-    int (*open)(struct sink *sink, const char *addr);
-    int (*close)(struct sink *sink, int fd);
-    int (*accept)(struct sink *sink, int fd);
-    int (*ioctl)(struct sink *sink, int fd, unsigned int cmd, unsigned long arg);
-    int (*send)(struct sink *sink, int fd, const u8 *buf, u32 len);
-    int (*recv)(struct sink *sink, int fd, u8 *buf, u32 size);
+    struct stream *(*open)(struct sink *sink, const char *addr);
+    int (*close)(struct stream *stream);
+    struct stream *(*accept)(struct stream *stream);
+    int (*ioctl)(struct stream *stream, unsigned int cmd, unsigned long arg);
+    int (*send)(struct stream *stream, const u8 *buf, u32 len);
+    int (*recv)(struct stream *stream, u8 *buf, u32 size);
     int (*poll)(struct sink *sink);
 };
 
@@ -62,7 +64,7 @@ struct sink {
 };
 
 void sink_init(struct sink *sink, const char *id,
-                  const struct sink_operations *ops);
+               const struct sink_operations *ops);
 void sink_fini(struct sink *sink);
 
 int apix_sink_register(struct apix *ctx, struct sink *sink);
@@ -148,7 +150,7 @@ enum message_state {
 
 struct message {
     int state;
-    int fd; /* receive from fd */
+    struct stream *stream; /* receive from */
     struct srrp_packet *pac;
     struct list_head ln;
 };

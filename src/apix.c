@@ -34,13 +34,13 @@ static void log_hex_string(const char *buf, u32 len)
     printf("\n");
 }
 
-static void parse_packet(struct apix *ctx, struct stream *stream)
+static void parse_packet(struct stream *stream)
 {
     while (vsize(stream->rxbuf)) {
         u32 offset = srrp_next_packet_offset(
             vraw(stream->rxbuf), vsize(stream->rxbuf));
         if (offset != 0) {
-            LOG_WARN("[%p:parse_packet] broken packet:", ctx);
+            LOG_WARN("[%p:parse_packet] broken packet:", stream->ctx);
             log_hex_string(vraw(stream->rxbuf), offset);
             vdrop(stream->rxbuf, offset);
         }
@@ -53,7 +53,8 @@ static void parse_packet(struct apix *ctx, struct stream *stream)
             if (time(0) < stream->ts_poll_recv.tv_sec + PARSE_PACKET_TIMEOUT / 1000)
                 break;
 
-            LOG_ERROR("[%p:parse_packet] wrong packet:%s", ctx, vraw(stream->rxbuf));
+            LOG_ERROR("[%p:parse_packet] wrong packet:%s",
+                      stream->ctx, vraw(stream->rxbuf));
             u32 offset = srrp_next_packet_offset(
                 vraw(stream->rxbuf) + 1,
                 vsize(stream->rxbuf) - 1) + 1;
@@ -88,14 +89,15 @@ static void parse_packet(struct apix *ctx, struct stream *stream)
             pac = NULL;
         }
 
-        LOG_TRACE("[%p:parse_packet] right packet:%s", ctx, srrp_get_raw(stream->rxpac_unfin));
+        LOG_TRACE("[%p:parse_packet] right packet:%s",
+                  stream->ctx, srrp_get_raw(stream->rxpac_unfin));
 
         // construct message if receviced fin srrp packet
         if (srrp_get_fin(stream->rxpac_unfin) == SRRP_FIN_1) {
             struct message *msg = malloc(sizeof(*msg));
             memset(msg, 0, sizeof(*msg));
             msg->state = MESSAGE_ST_NONE;
-            msg->fd = stream->fd;
+            msg->stream = stream;
             msg->pac = stream->rxpac_unfin;
             INIT_LIST_HEAD(&msg->ln);
             list_add_tail(&msg->ln, &stream->msgs);
@@ -106,62 +108,65 @@ static void parse_packet(struct apix *ctx, struct stream *stream)
 }
 
 static int apix_response(
-    struct apix *ctx, int fd, struct srrp_packet *req, const char *data)
+    struct stream *stream, struct srrp_packet *req, const char *data)
 {
     struct srrp_packet *resp = srrp_new_response(
         srrp_get_dstid(req),
         srrp_get_srcid(req),
         srrp_get_anchor(req),
         data);
-    int rc = apix_srrp_send(ctx, fd, resp);
+    int rc = apix_srrp_send(stream, resp);
     srrp_free(resp);
     return rc;
 }
 
 static void
-handle_ctrl(struct stream *stream, struct message *am)
+handle_ctrl(struct message *am)
 {
-    assert(stream->type != STREAM_T_LISTEN);
+    assert(am->stream->type != STREAM_T_LISTEN);
 
     u32 nodeid = 0;
-    if (stream->type == STREAM_T_ACCEPT) {
-        assert(stream->father);
-        nodeid = stream->father->l_nodeid;
+    if (am->stream->type == STREAM_T_ACCEPT) {
+        assert(am->stream->father);
+        nodeid = am->stream->father->l_nodeid;
     } else {
-        nodeid = stream->l_nodeid;
+        nodeid = am->stream->l_nodeid;
     }
 
     if (srrp_get_srcid(am->pac) == 0) {
         struct srrp_packet *pac = srrp_new_ctrl(nodeid, SRRP_CTRL_NODEID_ZERO, "");
-        apix_srrp_send(stream->ctx, stream->fd, pac);
+        apix_srrp_send(am->stream, pac);
         srrp_free(pac);
-        stream->state = STREAM_ST_NODEID_ZERO;
+        am->stream->state = STREAM_ST_NODEID_ZERO;
         goto out;
     }
 
-    struct stream *tmp = find_stream_by_nodeid(stream->ctx, srrp_get_srcid(am->pac));
-    if (tmp != NULL && tmp != stream) {
+    struct stream *tmp = find_stream_by_nodeid(
+        am->stream->ctx, srrp_get_srcid(am->pac));
+    if (tmp != NULL && tmp != am->stream) {
         struct srrp_packet *pac = srrp_new_ctrl(nodeid, SRRP_CTRL_NODEID_DUP, "");
-        apix_srrp_send(stream->ctx, stream->fd, pac);
+        apix_srrp_send(am->stream, pac);
         srrp_free(pac);
-        stream->state = STREAM_ST_NODEID_DUP;
+        am->stream->state = STREAM_ST_NODEID_DUP;
         goto out;
     }
 
     if (strcmp(srrp_get_anchor(am->pac), SRRP_CTRL_SYNC) == 0) {
-        stream->r_nodeid = srrp_get_srcid(am->pac);
-        stream->state = STREAM_ST_NODEID_NORMAL;
-        stream->ts_sync_in = time(0);
+        am->stream->r_nodeid = srrp_get_srcid(am->pac);
+        am->stream->state = STREAM_ST_NODEID_NORMAL;
+        am->stream->ts_sync_in = time(0);
         goto out;
     }
 
     if (strcmp(srrp_get_anchor(am->pac), SRRP_CTRL_NODEID_DUP) == 0) {
-        LOG_WARN("[%p:handle_ctrl] recv nodeid dup:%s", stream->ctx, srrp_get_raw(am->pac));
+        LOG_WARN("[%p:handle_ctrl] recv nodeid dup:%s",
+                 am->stream->ctx, srrp_get_raw(am->pac));
         goto out;
     }
 
     if (strcmp(srrp_get_anchor(am->pac), SRRP_CTRL_NODEID_ZERO) == 0) {
-        LOG_ERROR("[%p:handle_ctrl] recv nodeid zero:%s", stream->ctx, srrp_get_raw(am->pac));
+        LOG_ERROR("[%p:handle_ctrl] recv nodeid zero:%s",
+                  am->stream->ctx, srrp_get_raw(am->pac));
         goto out;
     }
 
@@ -170,57 +175,58 @@ out:
 }
 
 static void
-handle_subscribe(struct stream *stream, struct message *am)
+handle_subscribe(struct message *am)
 {
-    assert(stream->type != STREAM_T_LISTEN);
+    assert(am->stream->type != STREAM_T_LISTEN);
 
-    for (u32 i = 0; i < vsize(stream->sub_topics); i++) {
-        if (strcmp(sget(vat(stream->sub_topics, i)), srrp_get_anchor(am->pac)) == 0) {
-            apix_response(stream->ctx, am->fd, am->pac, "j:{\"err\":0}");
+    for (u32 i = 0; i < vsize(am->stream->sub_topics); i++) {
+        if (strcmp(sget(vat(am->stream->sub_topics, i)), srrp_get_anchor(am->pac)) == 0) {
+            apix_response(am->stream, am->pac, "j:{\"err\":0}");
             message_finish(am);
             return;
         }
     }
 
     str_t *topic = str_new(srrp_get_anchor(am->pac));
-    vpush(stream->sub_topics, &topic);
+    vpush(am->stream->sub_topics, &topic);
 
     struct srrp_packet *pub = srrp_new_publish(
         srrp_get_anchor(am->pac), "j:{\"state\":\"sub\"}");
-    apix_srrp_send(stream->ctx, am->fd, pub);
+    apix_srrp_send(am->stream, pub);
     srrp_free(pub);
 
     message_finish(am);
 }
 
 static void
-handle_unsubscribe(struct stream *stream, struct message *am)
+handle_unsubscribe(struct message *am)
 {
-    assert(stream->type != STREAM_T_LISTEN);
+    assert(am->stream->type != STREAM_T_LISTEN);
 
-    for (u32 i = 0; i < vsize(stream->sub_topics); i++) {
-        if (strcmp(sget(*(str_t **)vat(stream->sub_topics, i)),
+    for (u32 i = 0; i < vsize(am->stream->sub_topics); i++) {
+        if (strcmp(sget(*(str_t **)vat(am->stream->sub_topics, i)),
                    srrp_get_anchor(am->pac)) == 0) {
-            str_free(*(str_t **)vat(stream->sub_topics, i));
-            vremove(stream->sub_topics, i, 1);
+            str_free(*(str_t **)vat(am->stream->sub_topics, i));
+            vremove(am->stream->sub_topics, i, 1);
             break;
         }
     }
 
     struct srrp_packet *pub = srrp_new_publish(
         srrp_get_anchor(am->pac), "j:{\"state\":\"unsub\"}");
-    apix_srrp_send(stream->ctx, am->fd, pub);
+    apix_srrp_send(am->stream, pub);
     srrp_free(pub);
 
     message_finish(am);
 }
 
-static void forward_request_or_response(struct apix *ctx, struct message *am)
+static void forward_request_or_response(struct message *am)
 {
     struct stream *dst = NULL;
 
-    dst = find_stream_by_l_nodeid(ctx, srrp_get_dstid(am->pac));
-    LOG_TRACE("[%p:forward_rr_l] dstid:%x, dst:%p", ctx, srrp_get_dstid(am->pac), dst);
+    dst = find_stream_by_l_nodeid(am->stream->ctx, srrp_get_dstid(am->pac));
+    LOG_TRACE("[%p:forward_rr_l] dstid:%x, dst:%p",
+              am->stream->ctx, srrp_get_dstid(am->pac), dst);
     if (dst) {
         list_del(&am->ln);
         list_add_tail(&am->ln, &dst->msgs);
@@ -228,27 +234,28 @@ static void forward_request_or_response(struct apix *ctx, struct message *am)
         return;
     }
 
-    dst = find_stream_by_r_nodeid(ctx, srrp_get_dstid(am->pac));
-    LOG_TRACE("[%p:forward_rr_r] dstid:%x, dst:%p", ctx, srrp_get_dstid(am->pac), dst);
+    dst = find_stream_by_r_nodeid(am->stream->ctx, srrp_get_dstid(am->pac));
+    LOG_TRACE("[%p:forward_rr_r] dstid:%x, dst:%p",
+              am->stream->ctx, srrp_get_dstid(am->pac), dst);
     if (dst) {
-        apix_srrp_send(ctx, dst->fd, am->pac);
+        apix_srrp_send(dst, am->pac);
         message_finish(am);
         return;
     }
 
-    apix_response(ctx, am->fd, am->pac,
+    apix_response(am->stream, am->pac,
                   "j:{\"err\":404,\"msg\":\"Destination not found\"}");
     message_finish(am);
     return;
 }
 
-static void forward_publish(struct apix *ctx, struct message *am)
+static void forward_publish(struct message *am)
 {
     regex_t regex;
     int rc;
 
     struct stream *pos;
-    list_for_each_entry(pos, &ctx->streams, ln_ctx) {
+    list_for_each_entry(pos, &am->stream->ctx->streams, ln_ctx) {
         for (u32 i = 0; i < vsize(pos->sub_topics); i++) {
             //LOG_TRACE("[%p:forward_publish] topic:%s, sub:%s",
             //          ctx, srrp_get_anchor(am->pac), sget(*(str_t **)vat(pos->sub_topics, i)));
@@ -256,7 +263,7 @@ static void forward_publish(struct apix *ctx, struct message *am)
             if (rc != 0) continue;
             rc = regexec(&regex, srrp_get_anchor(am->pac), 0, NULL, 0);
             if (rc == 0) {
-                apix_srrp_send(ctx, pos->fd, am->pac);
+                apix_srrp_send(pos, am->pac);
             }
             regfree(&regex);
         }
@@ -266,16 +273,16 @@ static void forward_publish(struct apix *ctx, struct message *am)
 }
 
 static void
-handle_forward(struct apix *ctx, struct message *am)
+handle_forward(struct message *am)
 {
     LOG_TRACE("[%p:handle_forward] state:%d, raw:%s",
-              ctx, am->state, srrp_get_raw(am->pac));
+              am->stream->ctx, am->state, srrp_get_raw(am->pac));
 
     if (srrp_get_leader(am->pac) == SRRP_REQUEST_LEADER ||
         srrp_get_leader(am->pac) == SRRP_RESPONSE_LEADER) {
-        forward_request_or_response(ctx, am);
+        forward_request_or_response(am);
     } else if (srrp_get_leader(am->pac) == SRRP_PUBLISH_LEADER) {
-        forward_publish(ctx, am);
+        forward_publish(am);
     } else {
         assert(false);
     }
@@ -295,34 +302,34 @@ static void handle_message(struct stream *stream)
         assert(stream->type != STREAM_T_LISTEN);
 
         if (srrp_get_leader(pos->pac) == SRRP_CTRL_LEADER) {
-            handle_ctrl(stream, pos);
+            handle_ctrl(pos);
             continue;
         }
 
         if (stream->r_nodeid == 0) {
             LOG_DEBUG("[%p:handle_message] #%d nodeid zero: "
                       "l_nodeid:%d, r_nodeid:%d, state:%d, raw:%s",
-                      stream->ctx, pos->fd, stream->l_nodeid, stream->r_nodeid,
+                      stream->ctx, pos->stream->fd, stream->l_nodeid, stream->r_nodeid,
                       pos->state, srrp_get_raw(pos->pac));
             if (srrp_get_leader(pos->pac) == SRRP_REQUEST_LEADER)
-                apix_response(stream->ctx, pos->fd, pos->pac,
+                apix_response(stream, pos->pac,
                               "j:{\"err\":1, \"msg\":\"nodeid not sync\"}");
             message_finish(pos);
             continue;
         }
 
         if (srrp_get_leader(pos->pac) == SRRP_SUBSCRIBE_LEADER) {
-            handle_subscribe(stream, pos);
+            handle_subscribe(pos);
             continue;
         }
 
         if (srrp_get_leader(pos->pac) == SRRP_UNSUBSCRIBE_LEADER) {
-            handle_unsubscribe(stream, pos);
+            handle_unsubscribe(pos);
             continue;
         }
 
         if (pos->state == MESSAGE_ST_FORWARD) {
-            handle_forward(stream->ctx, pos);
+            handle_forward(pos);
             continue;
         }
 
@@ -341,11 +348,11 @@ static void clear_finished_message(struct stream *stream)
     }
 }
 
-static void sync_stream(struct stream *stream)
+static void sync_nodeid(struct stream *stream)
 {
     assert(stream->type != STREAM_T_LISTEN);
 
-    LOG_TRACE("[%p:sync_stream] #%d sync", stream->ctx, stream->fd);
+    LOG_TRACE("[%p:sync_nodeid] #%d sync", stream->ctx, stream->fd);
 
     u32 nodeid = 0;
     if (stream->type == STREAM_T_ACCEPT) {
@@ -355,7 +362,7 @@ static void sync_stream(struct stream *stream)
         nodeid = stream->l_nodeid;
     }
     struct srrp_packet *pac = srrp_new_ctrl(nodeid, SRRP_CTRL_SYNC, "");
-    apix_send(stream->ctx, stream->fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+    apix_send(stream, srrp_get_raw(pac), srrp_get_packet_len(pac));
     srrp_free(pac);
     stream->ts_sync_out = time(0);
 }
@@ -387,7 +394,7 @@ void apix_drop(struct apix *ctx)
     free(ctx);
 }
 
-int apix_open(struct apix *ctx, const char *sinkid, const char *addr)
+struct stream *apix_open(struct apix *ctx, const char *sinkid, const char *addr)
 {
     struct sink *pos;
     list_for_each_entry(pos, &ctx->sinks, ln) {
@@ -396,82 +403,62 @@ int apix_open(struct apix *ctx, const char *sinkid, const char *addr)
             return pos->ops.open(pos, addr);
         }
     }
-    return -1;
+    return NULL;
 }
 
-int apix_close(struct apix *ctx, int fd)
+struct stream *apix_accept(struct stream *stream)
 {
-    struct stream *stream = find_stream_in_apix(ctx, fd);
-    if (stream == NULL)
-        return -1;
-    if (stream->sink && stream->sink->ops.close)
-        stream->sink->ops.close(stream->sink, fd);
+    if (stream->sink->ops.accept == NULL)
+        return NULL;
+    return stream->sink->ops.accept(stream);
+}
+
+int apix_close(struct stream *stream)
+{
+    assert(stream->sink->ops.close);
+    stream->sink->ops.close(stream);
     return 0;
 }
 
-int apix_accept(struct apix *ctx, int fd)
+int apix_ioctl(struct stream *stream, unsigned int cmd, unsigned long arg)
 {
-    struct stream *stream = find_stream_in_apix(ctx, fd);
-    if (stream == NULL)
+    if (stream->sink->ops.ioctl == NULL)
         return -1;
-    if (stream->sink && stream->sink->ops.accept)
-        stream->sink->ops.accept(stream->sink, fd);
-    return 0;
+    return stream->sink->ops.ioctl(stream, cmd, arg);
 }
 
-int apix_ioctl(struct apix *ctx, int fd, unsigned int cmd, unsigned long arg)
+int apix_send(struct stream *stream, const u8 *buf, u32 len)
 {
-    struct stream *stream = find_stream_in_apix(ctx, fd);
-    if (stream == NULL)
+    if (stream->type == STREAM_T_LISTEN || stream->sink->ops.send == NULL)
         return -1;
-    if (stream->sink == NULL || stream->sink->ops.ioctl == NULL)
-        return -1;
-    return stream->sink->ops.ioctl(stream->sink, fd, cmd, arg);
+    return stream->sink->ops.send(stream, buf, len);
 }
 
-int apix_send(struct apix *ctx, int fd, const u8 *buf, u32 len)
+int apix_recv(struct stream *stream, u8 *buf, u32 len)
 {
-    struct stream *stream = find_stream_in_apix(ctx, fd);
-    if (stream == NULL)
+    if (stream->sink->ops.recv == NULL)
         return -1;
-    if (stream->type == STREAM_T_LISTEN || stream->sink == NULL ||
-        stream->sink->ops.send == NULL)
-        return -1;
-
-    return stream->sink->ops.send(stream->sink, fd, buf, len);
+    return stream->sink->ops.recv(stream, buf, len);
 }
 
-int apix_recv(struct apix *ctx, int fd, u8 *buf, u32 len)
+int apix_send_to_buffer(struct stream *stream, const u8 *buf, u32 len)
 {
-    struct stream *stream = find_stream_in_apix(ctx, fd);
-    if (stream == NULL)
+    if (stream->type == STREAM_T_LISTEN || stream->sink->ops.send == NULL)
         return -1;
-    if (stream->sink == NULL || stream->sink->ops.recv == NULL)
-        return -1;
-    return stream->sink->ops.recv(stream->sink, fd, buf, len);
-}
-
-int apix_send_to_buffer(struct apix *ctx, int fd, const u8 *buf, u32 len)
-{
-    struct stream *stream = find_stream_in_apix(ctx, fd);
-    if (stream == NULL)
-        return -1;
-    if (stream->type == STREAM_T_LISTEN || stream->sink == NULL ||
-        stream->sink->ops.send == NULL)
-        return -1;
-
     vpack(stream->txbuf, buf, len);
     return 0;
 }
 
-int apix_read_from_buffer(struct apix *ctx, int fd, u8 *buf, u32 len)
+int apix_read_from_buffer(struct stream *stream, u8 *buf, u32 len)
 {
-    struct stream *stream = find_stream_in_apix(ctx, fd);
-    if (stream == NULL)
-        return -1;
     u32 less = len < vsize(stream->rxbuf) ? len : vsize(stream->rxbuf);
     if (less) vdump(stream->rxbuf, buf, less);
     return less;
+}
+
+int apix_raw_fd(struct stream *stream)
+{
+    return stream->fd;
 }
 
 static int apix_poll(struct apix *ctx)
@@ -499,7 +486,7 @@ static int apix_poll(struct apix *ctx)
         // sync
         if (pos_fd->type != STREAM_T_LISTEN && pos_fd->srrp_mode == 1 &&
             pos_fd->ts_sync_out + (STREAM_SYNC_TIMEOUT / 1000) < time(0)) {
-            sync_stream(pos_fd);
+            sync_nodeid(pos_fd);
         }
 
         // send txbuf to system buffer
@@ -512,7 +499,7 @@ static int apix_poll(struct apix *ctx)
         if (rc == 1) {
             if (vsize(pos_fd->txbuf)) {
                 int nr = apix_send(
-                    ctx, pos_fd->fd, vraw(pos_fd->txbuf), vsize(pos_fd->txbuf));
+                    pos_fd, vraw(pos_fd->txbuf), vsize(pos_fd->txbuf));
                 if (nr > 0) assert((u32)nr <= vsize(pos_fd->txbuf));
                 vdrop(pos_fd->txbuf, nr);
             }
@@ -525,7 +512,7 @@ static int apix_poll(struct apix *ctx)
             ctx->poll_cnt++;
 
             if (pos_fd->srrp_mode == 1) {
-                parse_packet(ctx, pos_fd);
+                parse_packet(pos_fd);
             }
         }
 
@@ -536,14 +523,14 @@ static int apix_poll(struct apix *ctx)
     return 0;
 }
 
-int apix_waiting(struct apix *ctx, u64 usec)
+struct stream *apix_waiting(struct apix *ctx, u64 usec)
 {
     apix_poll(ctx);
 
     struct stream *pos;
     list_for_each_entry(pos, &ctx->streams, ln_ctx) {
         if (pos->ev.byte != 0) {
-            return pos->fd;
+            return pos;
         }
     }
 
@@ -564,11 +551,8 @@ int apix_waiting(struct apix *ctx, u64 usec)
     return 0;
 }
 
-u8 apix_next_event(struct apix *ctx, int fd)
+u8 apix_next_event(struct stream *stream)
 {
-    struct stream *stream = find_stream_in_apix(ctx, fd);
-    assert(stream);
-
     //LOG_TRACE("[%p:apix_next_event] #%d event %d", ctx, stream->fd, stream->ev.byte);
 
     if (stream->ev.bits.open) {
@@ -608,11 +592,8 @@ u8 apix_next_event(struct apix *ctx, int fd)
     return AEC_NONE;
 }
 
-struct srrp_packet *apix_next_srrp_packet(struct apix *ctx, int fd)
+struct srrp_packet *apix_next_srrp_packet(struct stream *stream)
 {
-    struct stream *stream = find_stream_in_apix(ctx, fd);
-    assert(stream);
-
     struct message *pos;
     list_for_each_entry(pos,&stream->msgs, ln) {
         //LOG_TRACE("[%p:apix_next_srrp_packet] #%d msg:%p, state:%d, raw:%s",
@@ -626,22 +607,16 @@ struct srrp_packet *apix_next_srrp_packet(struct apix *ctx, int fd)
     return NULL;
 }
 
-int apix_upgrade_to_srrp(struct apix *ctx, int fd, u32 nodeid)
+int apix_upgrade_to_srrp(struct stream *stream, u32 nodeid)
 {
-    struct stream *stream = find_stream_in_apix(ctx, fd);
-    if (stream == NULL)
-        return -EBADF;
     stream->srrp_mode = 1;
     assert(nodeid != 0);
     stream->l_nodeid = nodeid;
     return 0;
 }
 
-void apix_srrp_forward(struct apix *ctx, int fd, struct srrp_packet *pac)
+void apix_srrp_forward(struct stream *stream, struct srrp_packet *pac)
 {
-    struct stream *stream = find_stream_in_apix(ctx, fd);
-    assert(stream);
-
     struct message *pos;
     list_for_each_entry(pos, &stream->msgs, ln) {
         if (pos->pac == pac) {
@@ -653,16 +628,16 @@ void apix_srrp_forward(struct apix *ctx, int fd, struct srrp_packet *pac)
 }
 
 static void __apix_srrp_send(
-    struct apix *ctx, int fd, const struct srrp_packet *pac)
+    struct stream *stream, const struct srrp_packet *pac)
 {
     u32 idx = 0;
     struct srrp_packet *tmp_pac = NULL;
 
-    LOG_TRACE("[%p:__apix_srrp_send] send:%s", ctx, srrp_get_raw(pac));
+    LOG_TRACE("[%p:__apix_srrp_send] send:%s", stream->ctx, srrp_get_raw(pac));
 
     // payload_len < cnt, maybe zero, should not remove this code
     if (srrp_get_payload_len(pac) < PAYLOAD_LIMIT) {
-        apix_send_to_buffer(ctx, fd, srrp_get_raw(pac), srrp_get_packet_len(pac));
+        apix_send_to_buffer(stream, srrp_get_raw(pac), srrp_get_packet_len(pac));
         return;
     }
 
@@ -683,32 +658,30 @@ static void __apix_srrp_send(
                        srrp_get_anchor(pac),
                        srrp_get_payload(pac) + idx,
                        tmp_cnt);
-        LOG_TRACE("[%p:__apix_srrp_send] split:%s", ctx, srrp_get_raw(tmp_pac));
-        apix_send_to_buffer(ctx, fd, srrp_get_raw(tmp_pac),
+        LOG_TRACE("[%p:__apix_srrp_send] split:%s", stream->ctx, srrp_get_raw(tmp_pac));
+        apix_send_to_buffer(stream, srrp_get_raw(tmp_pac),
                             srrp_get_packet_len(tmp_pac));
         idx += tmp_cnt;
         srrp_free(tmp_pac);
     }
 }
 
-int apix_srrp_send(struct apix *ctx, int fd, struct srrp_packet *pac)
+int apix_srrp_send(struct stream *stream, struct srrp_packet *pac)
 {
     int retval = -1;
 
-    assert(fd > 0);
-
-    // send to src fd
-    struct stream *dst_fd = find_stream_in_apix(ctx, fd);
-    if (dst_fd && dst_fd->type != STREAM_T_LISTEN) {
-        __apix_srrp_send(ctx, dst_fd->fd, pac);
+    // send to src stream
+    if (stream->type != STREAM_T_LISTEN) {
+        __apix_srrp_send(stream, pac);
         retval = 0;
     }
 
     // send to nodeid
     if (srrp_get_dstid(pac) != 0) {
-        struct stream *dst_nd = find_stream_by_r_nodeid(ctx, srrp_get_dstid(pac));
-        if (dst_nd && dst_nd != dst_fd) {
-            __apix_srrp_send(ctx, dst_nd->fd, pac);
+        struct stream *nd_stream =
+            find_stream_by_r_nodeid(stream->ctx, srrp_get_dstid(pac));
+        if (nd_stream && nd_stream != stream) {
+            __apix_srrp_send(nd_stream, pac);
             retval = 0;
         }
     }
@@ -721,7 +694,7 @@ int apix_srrp_send(struct apix *ctx, int fd, struct srrp_packet *pac)
  */
 
 void sink_init(struct sink *sink, const char *name,
-                  const struct sink_operations *ops)
+               const struct sink_operations *ops)
 {
     assert(strlen(name) < SINK_ID_SIZE);
     INIT_LIST_HEAD(&sink->streams);

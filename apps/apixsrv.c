@@ -9,6 +9,7 @@
 
 #include <apix/apix.h>
 #include <apix/log.h>
+#include "apix.h"
 #include "opt.h"
 
 static int exit_flag;
@@ -36,55 +37,55 @@ static void *apix_thread(void *arg)
     struct opt *opt;
 
     opt = find_opt("unix", opttab);
-    int fd_unix = apix_open_unix_server(ctx, opt_string(opt));
-    if (fd_unix == -1) {
+    struct stream *server_unix = apix_open_unix_server(ctx, opt_string(opt));
+    if (server_unix == NULL) {
         LOG_ERROR("open unix socket at %s failed!", opt_string(opt));
         exit(-1);
     }
-    apix_upgrade_to_srrp(ctx, fd_unix, 0x1);
-    LOG_INFO("open unix socket #%d at %s", fd_unix, opt_string(opt));
+    apix_upgrade_to_srrp(server_unix, 0x1);
+    LOG_INFO("open unix socket #%d at %s", apix_raw_fd(server_unix), opt_string(opt));
 
     opt = find_opt("tcp", opttab);
-    int fd_tcp = apix_open_tcp_server(ctx, opt_string(opt));
-    if (fd_tcp == -1) {
+    struct stream *server_tcp = apix_open_tcp_server(ctx, opt_string(opt));
+    if (server_tcp == NULL) {
         perror("");
         LOG_ERROR("open tcp socket at %s failed!", opt_string(opt));
         exit(-1);
     }
-    apix_upgrade_to_srrp(ctx, fd_tcp, 0x2);
-    LOG_INFO("open tcp socket #%d at %s", fd_tcp, opt_string(opt));
+    apix_upgrade_to_srrp(server_tcp, 0x2);
+    LOG_INFO("open tcp socket #%d at %s", apix_raw_fd(server_tcp), opt_string(opt));
 
     for (;;) {
         if (exit_flag == 1) break;
 
-        int fd = apix_waiting(ctx, 100 * 1000);
-        if (fd == 0) continue;
+        struct stream *stream = apix_waiting(ctx, 100 * 1000);
+        if (stream == NULL) continue;
 
-        switch (apix_next_event(ctx, fd)) {
+        switch (apix_next_event(stream)) {
         case AEC_OPEN:
-            LOG_INFO("#%d open", fd);
+            LOG_INFO("#%d open", apix_raw_fd(stream));
             break;
         case AEC_CLOSE:
-            LOG_INFO("#%d close", fd);
+            LOG_INFO("#%d close", apix_raw_fd(stream));
             break;
         case AEC_ACCEPT:
-            apix_accept(ctx, fd);
-            LOG_INFO("#%d accept", fd);
+            apix_accept(stream);
+            LOG_INFO("#%d accept", apix_raw_fd(stream));
             break;
         case AEC_SRRP_PACKET: {
-            struct srrp_packet *pac = apix_next_srrp_packet(ctx, fd);
-            if (fd == fd_unix || fd == fd_tcp) {
+            struct srrp_packet *pac = apix_next_srrp_packet(stream);
+            if (stream == server_unix || stream == server_tcp) {
                 struct srrp_packet *resp = srrp_new_response(
                     srrp_get_dstid(pac),
                     srrp_get_srcid(pac),
                     srrp_get_anchor(pac),
                     "j:{\"err\":404,\"msg\":\"Service not found\"}");
-                apix_srrp_send(ctx, fd, resp);
+                apix_srrp_send(stream, resp);
                 srrp_free(resp);
-                LOG_INFO("#%d serv packet: %s", fd, srrp_get_raw(pac));
+                LOG_INFO("#%d serv packet: %s", apix_raw_fd(stream), srrp_get_raw(pac));
             } else {
-                apix_srrp_forward(ctx, fd, pac);
-                LOG_INFO("#%d forward packet: %s", fd, srrp_get_raw(pac));
+                apix_srrp_forward(stream, pac);
+                LOG_INFO("#%d forward packet: %s", apix_raw_fd(stream), srrp_get_raw(pac));
             }
             break;
         }

@@ -6,24 +6,25 @@ run_flag = 1
 ctx = apix.Apix()
 ctx.enable_posix()
 
-fd = ctx.open_unix_client("/tmp/apix")
+client = ctx.open_unix_client("/tmp/apix")
 pac = srrp.srrp_new_ctrl(0xff01, "/sync", "")
-ctx.send(fd, pac.raw())
+client.send(pac.raw())
 
 while run_flag:
-    fd = ctx.waiting(10 * 1000)
-    if fd == 0: continue
+    stream = ctx.waiting(10 * 1000)
+    if stream.is_null():
+        continue
 
-    match ctx.next_event(fd):
+    match stream.next_event():
         case 1:
             print("open")
         case 2:
             print("close")
         case 3:
-            ctx.accept(fd);
-            print("error, client never accept")
+            stream.accept();
+            print("never enter accept")
         case 4:
-            data = ctx.read_from_buffer(fd)
+            data = stream.read_from_buffer()
             if len(data):
                 pac = srrp.srrp_parse(data)
                 if pac.is_null():
@@ -31,6 +32,6 @@ while run_flag:
                     if data.decode('utf-8') == 'exit':
                         run_flag = 0
                 else:
-                    print(pac.raw())
+                    print("recv srrp:", pac.raw())
 
-ctx.close(fd)
+client.close()

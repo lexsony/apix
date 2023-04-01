@@ -2,6 +2,8 @@
  * Currently struct Apix & Srrp in this file
  */
 
+use std::io::Error;
+
 pub enum LogLevel {
     None = 0,
     Trace,
@@ -28,6 +30,96 @@ pub enum ApixEvent {
     SrrpPacket,
 }
 
+pub struct ApixStream {
+    pub stream: *mut apix_sys::stream,
+    pub fd: i32,
+}
+
+impl ApixStream {
+    pub fn close(&self) {
+        unsafe {
+            apix_sys::apix_close(self.stream);
+        }
+    }
+
+    pub fn accept(&self) -> Result<ApixStream, Error> {
+        unsafe {
+            let new_stream = apix_sys::apix_accept(self.stream);
+            if new_stream.is_null() {
+                Err(Error::last_os_error())
+            } else {
+                Ok(ApixStream {
+                    stream: new_stream,
+                    fd: apix_sys::apix_raw_fd(new_stream),
+                })
+            }
+        }
+    }
+
+    pub fn send(&self, buf: &[u8]) {
+        unsafe {
+            apix_sys::apix_send(
+                self.stream, buf.as_ptr() as *const u8, buf.len() as u32);
+        }
+    }
+
+    pub fn recv(&self, buf: &mut [u8]) {
+        unsafe {
+            apix_sys::apix_recv(
+                self.stream, buf.as_ptr() as *mut u8, buf.len() as u32);
+        }
+    }
+
+    pub fn send_to_buffer(&self, buf: &mut [u8]) {
+        unsafe {
+            apix_sys::apix_send_to_buffer(
+                self.stream, buf.as_ptr() as *mut u8, buf.len() as u32);
+        }
+    }
+
+    pub fn read_from_buffer(&self, buf: &mut [u8]) {
+        unsafe {
+            apix_sys::apix_read_from_buffer(
+                self.stream, buf.as_ptr() as *mut u8, buf.len() as u32);
+        }
+    }
+
+    pub fn next_event(&self) -> u8 {
+        unsafe {
+            return apix_sys::apix_next_event(self.stream);
+        }
+    }
+
+    pub fn next_srrp_packet(&self) -> Option<SrrpPacket> {
+        unsafe {
+            let pac = apix_sys::apix_next_srrp_packet(self.stream);
+            if pac.is_null() {
+                None
+            } else {
+                Some(Srrp::from_raw_packet(pac))
+            }
+        }
+    }
+
+    pub fn upgrade_to_srrp(&self, nodeid: u32) {
+        unsafe {
+            apix_sys::apix_upgrade_to_srrp(self.stream, nodeid);
+        }
+    }
+
+    pub fn srrp_forward(&self, pac: &SrrpPacket) {
+        unsafe {
+            apix_sys::apix_srrp_forward(self.stream, pac.pac);
+        }
+    }
+
+    pub fn srrp_send(&self, pac: &SrrpPacket) {
+        unsafe {
+            apix_sys::apix_srrp_send(self.stream, pac.pac);
+        }
+    }
+}
+
 pub struct Apix {
     pub ctx: *mut apix_sys::apix,
 }
@@ -41,95 +133,28 @@ impl Drop for Apix {
 }
 
 impl Apix {
-    pub fn new() -> Result<Apix, std::io::Error> {
+    pub fn new() -> Result<Apix, Error> {
         unsafe {
             let ctx = apix_sys::apix_new();
             if ctx.is_null() {
-                Err(std::io::Error::last_os_error())
+                Err(Error::last_os_error())
             } else {
                 Ok(Apix { ctx: ctx })
             }
         }
     }
 
-    pub fn close(&self, fd: i32) {
+    pub fn waiting(&self, usec: u64) -> Option<ApixStream> {
         unsafe {
-            apix_sys::apix_close(self.ctx, fd);
-        }
-    }
-
-    pub fn accept(&self, fd: i32) {
-        unsafe {
-            apix_sys::apix_accept(self.ctx, fd);
-        }
-    }
-
-    pub fn send(&self, fd: i32, buf: &[u8]) {
-        unsafe {
-            apix_sys::apix_send(
-                self.ctx, fd, buf.as_ptr() as *const u8, buf.len() as u32);
-        }
-    }
-
-    pub fn recv(&self, fd: i32, buf: &mut [u8]) {
-        unsafe {
-            apix_sys::apix_recv(
-                self.ctx, fd, buf.as_ptr() as *mut u8, buf.len() as u32);
-        }
-    }
-
-    pub fn send_to_buffer(&self, fd: i32, buf: &mut [u8]) {
-        unsafe {
-            apix_sys::apix_send_to_buffer(
-                self.ctx, fd, buf.as_ptr() as *mut u8, buf.len() as u32);
-        }
-    }
-
-    pub fn read_from_buffer(&self, fd: i32, buf: &mut [u8]) {
-        unsafe {
-            apix_sys::apix_read_from_buffer(
-                self.ctx, fd, buf.as_ptr() as *mut u8, buf.len() as u32);
-        }
-    }
-
-    pub fn waiting(&self, usec: u64) -> i32 {
-        unsafe {
-            return apix_sys::apix_waiting(self.ctx, usec);
-        }
-    }
-
-    pub fn next_event(&self, fd: i32) -> u8 {
-        unsafe {
-            return apix_sys::apix_next_event(self.ctx, fd);
-        }
-    }
-
-    pub fn next_srrp_packet(&self, fd: i32) -> Option<SrrpPacket> {
-        unsafe {
-            let pac = apix_sys::apix_next_srrp_packet(self.ctx, fd);
-            if pac.is_null() {
+            let stream = apix_sys::apix_waiting(self.ctx, usec);
+            if stream.is_null() {
                 None
             } else {
-                Some(Srrp::from_raw_packet(pac))
+                Some(ApixStream {
+                    stream: stream,
+                    fd: apix_sys::apix_raw_fd(stream),
+                })
             }
-        }
-    }
-
-    pub fn upgrade_to_srrp(&self, fd: i32, nodeid: u32) {
-        unsafe {
-            apix_sys::apix_upgrade_to_srrp(self.ctx, fd, nodeid);
-        }
-    }
-
-    pub fn srrp_forward(&self, fd: i32, pac: &SrrpPacket) {
-        unsafe {
-            apix_sys::apix_srrp_forward(self.ctx, fd, pac.pac);
-        }
-    }
-
-    pub fn srrp_send(&self, fd: i32, pac: &SrrpPacket) {
-        unsafe {
-            apix_sys::apix_srrp_send(self.ctx, fd, pac.pac);
         }
     }
 
@@ -145,70 +170,44 @@ impl Apix {
         }
     }
 
-    pub fn open_unix_server(&self, addr: &str) -> Result<i32, std::io::Error> {
+    fn open(&self, sinkid: &[u8], addr: &str) -> Result<ApixStream, Error> {
         unsafe {
-            let _addr = std::ffi::CString::new(addr).unwrap();
-            match apix_sys::apix_open(
-                self.ctx, apix_sys::SINK_UNIX_S.as_ptr() as *const i8, _addr.as_ptr()) {
-                -1 => Err(std::io::Error::last_os_error()),
-                fd => Ok(fd),
+            let addr = std::ffi::CString::new(addr).unwrap();
+            let stream = apix_sys::apix_open(
+                self.ctx, sinkid.as_ptr() as *const i8, addr.as_ptr());
+            if stream.is_null() {
+                Err(Error::last_os_error())
+            } else {
+                Ok(ApixStream {
+                    stream: stream,
+                    fd: apix_sys::apix_raw_fd(stream),
+                })
             }
         }
     }
 
-    pub fn open_unix_client(&self, addr: &str) -> Result<i32, std::io::Error> {
-        unsafe {
-            let _addr = std::ffi::CString::new(addr).unwrap();
-            match apix_sys::apix_open(
-                self.ctx, apix_sys::SINK_UNIX_C.as_ptr() as *const i8, _addr.as_ptr()) {
-                -1 => Err(std::io::Error::last_os_error()),
-                fd => Ok(fd),
-            }
-        }
+    pub fn open_unix_server(&self, addr: &str) -> Result<ApixStream, Error> {
+        return self.open(apix_sys::SINK_UNIX_S, addr)
     }
 
-    pub fn open_tcp_server(&self, addr: &str) -> Result<i32, std::io::Error> {
-        unsafe {
-            let _addr = std::ffi::CString::new(addr).unwrap();
-            match apix_sys::apix_open(
-                self.ctx, apix_sys::SINK_TCP_S.as_ptr() as *const i8, _addr.as_ptr()) {
-                -1 => Err(std::io::Error::last_os_error()),
-                fd => Ok(fd),
-            }
-        }
+    pub fn open_unix_client(&self, addr: &str) -> Result<ApixStream, Error> {
+        return self.open(apix_sys::SINK_UNIX_C, addr)
     }
 
-    pub fn open_tcp_client(&self, addr: &str) -> Result<i32, std::io::Error> {
-        unsafe {
-            let _addr = std::ffi::CString::new(addr).unwrap();
-            match apix_sys::apix_open(
-                self.ctx, apix_sys::SINK_TCP_C.as_ptr() as *const i8, _addr.as_ptr()) {
-                -1 => Err(std::io::Error::last_os_error()),
-                fd => Ok(fd),
-            }
-        }
+    pub fn open_tcp_server(&self, addr: &str) -> Result<ApixStream, Error> {
+        return self.open(apix_sys::SINK_TCP_S, addr)
     }
 
-    pub fn open_com(&self, addr: &str) -> Result<i32, std::io::Error> {
-        unsafe {
-            let _addr = std::ffi::CString::new(addr).unwrap();
-            match apix_sys::apix_open(
-                self.ctx, apix_sys::SINK_COM.as_ptr() as *const i8, _addr.as_ptr()) {
-                -1 => Err(std::io::Error::last_os_error()),
-                fd => Ok(fd),
-            }
-        }
+    pub fn open_tcp_client(&self, addr: &str) -> Result<ApixStream, Error> {
+        return self.open(apix_sys::SINK_TCP_C, addr)
     }
 
-    pub fn open_can(&self, addr: &str) -> Result<i32, std::io::Error> {
-        unsafe {
-            let _addr = std::ffi::CString::new(addr).unwrap();
-            match apix_sys::apix_open(
-                self.ctx, apix_sys::SINK_CAN.as_ptr() as *const i8, _addr.as_ptr()) {
-                -1 => Err(std::io::Error::last_os_error()),
-                fd => Ok(fd),
-            }
-        }
+    pub fn open_com(&self, addr: &str) -> Result<ApixStream, Error> {
+        return self.open(apix_sys::SINK_COM, addr)
+    }
+
+    pub fn open_can(&self, addr: &str) -> Result<ApixStream, Error> {
+        return self.open(apix_sys::SINK_CAN, addr)
     }
 }
 
