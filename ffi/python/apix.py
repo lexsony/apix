@@ -1,12 +1,21 @@
 import ctypes
 from ctypes.util import find_library
+import srrp
 
 lib = ctypes.CDLL(find_library("apix"))
 
-def log_set_debug():
+LOG_LEVEL_TRACE = 1
+LOG_LEVEL_DEBUG = 2
+LOG_LEVEL_INFO = 3
+LOG_LEVEL_NOTICE = 4
+LOG_LEVEL_WARN = 5
+LOG_LEVEL_ERROR = 6
+LOG_LEVEL_FATAL = 7
+
+def log_set_level(level):
     func = lib.log_set_level
     func.argtypes = [ctypes.c_int32]
-    func(1)
+    func(level)
 
 class Apix():
     def __init__(self):
@@ -72,6 +81,29 @@ class Apix():
         func.argtypes = [ctypes.c_void_p, ctypes.c_int32]
         func.restype = ctypes.c_uint32
         return func(self.ctx, fd)
+
+    def next_srrp_packet(self, fd):
+        func = lib.apix_next_srrp_packet
+        func.argtypes = [ctypes.c_void_p, ctypes.c_int32]
+        func.restype = ctypes.c_void_p
+        return srrp.Srrp(func(self.ctx, fd), False)
+
+    def upgrade_to_srrp(self, fd, nodeid):
+        func = lib.apix_upgrade_to_srrp
+        func.argtypes = [ctypes.c_void_p, ctypes.c_int32, ctypes.c_uint32]
+        func.restype = ctypes.c_int32
+        return func(self.ctx, fd, nodeid)
+
+    def srrp_forward(self, fd, pac):
+        func = lib.apix_srrp_forward
+        func.argtypes = [ctypes.c_void_p, ctypes.c_int32, ctypes.c_void_p]
+        return func(self.ctx, fd, pac.pac)
+
+    def srrp_send(self, fd, pac):
+        func = lib.apix_srrp_send
+        func.argtypes = [ctypes.c_void_p, ctypes.c_int32, ctypes.c_void_p]
+        func.restype = ctypes.c_int32
+        return func(self.ctx, fd, pac.pac)
 
     def enable_posix(self):
         func = lib.apix_enable_posix

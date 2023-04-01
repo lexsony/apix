@@ -3,12 +3,13 @@ from ctypes.util import find_library
 
 lib = ctypes.CDLL(find_library("apix"))
 
-class __Srrp():
-    def __init__(self, pac):
+class Srrp():
+    def __init__(self, pac, owned=False):
         self.pac = pac
+        self.owned = owned
 
     def __del__(self):
-        if self.pac is not None:
+        if self.owned:
             func = lib.srrp_free
             func.argtypes = [ctypes.c_void_p]
             func(self.pac)
@@ -96,7 +97,7 @@ def srrp_parse(buf):
     func.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
     func.restype = ctypes.c_void_p
     pac = func(ctypes.cast(buf, ctypes.c_void_p), len(buf))
-    return __Srrp(pac)
+    return Srrp(pac, True)
 
 def srrp_new(leader, fin, srcid, dstid, anchor, payload, payload_len):
     func = lib.srrp_new
@@ -110,7 +111,7 @@ def srrp_new(leader, fin, srcid, dstid, anchor, payload, payload_len):
                ctypes.c_char_p(payload.encode('utf-8')),
                payload_len)
     assert(pac != 0)
-    return __Srrp(pac)
+    return Srrp(pac, True)
 
 def srrp_new_ctrl(srcid, anchor, payload):
     return srrp_new(0x3D, 1, srcid, 0, anchor, payload, len(payload))
