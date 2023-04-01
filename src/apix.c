@@ -90,11 +90,11 @@ static void parse_packet(struct apix *ctx, struct stream *stream)
 
         LOG_TRACE("[%p:parse_packet] right packet:%s", ctx, srrp_get_raw(stream->rxpac_unfin));
 
-        // construct apimsg if receviced fin srrp packet
+        // construct message if receviced fin srrp packet
         if (srrp_get_fin(stream->rxpac_unfin) == SRRP_FIN_1) {
-            struct apimsg *msg = malloc(sizeof(*msg));
+            struct message *msg = malloc(sizeof(*msg));
             memset(msg, 0, sizeof(*msg));
-            msg->state = APIMSG_ST_NONE;
+            msg->state = MESSAGE_ST_NONE;
             msg->fd = stream->fd;
             msg->pac = stream->rxpac_unfin;
             INIT_LIST_HEAD(&msg->ln);
@@ -119,7 +119,7 @@ static int apix_response(
 }
 
 static void
-handle_ctrl(struct stream *stream, struct apimsg *am)
+handle_ctrl(struct stream *stream, struct message *am)
 {
     assert(stream->type != STREAM_T_LISTEN);
 
@@ -166,18 +166,18 @@ handle_ctrl(struct stream *stream, struct apimsg *am)
     }
 
 out:
-    apimsg_finish(am);
+    message_finish(am);
 }
 
 static void
-handle_subscribe(struct stream *stream, struct apimsg *am)
+handle_subscribe(struct stream *stream, struct message *am)
 {
     assert(stream->type != STREAM_T_LISTEN);
 
     for (u32 i = 0; i < vsize(stream->sub_topics); i++) {
         if (strcmp(sget(vat(stream->sub_topics, i)), srrp_get_anchor(am->pac)) == 0) {
             apix_response(stream->ctx, am->fd, am->pac, "j:{\"err\":0}");
-            apimsg_finish(am);
+            message_finish(am);
             return;
         }
     }
@@ -190,11 +190,11 @@ handle_subscribe(struct stream *stream, struct apimsg *am)
     apix_srrp_send(stream->ctx, am->fd, pub);
     srrp_free(pub);
 
-    apimsg_finish(am);
+    message_finish(am);
 }
 
 static void
-handle_unsubscribe(struct stream *stream, struct apimsg *am)
+handle_unsubscribe(struct stream *stream, struct message *am)
 {
     assert(stream->type != STREAM_T_LISTEN);
 
@@ -212,10 +212,10 @@ handle_unsubscribe(struct stream *stream, struct apimsg *am)
     apix_srrp_send(stream->ctx, am->fd, pub);
     srrp_free(pub);
 
-    apimsg_finish(am);
+    message_finish(am);
 }
 
-static void forward_request_or_response(struct apix *ctx, struct apimsg *am)
+static void forward_request_or_response(struct apix *ctx, struct message *am)
 {
     struct stream *dst = NULL;
 
@@ -232,17 +232,17 @@ static void forward_request_or_response(struct apix *ctx, struct apimsg *am)
     LOG_TRACE("[%p:forward_rr_r] dstid:%x, dst:%p", ctx, srrp_get_dstid(am->pac), dst);
     if (dst) {
         apix_srrp_send(ctx, dst->fd, am->pac);
-        apimsg_finish(am);
+        message_finish(am);
         return;
     }
 
     apix_response(ctx, am->fd, am->pac,
                   "j:{\"err\":404,\"msg\":\"Destination not found\"}");
-    apimsg_finish(am);
+    message_finish(am);
     return;
 }
 
-static void forward_publish(struct apix *ctx, struct apimsg *am)
+static void forward_publish(struct apix *ctx, struct message *am)
 {
     regex_t regex;
     int rc;
@@ -262,11 +262,11 @@ static void forward_publish(struct apix *ctx, struct apimsg *am)
         }
     }
 
-    apimsg_finish(am);
+    message_finish(am);
 }
 
 static void
-handle_forward(struct apix *ctx, struct apimsg *am)
+handle_forward(struct apix *ctx, struct message *am)
 {
     LOG_TRACE("[%p:handle_forward] state:%d, raw:%s",
               ctx, am->state, srrp_get_raw(am->pac));
@@ -281,15 +281,15 @@ handle_forward(struct apix *ctx, struct apimsg *am)
     }
 }
 
-static void handle_apimsg(struct stream *stream)
+static void handle_message(struct stream *stream)
 {
-    struct apimsg *pos;
+    struct message *pos;
     list_for_each_entry(pos, &stream->msgs, ln) {
-        if (apimsg_is_finished(pos) || pos->state == APIMSG_ST_WAITING)
+        if (message_is_finished(pos) || pos->state == MESSAGE_ST_WAITING)
             continue;
 
         assert(srrp_get_ver(pos->pac) == SRRP_VERSION);
-        LOG_TRACE("[%p:handle_apimsg] #%d msg:%p, state:%d, raw:%s",
+        LOG_TRACE("[%p:handle_message] #%d msg:%p, state:%d, raw:%s",
                   stream->ctx, stream->fd, pos, pos->state, srrp_get_raw(pos->pac));
 
         assert(stream->type != STREAM_T_LISTEN);
@@ -300,14 +300,14 @@ static void handle_apimsg(struct stream *stream)
         }
 
         if (stream->r_nodeid == 0) {
-            LOG_DEBUG("[%p:handle_apimsg] #%d nodeid zero: "
+            LOG_DEBUG("[%p:handle_message] #%d nodeid zero: "
                       "l_nodeid:%d, r_nodeid:%d, state:%d, raw:%s",
                       stream->ctx, pos->fd, stream->l_nodeid, stream->r_nodeid,
                       pos->state, srrp_get_raw(pos->pac));
             if (srrp_get_leader(pos->pac) == SRRP_REQUEST_LEADER)
                 apix_response(stream->ctx, pos->fd, pos->pac,
                               "j:{\"err\":1, \"msg\":\"nodeid not sync\"}");
-            apimsg_finish(pos);
+            message_finish(pos);
             continue;
         }
 
@@ -321,23 +321,23 @@ static void handle_apimsg(struct stream *stream)
             continue;
         }
 
-        if (pos->state == APIMSG_ST_FORWARD) {
+        if (pos->state == MESSAGE_ST_FORWARD) {
             handle_forward(stream->ctx, pos);
             continue;
         }
 
         stream->ev.bits.srrp_packet_in = 1;
-        pos->state = APIMSG_ST_WAITING;
-        //LOG_TRACE("[%p:handle_apimsg] set srrp_packet_in", stream->ctx);
+        pos->state = MESSAGE_ST_WAITING;
+        //LOG_TRACE("[%p:handle_message] set srrp_packet_in", stream->ctx);
     }
 }
 
-static void clear_finished_apimsg(struct stream *stream)
+static void clear_finished_message(struct stream *stream)
 {
-    struct apimsg *pos, *n;
+    struct message *pos, *n;
     list_for_each_entry_safe(pos, n, &stream->msgs, ln) {
-        if (apimsg_is_finished(pos))
-            apimsg_free(pos);
+        if (message_is_finished(pos))
+            message_free(pos);
     }
 }
 
@@ -529,8 +529,8 @@ static int apix_poll(struct apix *ctx)
             }
         }
 
-        handle_apimsg(pos_fd);
-        clear_finished_apimsg(pos_fd);
+        handle_message(pos_fd);
+        clear_finished_message(pos_fd);
     }
 
     return 0;
@@ -596,9 +596,9 @@ u8 apix_next_event(struct apix *ctx, int fd)
 
     if (stream->ev.bits.srrp_packet_in) {
         stream->ev.bits.srrp_packet_in = 0;
-        struct apimsg *pos;
+        struct message *pos;
         list_for_each_entry(pos,&stream->msgs, ln) {
-            if (pos->state == APIMSG_ST_WAITING)
+            if (pos->state == MESSAGE_ST_WAITING)
                 stream->ev.bits.srrp_packet_in = 1;
         }
         // check again
@@ -615,12 +615,12 @@ struct srrp_packet *apix_next_srrp_packet(struct apix *ctx, int fd)
     struct stream *stream = find_stream_in_apix(ctx, fd);
     assert(stream);
 
-    struct apimsg *pos;
+    struct message *pos;
     list_for_each_entry(pos,&stream->msgs, ln) {
         //LOG_TRACE("[%p:apix_next_srrp_packet] #%d msg:%p, state:%d, raw:%s",
         //          ctx, fd, pos, pos->state, srrp_get_raw(pos->pac));
-        if (pos->state == APIMSG_ST_WAITING) {
-            apimsg_finish(pos);
+        if (pos->state == MESSAGE_ST_WAITING) {
+            message_finish(pos);
             return pos->pac;
         }
     }
@@ -644,10 +644,10 @@ void apix_srrp_forward(struct apix *ctx, int fd, struct srrp_packet *pac)
     struct stream *stream = find_stream_in_apix(ctx, fd);
     assert(stream);
 
-    struct apimsg *pos;
+    struct message *pos;
     list_for_each_entry(pos, &stream->msgs, ln) {
         if (pos->pac == pac) {
-            pos->state = APIMSG_ST_FORWARD;
+            pos->state = MESSAGE_ST_FORWARD;
             return;
         }
     }
@@ -819,9 +819,9 @@ void stream_free(struct stream *stream)
     }
     vec_free(stream->sub_topics);
 
-    struct apimsg *pos, *n;
+    struct message *pos, *n;
     list_for_each_entry_safe(pos, n, &stream->msgs, ln)
-        apimsg_free(pos);
+        message_free(pos);
 
     stream->ctx = NULL;
     stream->sink = NULL;

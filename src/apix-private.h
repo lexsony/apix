@@ -136,34 +136,34 @@ struct stream *find_stream_by_r_nodeid(struct apix *ctx, u32 nodeid);
 struct stream *find_stream_by_nodeid(struct apix *ctx, u32 nodeid);
 
 /**
- * apimsg
+ * message
  */
 
-enum apimsg_state {
-    APIMSG_ST_NONE = 0,
-    APIMSG_ST_WAITING,
-    APIMSG_ST_FINISHED,
-    APIMSG_ST_FORWARD,
+enum message_state {
+    MESSAGE_ST_NONE = 0,
+    MESSAGE_ST_WAITING,
+    MESSAGE_ST_FINISHED,
+    MESSAGE_ST_FORWARD,
 };
 
-struct apimsg {
+struct message {
     int state;
     int fd; /* receive from fd */
     struct srrp_packet *pac;
     struct list_head ln;
 };
 
-static inline int apimsg_is_finished(struct apimsg *msg)
+static inline int message_is_finished(struct message *msg)
 {
-    return msg->state == APIMSG_ST_FINISHED;
+    return msg->state == MESSAGE_ST_FINISHED;
 }
 
-static inline void apimsg_finish(struct apimsg *msg)
+static inline void message_finish(struct message *msg)
 {
-    msg->state = APIMSG_ST_FINISHED;
+    msg->state = MESSAGE_ST_FINISHED;
 }
 
-static inline void apimsg_free(struct apimsg *msg)
+static inline void message_free(struct message *msg)
 {
     list_del(&msg->ln);
     srrp_free(msg->pac);
