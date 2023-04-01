@@ -20,7 +20,6 @@ endif ()
 option(BUILD_STATIC "Build static library" ON)
 option(BUILD_SHARED "Build shared library" ON)
 
-include_directories(src)
 add_subdirectory(src)
 
 option(BUILD_TESTS "Build all tests." OFF)
@@ -29,7 +28,7 @@ if (BUILD_TESTS)
     add_subdirectory(tests)
 endif ()
 
-option(BUILD_APPS "Build all apps." OFF)
-if (BUILD_APPS)
-    add_subdirectory(apps)
+option(BUILD_EXAMPLES "Build all examples." OFF)
+if (BUILD_EXAMPLES)
+    add_subdirectory(examples)
 endif ()
