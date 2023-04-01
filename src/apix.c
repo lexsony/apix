@@ -550,19 +550,17 @@ int apix_waiting(struct apix *ctx, u64 usec)
     }
 
     //LOG_TRACE("[%p:apix_waiting] poll_cnt:%d", ctx, ctx->poll_cnt);
+    if (usec == 0)
+        usec = APIX_IDLE_MAX;
     if (ctx->poll_cnt == 0) {
-        if (usec != 0) {
-            usleep(usec);
-        } else {
-            if (ctx->idle_usec != APIX_IDLE_MAX) {
-                ctx->idle_usec += APIX_IDLE_MAX / 10;
-                if (ctx->idle_usec > APIX_IDLE_MAX)
-                    ctx->idle_usec = APIX_IDLE_MAX;
-            }
-            usleep(ctx->idle_usec);
+        usleep(ctx->idle_usec);
+        if (ctx->idle_usec != usec) {
+            ctx->idle_usec += usec / 10;
+            if (ctx->idle_usec > usec)
+                ctx->idle_usec = usec;
         }
     } else {
-        ctx->idle_usec = APIX_IDLE_MAX / 10;
+        ctx->idle_usec = usec / 10;
     }
 
     return 0;
