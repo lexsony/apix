@@ -11,7 +11,7 @@
 #include "vec.h"
 #include "srrp.h"
 
-#define APISINK_ID_SIZE 64
+#define SINK_ID_SIZE 64
 #define STREAM_ADDR_SIZE 64
 
 #define STREAM_SYNC_TIMEOUT (1000 * 5) /*ms*/
@@ -37,41 +37,41 @@ struct apix {
 };
 
 /**
- * apisink
+ * sink
  * - apix low level implement, maybe unix domain, bsd socket, uart, can ...
  */
 
-struct apisink;
+struct sink;
 
-struct apisink_operations {
-    int (*open)(struct apisink *sink, const char *addr);
-    int (*close)(struct apisink *sink, int fd);
-    int (*accept)(struct apisink *sink, int fd);
-    int (*ioctl)(struct apisink *sink, int fd, unsigned int cmd, unsigned long arg);
-    int (*send)(struct apisink *sink, int fd, const u8 *buf, u32 len);
-    int (*recv)(struct apisink *sink, int fd, u8 *buf, u32 size);
-    int (*poll)(struct apisink *sink);
+struct sink_operations {
+    int (*open)(struct sink *sink, const char *addr);
+    int (*close)(struct sink *sink, int fd);
+    int (*accept)(struct sink *sink, int fd);
+    int (*ioctl)(struct sink *sink, int fd, unsigned int cmd, unsigned long arg);
+    int (*send)(struct sink *sink, int fd, const u8 *buf, u32 len);
+    int (*recv)(struct sink *sink, int fd, u8 *buf, u32 size);
+    int (*poll)(struct sink *sink);
 };
 
-struct apisink {
-    char id[APISINK_ID_SIZE]; // identify
-    struct apisink_operations ops;
+struct sink {
+    char id[SINK_ID_SIZE]; // identify
+    struct sink_operations ops;
     struct apix *ctx;
     struct list_head streams;
     struct list_head ln;
 };
 
-void apisink_init(struct apisink *sink, const char *id,
-                  const struct apisink_operations *ops);
-void apisink_fini(struct apisink *sink);
+void sink_init(struct sink *sink, const char *id,
+                  const struct sink_operations *ops);
+void sink_fini(struct sink *sink);
 
-int apix_sink_register(struct apix *ctx, struct apisink *sink);
-void apix_sink_unregister(struct apix *ctx, struct apisink *sink);
+int apix_sink_register(struct apix *ctx, struct sink *sink);
+void apix_sink_unregister(struct apix *ctx, struct sink *sink);
 
 /**
  * stream
  * - treat it as unix fd in most situations
- * - each apisink holds several streams
+ * - each sink holds several streams
  */
 
 enum stream_type {
@@ -121,16 +121,16 @@ struct stream {
     struct list_head msgs;
 
     struct apix *ctx;
-    struct apisink *sink;
+    struct sink *sink;
     struct list_head ln_ctx;
     struct list_head ln_sink;
 };
 
-struct stream *stream_new(struct apisink *sink);
+struct stream *stream_new(struct sink *sink);
 void stream_free(struct stream *stream);
 
 struct stream *find_stream_in_apix(struct apix *ctx, int fd);
-struct stream *find_stream_in_apisink(struct apisink *sink, int fd);
+struct stream *find_stream_in_sink(struct sink *sink, int fd);
 struct stream *find_stream_by_l_nodeid(struct apix *ctx, u32 nodeid);
 struct stream *find_stream_by_r_nodeid(struct apix *ctx, u32 nodeid);
 struct stream *find_stream_by_nodeid(struct apix *ctx, u32 nodeid);

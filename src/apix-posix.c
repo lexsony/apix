@@ -29,15 +29,15 @@
 #include "log.h"
 
 struct posix_sink {
-    struct apisink sink;
+    struct sink sink;
     // for select
     fd_set fds;
     int nfds;
 };
 
-static int __fd_close(struct apisink *sink, int fd)
+static int __fd_close(struct sink *sink, int fd)
 {
-    struct stream *stream = find_stream_in_apisink(sink, fd);
+    struct stream *stream = find_stream_in_sink(sink, fd);
     if (stream == NULL)
         return -1;
 
@@ -54,7 +54,7 @@ static int __fd_close(struct apisink *sink, int fd)
  * unix domain socket server
  */
 
-static int unix_s_open(struct apisink *sink, const char *addr)
+static int unix_s_open(struct sink *sink, const char *addr)
 {
     int fd = socket(PF_UNIX, SOCK_STREAM, 0);
     if (fd == -1)
@@ -90,24 +90,24 @@ static int unix_s_open(struct apisink *sink, const char *addr)
     return fd;
 }
 
-static int unix_s_close(struct apisink *sink, int fd)
+static int unix_s_close(struct sink *sink, int fd)
 {
-    struct stream *stream = find_stream_in_apisink(sink, fd);
+    struct stream *stream = find_stream_in_sink(sink, fd);
     if (stream == NULL)
         return -1;
 
-    if (strcmp(sink->id, APISINK_UNIX_S) == 0)
+    if (strcmp(sink->id, SINK_UNIX_S) == 0)
         unlink(stream->addr);
 
     __fd_close(sink, fd);
     return 0;
 }
 
-static int unix_s_accept(struct apisink *sink, int fd)
+static int unix_s_accept(struct sink *sink, int fd)
 {
     struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
 
-    struct stream *stream = find_stream_in_apisink(sink, fd);
+    struct stream *stream = find_stream_in_sink(sink, fd);
     if (stream == NULL)
         return -1;
 
@@ -132,19 +132,19 @@ static int unix_s_accept(struct apisink *sink, int fd)
     return newfd;
 }
 
-static int unix_s_send(struct apisink *sink, int fd, const u8 *buf, u32 len)
+static int unix_s_send(struct sink *sink, int fd, const u8 *buf, u32 len)
 {
     UNUSED(sink);
     return send(fd, buf, len, MSG_NOSIGNAL);
 }
 
-static int unix_s_recv(struct apisink *sink, int fd, u8 *buf, u32 len)
+static int unix_s_recv(struct sink *sink, int fd, u8 *buf, u32 len)
 {
     UNUSED(sink);
     return recv(fd, buf, len, 0);
 }
 
-static int unix_s_poll(struct apisink *sink)
+static int unix_s_poll(struct sink *sink)
 {
     struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
 
@@ -195,7 +195,7 @@ static int unix_s_poll(struct apisink *sink)
     return 0;
 }
 
-static struct apisink_operations unix_s_ops = {
+static struct sink_operations unix_s_ops = {
     .open = unix_s_open,
     .close = unix_s_close,
     .accept = unix_s_accept,
@@ -209,7 +209,7 @@ static struct apisink_operations unix_s_ops = {
  * unix domain socket client
  */
 
-static int unix_c_open(struct apisink *sink, const char *addr)
+static int unix_c_open(struct sink *sink, const char *addr)
 {
     int fd = socket(PF_UNIX, SOCK_STREAM, 0);
     if (fd == -1)
@@ -237,19 +237,19 @@ static int unix_c_open(struct apisink *sink, const char *addr)
     return fd;
 }
 
-static int unix_c_send(struct apisink *sink, int fd, const u8 *buf, u32 len)
+static int unix_c_send(struct sink *sink, int fd, const u8 *buf, u32 len)
 {
     UNUSED(sink);
     return send(fd, buf, len, MSG_NOSIGNAL);
 }
 
-static int unix_c_recv(struct apisink *sink, int fd, u8 *buf, u32 len)
+static int unix_c_recv(struct sink *sink, int fd, u8 *buf, u32 len)
 {
     UNUSED(sink);
     return recv(fd, buf, len, 0);
 }
 
-static int unix_c_poll(struct apisink *sink)
+static int unix_c_poll(struct sink *sink)
 {
     struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
 
@@ -295,7 +295,7 @@ static int unix_c_poll(struct apisink *sink)
     return 0;
 }
 
-static struct apisink_operations unix_c_ops = {
+static struct sink_operations unix_c_ops = {
     .open = unix_c_open,
     .close = __fd_close,
     .accept = NULL,
@@ -309,7 +309,7 @@ static struct apisink_operations unix_c_ops = {
  * tcp server
  */
 
-static int tcp_s_open(struct apisink *sink, const char *addr)
+static int tcp_s_open(struct sink *sink, const char *addr)
 {
     int fd = socket(PF_INET, SOCK_STREAM, 0);
     if (fd == -1)
@@ -354,7 +354,7 @@ static int tcp_s_open(struct apisink *sink, const char *addr)
     return fd;
 }
 
-static struct apisink_operations tcp_s_ops = {
+static struct sink_operations tcp_s_ops = {
     .open = tcp_s_open,
     .close = __fd_close,
     .accept = unix_s_accept,
@@ -368,7 +368,7 @@ static struct apisink_operations tcp_s_ops = {
  * tcp client
  */
 
-static int tcp_c_open(struct apisink *sink, const char *addr)
+static int tcp_c_open(struct sink *sink, const char *addr)
 {
     int fd = socket(PF_INET, SOCK_STREAM, 0);
     if (fd == -1)
@@ -407,7 +407,7 @@ static int tcp_c_open(struct apisink *sink, const char *addr)
     return fd;
 }
 
-static struct apisink_operations tcp_c_ops = {
+static struct sink_operations tcp_c_ops = {
     .open = tcp_c_open,
     .close = __fd_close,
     .accept = NULL,
@@ -423,7 +423,7 @@ static struct apisink_operations tcp_c_ops = {
  * com
  */
 
-static int com_open(struct apisink *sink, const char *addr)
+static int com_open(struct sink *sink, const char *addr)
 {
     int fd = open(addr, O_RDWR | O_NOCTTY | O_NDELAY);
     if (fd == -1) return -1;
@@ -440,7 +440,7 @@ static int com_open(struct apisink *sink, const char *addr)
 }
 
 static int
-com_ioctl(struct apisink *sink, int fd, unsigned int cmd, unsigned long arg)
+com_ioctl(struct sink *sink, int fd, unsigned int cmd, unsigned long arg)
 {
     UNUSED(sink);
     UNUSED(cmd);
@@ -499,19 +499,19 @@ com_ioctl(struct apisink *sink, int fd, unsigned int cmd, unsigned long arg)
     return 0;
 }
 
-static int com_send(struct apisink *sink, int fd, const u8 *buf, u32 len)
+static int com_send(struct sink *sink, int fd, const u8 *buf, u32 len)
 {
     UNUSED(sink);
     return write(fd, buf, len);
 }
 
-static int com_recv(struct apisink *sink, int fd, u8 *buf, u32 len)
+static int com_recv(struct sink *sink, int fd, u8 *buf, u32 len)
 {
     UNUSED(sink);
     return read(fd, buf, len);
 }
 
-static int com_poll(struct apisink *sink)
+static int com_poll(struct sink *sink)
 {
     struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
 
@@ -555,7 +555,7 @@ static int com_poll(struct apisink *sink)
     return 0;
 }
 
-static struct apisink_operations com_ops = {
+static struct sink_operations com_ops = {
     .open = com_open,
     .close = __fd_close,
     .accept = NULL,
@@ -569,7 +569,7 @@ static struct apisink_operations com_ops = {
  * can
  */
 
-static int can_open(struct apisink *sink, const char *addr)
+static int can_open(struct sink *sink, const char *addr)
 {
     int fd = socket(PF_CAN, SOCK_RAW, CAN_RAW);
     if (fd == -1)
@@ -601,19 +601,19 @@ static int can_open(struct apisink *sink, const char *addr)
     return fd;
 }
 
-static int can_send(struct apisink *sink, int fd, const u8 *buf, u32 len)
+static int can_send(struct sink *sink, int fd, const u8 *buf, u32 len)
 {
     UNUSED(sink);
     return write(fd, buf, len);
 }
 
-static int can_recv(struct apisink *sink, int fd, u8 *buf, u32 len)
+static int can_recv(struct sink *sink, int fd, u8 *buf, u32 len)
 {
     UNUSED(sink);
     return read(fd, buf, len);
 }
 
-static int can_poll(struct apisink *sink)
+static int can_poll(struct sink *sink)
 {
     struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
 
@@ -657,7 +657,7 @@ static int can_poll(struct apisink *sink)
     return 0;
 }
 
-static struct apisink_operations can_ops = {
+static struct sink_operations can_ops = {
     .open = can_open,
     .close = __fd_close,
     .accept = NULL,
@@ -678,38 +678,38 @@ int apix_enable_posix(struct apix *ctx)
     // unix_s
     struct posix_sink *unix_s_sink = calloc(1, sizeof(struct posix_sink));
     FD_ZERO(&unix_s_sink->fds);
-    apisink_init(&unix_s_sink->sink, APISINK_UNIX_S, &unix_s_ops);
+    sink_init(&unix_s_sink->sink, SINK_UNIX_S, &unix_s_ops);
     apix_sink_register(ctx, &unix_s_sink->sink);
 
     // unix_c
     struct posix_sink *unix_c_sink = calloc(1, sizeof(struct posix_sink));
     FD_ZERO(&unix_c_sink->fds);
-    apisink_init(&unix_c_sink->sink, APISINK_UNIX_C, &unix_c_ops);
+    sink_init(&unix_c_sink->sink, SINK_UNIX_C, &unix_c_ops);
     apix_sink_register(ctx, &unix_c_sink->sink);
 
     // tcp_s
     struct posix_sink *tcp_s_sink = calloc(1, sizeof(struct posix_sink));
     FD_ZERO(&tcp_s_sink->fds);
-    apisink_init(&tcp_s_sink->sink, APISINK_TCP_S, &tcp_s_ops);
+    sink_init(&tcp_s_sink->sink, SINK_TCP_S, &tcp_s_ops);
     apix_sink_register(ctx, &tcp_s_sink->sink);
 
     // tcp_c
     struct posix_sink *tcp_c_sink = calloc(1, sizeof(struct posix_sink));
     FD_ZERO(&tcp_c_sink->fds);
-    apisink_init(&tcp_c_sink->sink, APISINK_TCP_C, &tcp_c_ops);
+    sink_init(&tcp_c_sink->sink, SINK_TCP_C, &tcp_c_ops);
     apix_sink_register(ctx, &tcp_c_sink->sink);
 
 #ifndef __APPLE__
     // com
     struct posix_sink *com_sink = calloc(1, sizeof(struct posix_sink));
     FD_ZERO(&com_sink->fds);
-    apisink_init(&com_sink->sink, APISINK_COM, &com_ops);
+    sink_init(&com_sink->sink, SINK_COM, &com_ops);
     apix_sink_register(ctx, &com_sink->sink);
 
     // can
     struct posix_sink *can_sink = calloc(1, sizeof(struct posix_sink));
     FD_ZERO(&can_sink->fds);
-    apisink_init(&can_sink->sink, APISINK_CAN, &can_ops);
+    sink_init(&can_sink->sink, SINK_CAN, &can_ops);
     apix_sink_register(ctx, &can_sink->sink);
 #endif
 
@@ -718,60 +718,60 @@ int apix_enable_posix(struct apix *ctx)
 
 void apix_disable_posix(struct apix *ctx)
 {
-    struct apisink *pos, *n;
+    struct sink *pos, *n;
     list_for_each_entry_safe(pos, n, &ctx->sinks, ln) {
         // unix_s
-        if (strcmp(pos->id, APISINK_UNIX_S) == 0) {
+        if (strcmp(pos->id, SINK_UNIX_S) == 0) {
             struct posix_sink *unix_s_sink =
                 container_of(pos, struct posix_sink, sink);
             apix_sink_unregister(ctx, &unix_s_sink->sink);
-            apisink_fini(&unix_s_sink->sink);
+            sink_fini(&unix_s_sink->sink);
             free(unix_s_sink);
         }
 
         // unix_c
-        if (strcmp(pos->id, APISINK_UNIX_C) == 0) {
+        if (strcmp(pos->id, SINK_UNIX_C) == 0) {
             struct posix_sink *unix_c_sink =
                 container_of(pos, struct posix_sink, sink);
             apix_sink_unregister(ctx, &unix_c_sink->sink);
-            apisink_fini(&unix_c_sink->sink);
+            sink_fini(&unix_c_sink->sink);
             free(unix_c_sink);
         }
 
         // tcp_s
-        if (strcmp(pos->id, APISINK_TCP_S) == 0) {
+        if (strcmp(pos->id, SINK_TCP_S) == 0) {
             struct posix_sink *tcp_s_sink =
                 container_of(pos, struct posix_sink, sink);
             apix_sink_unregister(ctx, &tcp_s_sink->sink);
-            apisink_fini(&tcp_s_sink->sink);
+            sink_fini(&tcp_s_sink->sink);
             free(tcp_s_sink);
         }
 
         // tcp_c
-        if (strcmp(pos->id, APISINK_TCP_C) == 0) {
+        if (strcmp(pos->id, SINK_TCP_C) == 0) {
             struct posix_sink *tcp_c_sink =
                 container_of(pos, struct posix_sink, sink);
             apix_sink_unregister(ctx, &tcp_c_sink->sink);
-            apisink_fini(&tcp_c_sink->sink);
+            sink_fini(&tcp_c_sink->sink);
             free(tcp_c_sink);
         }
 
 #ifndef __APPLE__
         // com
-        if (strcmp(pos->id, APISINK_COM) == 0) {
+        if (strcmp(pos->id, SINK_COM) == 0) {
             struct posix_sink *com_sink =
                 container_of(pos, struct posix_sink, sink);
             apix_sink_unregister(ctx, &com_sink->sink);
-            apisink_fini(&com_sink->sink);
+            sink_fini(&com_sink->sink);
             free(com_sink);
         }
 
         // can
-        if (strcmp(pos->id, APISINK_CAN) == 0) {
+        if (strcmp(pos->id, SINK_CAN) == 0) {
             struct posix_sink *can_sink =
                 container_of(pos, struct posix_sink, sink);
             apix_sink_unregister(ctx, &can_sink->sink);
-            apisink_fini(&can_sink->sink);
+            sink_fini(&can_sink->sink);
             free(can_sink);
         }
 #endif

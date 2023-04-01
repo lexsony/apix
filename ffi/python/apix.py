@@ -128,19 +128,19 @@ class Apix():
              ctypes.c_char_p(addr.encode('utf-8')))
 
     def open_unix_server(self, addr):
-        return self.open("apisink_unix_s", addr)
+        return self.open("sink_unix_s", addr)
 
     def open_unix_client(self, addr):
-        return self.open("apisink_unix_c", addr)
+        return self.open("sink_unix_c", addr)
 
     def open_tcp_server(self, addr):
-        return self.open("apisink_tcp_s", addr)
+        return self.open("sink_tcp_s", addr)
 
     def open_tcp_client(self, addr):
-        return self.open("apisink_tcp_c", addr)
+        return self.open("sink_tcp_c", addr)
 
     def open_com(self, addr):
-        return self.open("apisink_com", addr)
+        return self.open("sink_com", addr)
 
     def open_can(self, addr):
-        return self.open("apisink_can", addr)
+        return self.open("sink_can", addr)

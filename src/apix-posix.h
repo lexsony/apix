@@ -9,20 +9,20 @@
 extern "C" {
 #endif
 
-#define APISINK_UNIX_S    "apisink_unix_s"
-#define APISINK_UNIX_C    "apisink_unix_c"
-#define APISINK_TCP_S     "apisink_tcp_s"
-#define APISINK_TCP_C     "apisink_tcp_c"
-#define APISINK_UDP_S     "apisink_udp_s"
-#define APISINK_UDP_C     "apisink_udp_c"
-#define APISINK_COM       "apisink_com"
-#define APISINK_CAN       "apisink_can"
-#define APISINK_SPI       "apisink_spi"
-#define APISINK_I2C       "apisink_i2c"
-#define APISINK_PIPE      "apisink_pipe"
-#define APISINK_SHM       "apisink_shm"
-#define APISINK_SHM_MEMFD "apisink_shm_memfd"
-#define APISINK_SHM_FTOK  "apisink_shm_ftok"
+#define SINK_UNIX_S    "sink_unix_s"
+#define SINK_UNIX_C    "sink_unix_c"
+#define SINK_TCP_S     "sink_tcp_s"
+#define SINK_TCP_C     "sink_tcp_c"
+#define SINK_UDP_S     "sink_udp_s"
+#define SINK_UDP_C     "sink_udp_c"
+#define SINK_COM       "sink_com"
+#define SINK_CAN       "sink_can"
+#define SINK_SPI       "sink_spi"
+#define SINK_I2C       "sink_i2c"
+#define SINK_PIPE      "sink_pipe"
+#define SINK_SHM       "sink_shm"
+#define SINK_SHM_MEMFD "sink_shm_memfd"
+#define SINK_SHM_FTOK  "sink_shm_ftok"
 
 #define COM_ARG_BAUD_9600 9600
 #define COM_ARG_BAUD_115200 115200
@@ -43,12 +43,12 @@ struct ioctl_com_param {
     char stop;
 };
 
-#define apix_open_unix_server(ctx, addr) apix_open(ctx, APISINK_UNIX_S, addr)
-#define apix_open_unix_client(ctx, addr) apix_open(ctx, APISINK_UNIX_C, addr)
-#define apix_open_tcp_server(ctx, addr) apix_open(ctx, APISINK_TCP_S, addr)
-#define apix_open_tcp_client(ctx, addr) apix_open(ctx, APISINK_TCP_C, addr)
-#define apix_open_com(ctx, addr) apix_open(ctx, APISINK_COM, addr)
-#define apix_open_can(ctx, addr) apix_open(ctx, APISINK_CAN, addr)
+#define apix_open_unix_server(ctx, addr) apix_open(ctx, SINK_UNIX_S, addr)
+#define apix_open_unix_client(ctx, addr) apix_open(ctx, SINK_UNIX_C, addr)
+#define apix_open_tcp_server(ctx, addr) apix_open(ctx, SINK_TCP_S, addr)
+#define apix_open_tcp_client(ctx, addr) apix_open(ctx, SINK_TCP_C, addr)
+#define apix_open_com(ctx, addr) apix_open(ctx, SINK_COM, addr)
+#define apix_open_can(ctx, addr) apix_open(ctx, SINK_CAN, addr)
 
 int apix_enable_posix(struct apix *ctx);
 void apix_disable_posix(struct apix *ctx);

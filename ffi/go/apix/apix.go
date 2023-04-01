@@ -74,25 +74,25 @@ func (self *Apix) DisablePosix() {
 }
 
 func (self *Apix) OpenUnixServer(addr string) (int) {
-    return int(C.apix_open(self.ctx, C.CString(C.APISINK_UNIX_S), C.CString(addr)))
+    return int(C.apix_open(self.ctx, C.CString(C.SINK_UNIX_S), C.CString(addr)))
 }
 
 func (self *Apix) OpenUnixClient(addr string) (int) {
-    return int(C.apix_open(self.ctx, C.CString(C.APISINK_UNIX_C), C.CString(addr)))
+    return int(C.apix_open(self.ctx, C.CString(C.SINK_UNIX_C), C.CString(addr)))
 }
 
 func (self *Apix) OpenTcpServer(addr string) (int) {
-    return int(C.apix_open(self.ctx, C.CString(C.APISINK_TCP_S), C.CString(addr)))
+    return int(C.apix_open(self.ctx, C.CString(C.SINK_TCP_S), C.CString(addr)))
 }
 
 func (self *Apix) OpenTcpClient(addr string) (int) {
-    return int(C.apix_open(self.ctx, C.CString(C.APISINK_TCP_C), C.CString(addr)))
+    return int(C.apix_open(self.ctx, C.CString(C.SINK_TCP_C), C.CString(addr)))
 }
 
 func (self *Apix) OpenCom(addr string) (int) {
-    return int(C.apix_open(self.ctx, C.CString(C.APISINK_COM), C.CString(addr)))
+    return int(C.apix_open(self.ctx, C.CString(C.SINK_COM), C.CString(addr)))
 }
 
 func (self *Apix) OpenCan(addr string) (int) {
-    return int(C.apix_open(self.ctx, C.CString(C.APISINK_CAN), C.CString(addr)))
+    return int(C.apix_open(self.ctx, C.CString(C.SINK_CAN), C.CString(addr)))
 }

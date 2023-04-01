@@ -377,11 +377,11 @@ void apix_drop(struct apix *ctx)
         stream_free(stream_pos);
     }
 
-    struct apisink *apisink_pos, *apisink_n;
-    list_for_each_entry_safe(apisink_pos, apisink_n, &ctx->sinks, ln) {
-        apix_sink_unregister(apisink_pos->ctx, apisink_pos);
-        apisink_fini(apisink_pos);
-        free(apisink_pos);
+    struct sink *sink_pos, *sink_n;
+    list_for_each_entry_safe(sink_pos, sink_n, &ctx->sinks, ln) {
+        apix_sink_unregister(sink_pos->ctx, sink_pos);
+        sink_fini(sink_pos);
+        free(sink_pos);
     }
 
     free(ctx);
@@ -389,7 +389,7 @@ void apix_drop(struct apix *ctx)
 
 int apix_open(struct apix *ctx, const char *sinkid, const char *addr)
 {
-    struct apisink *pos;
+    struct sink *pos;
     list_for_each_entry(pos, &ctx->sinks, ln) {
         if (strcmp(pos->id, sinkid) == 0) {
             assert(pos->ops.open);
@@ -480,7 +480,7 @@ static int apix_poll(struct apix *ctx)
     gettimeofday(&ctx->poll_ts, NULL);
 
     // poll each sink
-    struct apisink *pos_sink;
+    struct sink *pos_sink;
     list_for_each_entry(pos_sink, &ctx->sinks, ln) {
         if (pos_sink->ops.poll(pos_sink) != 0) {
             LOG_ERROR("[%p:apix_poll] %s(%d)", ctx, strerror(errno));
@@ -719,13 +719,13 @@ int apix_srrp_send(struct apix *ctx, int fd, struct srrp_packet *pac)
 }
 
 /**
- * apisink
+ * sink
  */
 
-void apisink_init(struct apisink *sink, const char *name,
-                  const struct apisink_operations *ops)
+void sink_init(struct sink *sink, const char *name,
+                  const struct sink_operations *ops)
 {
-    assert(strlen(name) < APISINK_ID_SIZE);
+    assert(strlen(name) < SINK_ID_SIZE);
     INIT_LIST_HEAD(&sink->streams);
     INIT_LIST_HEAD(&sink->ln);
     snprintf(sink->id, sizeof(sink->id), "%s", name);
@@ -733,7 +733,7 @@ void apisink_init(struct apisink *sink, const char *name,
     sink->ctx = NULL;
 }
 
-void apisink_fini(struct apisink *sink)
+void sink_fini(struct sink *sink)
 {
     struct stream *pos, *n;
     list_for_each_entry_safe(pos, n, &sink->streams, ln_sink)
@@ -745,9 +745,9 @@ void apisink_fini(struct apisink *sink)
     //    apix_sink_unregister(sink->ctx, sink);
 }
 
-int apix_sink_register(struct apix *ctx, struct apisink *sink)
+int apix_sink_register(struct apix *ctx, struct sink *sink)
 {
-    struct apisink *pos;
+    struct sink *pos;
     list_for_each_entry(pos, &ctx->sinks, ln) {
         if (strcmp(sink->id, pos->id) == 0)
             return -1;
@@ -758,14 +758,14 @@ int apix_sink_register(struct apix *ctx, struct apisink *sink)
     return 0;
 }
 
-void apix_sink_unregister(struct apix *ctx, struct apisink *sink)
+void apix_sink_unregister(struct apix *ctx, struct sink *sink)
 {
     UNUSED(ctx);
     list_del_init(&sink->ln);
     sink->ctx = NULL;
 }
 
-struct stream *stream_new(struct apisink *sink)
+struct stream *stream_new(struct sink *sink)
 {
     struct stream *stream = malloc(sizeof(struct stream));
     memset(stream, 0, sizeof(*stream));
@@ -840,7 +840,7 @@ struct stream *find_stream_in_apix(struct apix *ctx, int fd)
     return NULL;
 }
 
-struct stream *find_stream_in_apisink(struct apisink *sink, int fd)
+struct stream *find_stream_in_sink(struct sink *sink, int fd)
 {
     struct stream *pos, *n;
     list_for_each_entry_safe(pos, n, &sink->streams, ln_sink) {

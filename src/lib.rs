@@ -149,7 +149,7 @@ impl Apix {
         unsafe {
             let _addr = std::ffi::CString::new(addr).unwrap();
             match apix_sys::apix_open(
-                self.ctx, apix_sys::APISINK_UNIX_S.as_ptr() as *const i8, _addr.as_ptr()) {
+                self.ctx, apix_sys::SINK_UNIX_S.as_ptr() as *const i8, _addr.as_ptr()) {
                 -1 => Err(std::io::Error::last_os_error()),
                 fd => Ok(fd),
             }
@@ -160,7 +160,7 @@ impl Apix {
         unsafe {
             let _addr = std::ffi::CString::new(addr).unwrap();
             match apix_sys::apix_open(
-                self.ctx, apix_sys::APISINK_UNIX_C.as_ptr() as *const i8, _addr.as_ptr()) {
+                self.ctx, apix_sys::SINK_UNIX_C.as_ptr() as *const i8, _addr.as_ptr()) {
                 -1 => Err(std::io::Error::last_os_error()),
                 fd => Ok(fd),
             }
@@ -171,7 +171,7 @@ impl Apix {
         unsafe {
             let _addr = std::ffi::CString::new(addr).unwrap();
             match apix_sys::apix_open(
-                self.ctx, apix_sys::APISINK_TCP_S.as_ptr() as *const i8, _addr.as_ptr()) {
+                self.ctx, apix_sys::SINK_TCP_S.as_ptr() as *const i8, _addr.as_ptr()) {
                 -1 => Err(std::io::Error::last_os_error()),
                 fd => Ok(fd),
             }
@@ -182,7 +182,7 @@ impl Apix {
         unsafe {
             let _addr = std::ffi::CString::new(addr).unwrap();
             match apix_sys::apix_open(
-                self.ctx, apix_sys::APISINK_TCP_C.as_ptr() as *const i8, _addr.as_ptr()) {
+                self.ctx, apix_sys::SINK_TCP_C.as_ptr() as *const i8, _addr.as_ptr()) {
                 -1 => Err(std::io::Error::last_os_error()),
                 fd => Ok(fd),
             }
@@ -193,7 +193,7 @@ impl Apix {
         unsafe {
             let _addr = std::ffi::CString::new(addr).unwrap();
             match apix_sys::apix_open(
-                self.ctx, apix_sys::APISINK_COM.as_ptr() as *const i8, _addr.as_ptr()) {
+                self.ctx, apix_sys::SINK_COM.as_ptr() as *const i8, _addr.as_ptr()) {
                 -1 => Err(std::io::Error::last_os_error()),
                 fd => Ok(fd),
             }
@@ -204,7 +204,7 @@ impl Apix {
         unsafe {
             let _addr = std::ffi::CString::new(addr).unwrap();
             match apix_sys::apix_open(
-                self.ctx, apix_sys::APISINK_CAN.as_ptr() as *const i8, _addr.as_ptr()) {
+                self.ctx, apix_sys::SINK_CAN.as_ptr() as *const i8, _addr.as_ptr()) {
                 -1 => Err(std::io::Error::last_os_error()),
                 fd => Ok(fd),
             }

@@ -9,14 +9,14 @@
 extern "C" {
 #endif
 
-#define APISINK_STM32_TCP_S  "apisink_stm32_tcp_s"
-#define APISINK_STM32_TCP_C  "apisink_stm32_tcp_c"
-#define APISINK_STM32_UDP_S  "apisink_stm32_udp_s"
-#define APISINK_STM32_UDP_C  "apisink_stm32_udp_c"
-#define APISINK_STM32_COM    "apisink_stm32_com"
-#define APISINK_STM32_CAN    "apisink_stm32_can"
-#define APISINK_STM32_SPI    "apisink_stm32_spi"
-#define APISINK_STM32_I2C    "apisink_stm32_i2c"
+#define SINK_STM32_TCP_S  "sink_stm32_tcp_s"
+#define SINK_STM32_TCP_C  "sink_stm32_tcp_c"
+#define SINK_STM32_UDP_S  "sink_stm32_udp_s"
+#define SINK_STM32_UDP_C  "sink_stm32_udp_c"
+#define SINK_STM32_COM    "sink_stm32_com"
+#define SINK_STM32_CAN    "sink_stm32_can"
+#define SINK_STM32_SPI    "sink_stm32_spi"
+#define SINK_STM32_I2C    "sink_stm32_i2c"
 
 #define COM_ARG_BAUD_9600 9600
 #define COM_ARG_BAUD_115200 115200
@@ -38,11 +38,11 @@ struct ioctl_com_param {
 };
 
 #define apix_open_stm32_tcp_server(ctx, addr) \
-    apix_open(ctx, APISINK_STM32_TCP_S, addr)
+    apix_open(ctx, SINK_STM32_TCP_S, addr)
 #define apix_open_stm32_tcp_client(ctx, addr) \
-    apix_open(ctx, APISINK_STM32_TCP_C, addr)
+    apix_open(ctx, SINK_STM32_TCP_C, addr)
 #define apix_open_stm32_com(ctx, addr) \
-    apix_open(ctx, APISINK_STM32_COM, addr)
+    apix_open(ctx, SINK_STM32_COM, addr)
 
 int apix_enable_stm32(struct apix *ctx);
 void apix_disable_stm32(struct apix *ctx);
