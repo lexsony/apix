@@ -63,10 +63,10 @@ static int tcp_s_open(struct apisink *sink, const char *addr)
         return -1;
     }
 
-    struct sinkfd *sinkfd = sinkfd_new(sink);
-    sinkfd->fd = fd;
-    sinkfd->type = SINKFD_T_LISTEN;
-    snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
+    struct stream *stream = stream_new(sink);
+    stream->fd = fd;
+    stream->type = STREAM_T_LISTEN;
+    snprintf(stream->addr, sizeof(stream->addr), "%s", addr);
 
     struct posix_sink *tcp_s_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &tcp_s_sink->fds);
@@ -77,13 +77,13 @@ static int tcp_s_open(struct apisink *sink, const char *addr)
 
 static int tcp_s_close(struct apisink *sink, int fd)
 {
-    struct sinkfd *sinkfd = find_sinkfd_in_apisink(sink, fd);
-    if (sinkfd == NULL)
+    struct stream *stream = find_stream_in_apisink(sink, fd);
+    if (stream == NULL)
         return -1;
-    close(sinkfd->fd);
+    close(stream->fd);
     if (strcmp(sink->id, APISINK_STM32_TCP_S) == 0)
-        unlink(sinkfd->addr);
-    sinkfd_free(sinkfd);
+        unlink(stream->addr);
+    stream_free(stream);
     return 0;
 }
 
@@ -116,8 +116,8 @@ static int tcp_s_poll(struct apisink *sink)
         return -1;
     }
 
-    struct sinkfd *pos, *n;
-    list_for_each_entry_safe(pos, n, &sink->sinkfds, ln_sink) {
+    struct stream *pos, *n;
+    list_for_each_entry_safe(pos, n, &sink->streams, ln_sink) {
         if (nr_recv_fds == 0) break;
 
         if (!FD_ISSET(pos->fd, &recvfds))
@@ -134,11 +134,11 @@ static int tcp_s_poll(struct apisink *sink)
         //    }
         //    LOG_DEBUG("[accept] fd:%d, newfd:%d", pos->fd, newfd);
 
-        //    struct sinkfd *sinkfd = sinkfd_new();
-        //    sinkfd->fd = newfd;
-        //    sinkfd->sink = sink;
-        //    list_add(&sinkfd->ln_sink, &sink->sinkfds);
-        //    list_add(&sinkfd->ln_ctx, &sink->ctx->sinkfds);
+        //    struct stream *stream = stream_new();
+        //    stream->fd = newfd;
+        //    stream->sink = sink;
+        //    list_add(&stream->ln_sink, &sink->streams);
+        //    list_add(&stream->ln_ctx, &sink->ctx->streams);
 
         //    if (tcp_s_sink->nfds < newfd + 1)
         //        tcp_s_sink->nfds = newfd + 1;
@@ -204,10 +204,10 @@ static int tcp_c_open(struct apisink *sink, const char *addr)
         return -1;
     }
 
-    struct sinkfd *sinkfd = sinkfd_new(sink);
-    sinkfd->fd = fd;
-    sinkfd->type = SINKFD_T_LISTEN;
-    snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
+    struct stream *stream = stream_new(sink);
+    stream->fd = fd;
+    stream->type = STREAM_T_LISTEN;
+    snprintf(stream->addr, sizeof(stream->addr), "%s", addr);
 
     struct posix_sink *tcp_c_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &tcp_c_sink->fds);
@@ -218,12 +218,12 @@ static int tcp_c_open(struct apisink *sink, const char *addr)
 
 static int tcp_c_close(struct apisink *sink, int fd)
 {
-    struct sinkfd *sinkfd = find_sinkfd_in_apisink(sink, fd);
-    if (sinkfd == NULL)
+    struct stream *stream = find_stream_in_apisink(sink, fd);
+    if (stream == NULL)
         return -1;
 
-    close(sinkfd->fd);
-    sinkfd_free(sinkfd);
+    close(stream->fd);
+    stream_free(stream);
 
     struct posix_sink *tcp_c_sink = container_of(sink, struct posix_sink, sink);
     FD_CLR(fd, &tcp_c_sink->fds);
@@ -260,8 +260,8 @@ static int tcp_c_poll(struct apisink *sink)
         return -1;
     }
 
-    struct sinkfd *pos, *n;
-    list_for_each_entry_safe(pos, n, &sink->sinkfds, ln_sink) {
+    struct stream *pos, *n;
+    list_for_each_entry_safe(pos, n, &sink->streams, ln_sink) {
         if (nr_recv_fds == 0) break;
 
         if (!FD_ISSET(pos->fd, &recvfds))
@@ -306,20 +306,20 @@ static int com_open(struct apisink *sink, const char *addr)
     int fd = open(addr, O_RDWR | O_NOCTTY);
     if (fd == -1) return -1;
 
-    struct sinkfd *sinkfd = sinkfd_new(sink);
-    sinkfd->fd = fd;
-    snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
+    struct stream *stream = stream_new(sink);
+    stream->fd = fd;
+    snprintf(stream->addr, sizeof(stream->addr), "%s", addr);
 
     return fd;
 }
 
 static int com_close(struct apisink *sink, int fd)
 {
-    struct sinkfd *sinkfd = find_sinkfd_in_apisink(sink, fd);
-    if (sinkfd == NULL)
+    struct stream *stream = find_stream_in_apisink(sink, fd);
+    if (stream == NULL)
         return -1;
-    close(sinkfd->fd);
-    sinkfd_free(sinkfd);
+    close(stream->fd);
+    stream_free(stream);
     return 0;
 }
 
@@ -345,8 +345,8 @@ static int com_recv(struct apisink *sink, int fd, u8 *buf, u32 len)
 
 static int com_poll(struct apisink *sink)
 {
-    struct sinkfd *pos;
-    list_for_each_entry(pos, &sink->sinkfds, ln_sink) {
+    struct stream *pos;
+    list_for_each_entry(pos, &sink->streams, ln_sink) {
         char buf[1024] = {0};
         int nread = read(pos->fd, buf, sizeof(buf));
         if (nread == 0) continue;

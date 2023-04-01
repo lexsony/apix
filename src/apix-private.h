@@ -12,9 +12,9 @@
 #include "srrp.h"
 
 #define APISINK_ID_SIZE 64
-#define SINKFD_ADDR_SIZE 64
+#define STREAM_ADDR_SIZE 64
 
-#define SINKFD_SYNC_TIMEOUT (1000 * 5) /*ms*/
+#define STREAM_SYNC_TIMEOUT (1000 * 5) /*ms*/
 #define PARSE_PACKET_TIMEOUT 1000 /*ms*/
 #define APIX_IDLE_MAX (1 * 1000 * 1000) /*us*/
 
@@ -29,7 +29,7 @@ extern "C" {
  */
 
 struct apix {
-    struct list_head sinkfds;
+    struct list_head streams;
     struct list_head sinks;
     struct timeval poll_ts;
     u8 poll_cnt;
@@ -57,7 +57,7 @@ struct apisink {
     char id[APISINK_ID_SIZE]; // identify
     struct apisink_operations ops;
     struct apix *ctx;
-    struct list_head sinkfds;
+    struct list_head streams;
     struct list_head ln;
 };
 
@@ -69,31 +69,31 @@ int apix_sink_register(struct apix *ctx, struct apisink *sink);
 void apix_sink_unregister(struct apix *ctx, struct apisink *sink);
 
 /**
- * sinkfd
+ * stream
  * - treat it as unix fd in most situations
- * - each apisink holds several sinkfds
+ * - each apisink holds several streams
  */
 
-enum sinkfd_type {
-    SINKFD_T_LISTEN = 'l',
-    SINKFD_T_ACCEPT = 'a',
-    SINKFD_T_CONNECT = 'c',
+enum stream_type {
+    STREAM_T_LISTEN = 'l',
+    STREAM_T_ACCEPT = 'a',
+    STREAM_T_CONNECT = 'c',
 };
 
-enum sinkfd_state {
-    SINKFD_ST_NONE = 0,
-    SINKFD_ST_NODEID_NORMAL,
-    SINKFD_ST_NODEID_DUP,
-    SINKFD_ST_NODEID_ZERO,
-    SINKFD_ST_FINISHED,
+enum stream_state {
+    STREAM_ST_NONE = 0,
+    STREAM_ST_NODEID_NORMAL,
+    STREAM_ST_NODEID_DUP,
+    STREAM_ST_NODEID_ZERO,
+    STREAM_ST_FINISHED,
 };
 
-struct sinkfd {
+struct stream {
     int fd;
-    struct sinkfd *father;
-    char addr[SINKFD_ADDR_SIZE];
-    char type; /* sinkfd_type */
-    int state; /* sinkfd_state */
+    struct stream *father;
+    char addr[STREAM_ADDR_SIZE];
+    char type; /* stream_type */
+    int state; /* stream_state */
     time_t ts_sync_in;
     time_t ts_sync_out;
     struct timeval ts_poll_recv;
@@ -126,14 +126,14 @@ struct sinkfd {
     struct list_head ln_sink;
 };
 
-struct sinkfd *sinkfd_new(struct apisink *sink);
-void sinkfd_free(struct sinkfd *sinkfd);
+struct stream *stream_new(struct apisink *sink);
+void stream_free(struct stream *stream);
 
-struct sinkfd *find_sinkfd_in_apix(struct apix *ctx, int fd);
-struct sinkfd *find_sinkfd_in_apisink(struct apisink *sink, int fd);
-struct sinkfd *find_sinkfd_by_l_nodeid(struct apix *ctx, u32 nodeid);
-struct sinkfd *find_sinkfd_by_r_nodeid(struct apix *ctx, u32 nodeid);
-struct sinkfd *find_sinkfd_by_nodeid(struct apix *ctx, u32 nodeid);
+struct stream *find_stream_in_apix(struct apix *ctx, int fd);
+struct stream *find_stream_in_apisink(struct apisink *sink, int fd);
+struct stream *find_stream_by_l_nodeid(struct apix *ctx, u32 nodeid);
+struct stream *find_stream_by_r_nodeid(struct apix *ctx, u32 nodeid);
+struct stream *find_stream_by_nodeid(struct apix *ctx, u32 nodeid);
 
 /**
  * apimsg

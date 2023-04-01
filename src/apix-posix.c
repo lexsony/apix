@@ -37,12 +37,12 @@ struct posix_sink {
 
 static int __fd_close(struct apisink *sink, int fd)
 {
-    struct sinkfd *sinkfd = find_sinkfd_in_apisink(sink, fd);
-    if (sinkfd == NULL)
+    struct stream *stream = find_stream_in_apisink(sink, fd);
+    if (stream == NULL)
         return -1;
 
-    close(sinkfd->fd);
-    sinkfd_free(sinkfd);
+    close(stream->fd);
+    stream_free(stream);
 
     struct posix_sink *unix_c_sink = container_of(sink, struct posix_sink, sink);
     FD_CLR(fd, &unix_c_sink->fds);
@@ -78,10 +78,10 @@ static int unix_s_open(struct apisink *sink, const char *addr)
         return -1;
     }
 
-    struct sinkfd *sinkfd = sinkfd_new(sink);
-    sinkfd->fd = fd;
-    sinkfd->type = SINKFD_T_LISTEN;
-    snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
+    struct stream *stream = stream_new(sink);
+    stream->fd = fd;
+    stream->type = STREAM_T_LISTEN;
+    snprintf(stream->addr, sizeof(stream->addr), "%s", addr);
 
     struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &ps->fds);
@@ -92,12 +92,12 @@ static int unix_s_open(struct apisink *sink, const char *addr)
 
 static int unix_s_close(struct apisink *sink, int fd)
 {
-    struct sinkfd *sinkfd = find_sinkfd_in_apisink(sink, fd);
-    if (sinkfd == NULL)
+    struct stream *stream = find_stream_in_apisink(sink, fd);
+    if (stream == NULL)
         return -1;
 
     if (strcmp(sink->id, APISINK_UNIX_S) == 0)
-        unlink(sinkfd->addr);
+        unlink(stream->addr);
 
     __fd_close(sink, fd);
     return 0;
@@ -107,23 +107,23 @@ static int unix_s_accept(struct apisink *sink, int fd)
 {
     struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
 
-    struct sinkfd *sinkfd = find_sinkfd_in_apisink(sink, fd);
-    if (sinkfd == NULL)
+    struct stream *stream = find_stream_in_apisink(sink, fd);
+    if (stream == NULL)
         return -1;
 
-    int newfd = accept(sinkfd->fd, NULL, NULL);
+    int newfd = accept(stream->fd, NULL, NULL);
     if (newfd == -1) {
         LOG_ERROR("[%p:accept] #%d %s(%d)",
-                  sink->ctx, sinkfd->fd, strerror(errno), errno);
+                  sink->ctx, stream->fd, strerror(errno), errno);
         return -1;
     }
-    LOG_DEBUG("[%p:accept] #%d accept #%d", sink->ctx, sinkfd->fd, newfd);
+    LOG_DEBUG("[%p:accept] #%d accept #%d", sink->ctx, stream->fd, newfd);
 
-    struct sinkfd *new_sinkfd = sinkfd_new(sink);
-    new_sinkfd->fd = newfd;
-    new_sinkfd->father = sinkfd;
-    new_sinkfd->type = SINKFD_T_ACCEPT;
-    new_sinkfd->srrp_mode = sinkfd->srrp_mode;
+    struct stream *new_stream = stream_new(sink);
+    new_stream->fd = newfd;
+    new_stream->father = stream;
+    new_stream->type = STREAM_T_ACCEPT;
+    new_stream->srrp_mode = stream->srrp_mode;
 
     if (ps->nfds < newfd + 1)
         ps->nfds = newfd + 1;
@@ -160,8 +160,8 @@ static int unix_s_poll(struct apisink *sink)
         return -1;
     }
 
-    struct sinkfd *pos, *n;
-    list_for_each_entry_safe(pos, n, &sink->sinkfds, ln_sink) {
+    struct stream *pos, *n;
+    list_for_each_entry_safe(pos, n, &sink->streams, ln_sink) {
         if (nr_recv_fds == 0) break;
 
         if (!FD_ISSET(pos->fd, &recvfds))
@@ -170,7 +170,7 @@ static int unix_s_poll(struct apisink *sink)
         nr_recv_fds--;
 
         // accept
-        if (pos->type == SINKFD_T_LISTEN) {
+        if (pos->type == STREAM_T_LISTEN) {
             pos->ev.bits.accept = 1;
         } else /* recv */ {
             char buf[1024] = {0};
@@ -226,9 +226,9 @@ static int unix_c_open(struct apisink *sink, const char *addr)
         return -1;
     }
 
-    struct sinkfd *sinkfd = sinkfd_new(sink);
-    sinkfd->fd = fd;
-    snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
+    struct stream *stream = stream_new(sink);
+    stream->fd = fd;
+    snprintf(stream->addr, sizeof(stream->addr), "%s", addr);
 
     struct posix_sink *ps = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &ps->fds);
@@ -265,8 +265,8 @@ static int unix_c_poll(struct apisink *sink)
         return -1;
     }
 
-    struct sinkfd *pos, *n;
-    list_for_each_entry_safe(pos, n, &sink->sinkfds, ln_sink) {
+    struct stream *pos, *n;
+    list_for_each_entry_safe(pos, n, &sink->streams, ln_sink) {
         if (nr_recv_fds == 0) break;
 
         if (!FD_ISSET(pos->fd, &recvfds))
@@ -342,10 +342,10 @@ static int tcp_s_open(struct apisink *sink, const char *addr)
         return -1;
     }
 
-    struct sinkfd *sinkfd = sinkfd_new(sink);
-    sinkfd->fd = fd;
-    sinkfd->type = SINKFD_T_LISTEN;
-    snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
+    struct stream *stream = stream_new(sink);
+    stream->fd = fd;
+    stream->type = STREAM_T_LISTEN;
+    snprintf(stream->addr, sizeof(stream->addr), "%s", addr);
 
     struct posix_sink *tcp_s_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &tcp_s_sink->fds);
@@ -395,10 +395,10 @@ static int tcp_c_open(struct apisink *sink, const char *addr)
         return -1;
     }
 
-    struct sinkfd *sinkfd = sinkfd_new(sink);
-    sinkfd->fd = fd;
-    sinkfd->type = SINKFD_T_CONNECT;
-    snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
+    struct stream *stream = stream_new(sink);
+    stream->fd = fd;
+    stream->type = STREAM_T_CONNECT;
+    snprintf(stream->addr, sizeof(stream->addr), "%s", addr);
 
     struct posix_sink *tcp_c_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &tcp_c_sink->fds);
@@ -428,9 +428,9 @@ static int com_open(struct apisink *sink, const char *addr)
     int fd = open(addr, O_RDWR | O_NOCTTY | O_NDELAY);
     if (fd == -1) return -1;
 
-    struct sinkfd *sinkfd = sinkfd_new(sink);
-    sinkfd->fd = fd;
-    snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
+    struct stream *stream = stream_new(sink);
+    stream->fd = fd;
+    snprintf(stream->addr, sizeof(stream->addr), "%s", addr);
 
     struct posix_sink *com_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &com_sink->fds);
@@ -527,8 +527,8 @@ static int com_poll(struct apisink *sink)
         return -1;
     }
 
-    struct sinkfd *pos, *n;
-    list_for_each_entry_safe(pos, n, &sink->sinkfds, ln_sink) {
+    struct stream *pos, *n;
+    list_for_each_entry_safe(pos, n, &sink->streams, ln_sink) {
         if (nr_recv_fds == 0) break;
 
         if (!FD_ISSET(pos->fd, &recvfds))
@@ -589,10 +589,10 @@ static int can_open(struct apisink *sink, const char *addr)
         return -1;
     }
 
-    struct sinkfd *sinkfd = sinkfd_new(sink);
-    sinkfd->fd = fd;
-    sinkfd->type = SINKFD_T_CONNECT;
-    snprintf(sinkfd->addr, sizeof(sinkfd->addr), "%s", addr);
+    struct stream *stream = stream_new(sink);
+    stream->fd = fd;
+    stream->type = STREAM_T_CONNECT;
+    snprintf(stream->addr, sizeof(stream->addr), "%s", addr);
 
     struct posix_sink *tcp_c_sink = container_of(sink, struct posix_sink, sink);
     FD_SET(fd, &tcp_c_sink->fds);
@@ -629,8 +629,8 @@ static int can_poll(struct apisink *sink)
         return -1;
     }
 
-    struct sinkfd *pos, *n;
-    list_for_each_entry_safe(pos, n, &sink->sinkfds, ln_sink) {
+    struct stream *pos, *n;
+    list_for_each_entry_safe(pos, n, &sink->streams, ln_sink) {
         if (nr_recv_fds == 0) break;
 
         if (!FD_ISSET(pos->fd, &recvfds))
