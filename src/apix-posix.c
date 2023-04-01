@@ -177,11 +177,9 @@ static int unix_s_poll(struct sink *sink)
             int nread = recv(pos->fd, buf, sizeof(buf), 0);
             if (nread == -1) {
                 LOG_DEBUG("[%p:recv] #%d %s(%d)", sink->ctx, pos->fd, strerror(errno), errno);
-                FD_CLR(pos->fd, &ps->fds);
                 sink->ops.close(sink, pos->fd);
             } else if (nread == 0) {
                 LOG_DEBUG("[%p:recv] #%d finished", sink->ctx, pos->fd);
-                FD_CLR(pos->fd, &ps->fds);
                 sink->ops.close(sink, pos->fd);
             } else {
                 LOG_TRACE("[%p:recv] #%d packet in", sink->ctx, pos->fd);
@@ -278,11 +276,9 @@ static int unix_c_poll(struct sink *sink)
         int nread = recv(pos->fd, buf, sizeof(buf), 0);
         if (nread == -1) {
             LOG_DEBUG("[%p:recv] #%d %s(%d)", sink->ctx, pos->fd, strerror(errno), errno);
-            FD_CLR(pos->fd, &ps->fds);
             sink->ops.close(sink, pos->fd);
         } else if (nread == 0) {
             LOG_DEBUG("[%p:recv] #%d finished", sink->ctx, pos->fd);
-            FD_CLR(pos->fd, &ps->fds);
             sink->ops.close(sink, pos->fd);
         } else {
             LOG_TRACE("[%p:recv] #%d packet in", sink->ctx, pos->fd);

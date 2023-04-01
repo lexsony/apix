@@ -543,9 +543,6 @@ int apix_waiting(struct apix *ctx, u64 usec)
     struct stream *pos;
     list_for_each_entry(pos, &ctx->streams, ln_ctx) {
         if (pos->ev.byte != 0) {
-            if (pos->ev.bits.close) {
-                pos->state = STREAM_ST_FINISHED;
-            }
             return pos->fd;
         }
     }
@@ -581,6 +578,7 @@ u8 apix_next_event(struct apix *ctx, int fd)
 
     if (stream->ev.bits.close) {
         stream->ev.bits.close = 0;
+        stream->state = STREAM_ST_FINISHED;
         return AEC_CLOSE;
     }
 
