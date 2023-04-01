@@ -21,7 +21,6 @@
 #include <apix/atbuf.h>
 #include "opt.h"
 #include "cli.h"
-#include "srrp.h"
 
 #define KBYTES 1024 * 1024
 #define FD_SIZE 4096

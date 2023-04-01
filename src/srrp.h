@@ -1,6 +1,7 @@
 #ifndef __SRRP_H // simple request response protocol
 #define __SRRP_H
 
+#include <string.h>
 #include "types.h"
 
 #ifdef __cplusplus

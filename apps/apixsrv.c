@@ -9,7 +9,6 @@
 
 #include <apix/apix.h>
 #include <apix/log.h>
-#include "apix.h"
 #include "opt.h"
 
 static int exit_flag;
@@ -68,10 +67,11 @@ static void *apix_thread(void *arg)
         case AEC_CLOSE:
             LOG_INFO("#%d close", apix_get_raw_fd(stream));
             break;
-        case AEC_ACCEPT:
-            apix_accept(stream);
-            LOG_INFO("#%d accept", apix_get_raw_fd(stream));
+        case AEC_ACCEPT: {
+            struct stream *new_stream = apix_accept(stream);
+            LOG_INFO("#%d accept #%d", apix_get_raw_fd(stream), apix_get_raw_fd(new_stream));
             break;
+        }
         case AEC_SRRP_PACKET: {
             struct srrp_packet *pac = apix_wait_srrp_packet(stream);
             if (stream == server_unix || stream == server_tcp) {
