@@ -532,6 +532,9 @@ static int apix_poll(struct apix *ctx)
 
 static void apix_idle(struct apix *ctx)
 {
+    if (ctx->idle_usec_max == 0)
+        return;
+
     if (ctx->poll_cnt == 0) {
         usleep(ctx->idle_usec);
         if (ctx->idle_usec != ctx->idle_usec_max) {

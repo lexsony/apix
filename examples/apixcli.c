@@ -278,6 +278,7 @@ static void *apix_thread(void *arg)
 {
     ctx = apix_new();
     apix_enable_posix(ctx);
+    apix_set_wait_timeout(ctx, 100 * 1000);
 
     for (;;) {
         if (exit_flag == 1) break;

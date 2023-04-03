@@ -38,12 +38,12 @@ struct posix_sink {
 static int __fd_close(struct stream *stream)
 {
     close(stream->fd);
-    stream_free(stream);
 
     struct posix_sink *unix_c_sink =
         container_of(stream->sink, struct posix_sink, sink);
     FD_CLR(stream->fd, &unix_c_sink->fds);
 
+    stream_free(stream);
     return 0;
 }
 
