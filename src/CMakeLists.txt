@@ -11,7 +11,7 @@ endif ()
 if (BUILD_SHARED)
     add_library(apix SHARED ${SRC} ${SRC_POSIX})
     set_target_properties(apix PROPERTIES PUBLIC_HEADER "${INC}")
-    set_target_properties(apix PROPERTIES VERSION 0.0.1 SOVERSION 0)
+    set_target_properties(apix PROPERTIES VERSION 0.2.0 SOVERSION 0)
     set(TARGET_SHARED apix)
 endif ()
 
