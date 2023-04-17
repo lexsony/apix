@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
-#include "unused.h"
 #include "crc16.h"
 #include "str.h"
 #include "vec.h"
@@ -162,29 +161,31 @@ struct srrp_packet *srrp_cat(
 u32 srrp_next_packet_offset(const u8 *buf, u32 len)
 {
     for (u32 i = 0; i < len; i++) {
-        if (isdigit(buf[i + 1])) {
-            if (buf[i] == SRRP_CTRL_LEADER)
+        if (buf[i] == SRRP_CTRL_LEADER ||
+            buf[i] == SRRP_REQUEST_LEADER ||
+            buf[i] == SRRP_RESPONSE_LEADER ||
+            buf[i] == SRRP_SUBSCRIBE_LEADER ||
+            buf[i] == SRRP_UNSUBSCRIBE_LEADER ||
+            buf[i] == SRRP_PUBLISH_LEADER) {
+            if (i + 3 < len) {
+                if (buf[i+2] - '0' == SRRP_VERSION_MAJOR &&
+                    buf[i+3] - '0' == SRRP_VERSION_MINOR) {
+                    return i;
+                }
+            } else {
                 return i;
-            else if (buf[i] == SRRP_REQUEST_LEADER)
-                return i;
-            else if (buf[i] == SRRP_RESPONSE_LEADER)
-                return i;
-            else if (buf[i] == SRRP_SUBSCRIBE_LEADER ||
-                     buf[i] == SRRP_UNSUBSCRIBE_LEADER ||
-                     buf[i] == SRRP_PUBLISH_LEADER)
-                return i;
+            }
         }
     }
-
     return len;
 }
 
 struct srrp_packet *srrp_parse(const u8 *buf, u32 len)
 {
-    char leader;
-    u8 fin;
-    u16 ver, packet_len;
-    u32 payload_len, srcid, dstid;
+    char leader = 0;
+    u8 fin = 0;
+    u16 ver = 0, packet_len = 0;
+    u32 payload_len = 0, srcid = 0, dstid = 0;
     char anchor[SRRP_ANCHOR_MAX] = {0};
 
     leader = buf[0];
@@ -192,14 +193,16 @@ struct srrp_packet *srrp_parse(const u8 *buf, u32 len)
     if (leader == SRRP_CTRL_LEADER ||
         leader == SRRP_REQUEST_LEADER ||
         leader == SRRP_RESPONSE_LEADER) {
-        if (sscanf((char *)buf + 1, "%c%hx#%hx#%x#%x#%x:%[^?]",
+        // 1024 means SRRP_ANCHOR_MAX
+        if (sscanf((char *)buf + 1, "%c%hx#%hx#%x#%x#%x:%1024[^?]",
                    &fin, &ver, &packet_len, &payload_len,
                    &srcid, &dstid, anchor) != 7)
             return NULL;
     } else if (leader == SRRP_SUBSCRIBE_LEADER ||
                leader == SRRP_UNSUBSCRIBE_LEADER ||
                leader == SRRP_PUBLISH_LEADER) {
-        if (sscanf((char *)buf + 1, "%c%hx#%hx#%x:%[^?]",
+        // 1024 means SRRP_ANCHOR_MAX
+        if (sscanf((char *)buf + 1, "%c%hx#%hx#%x:%1024[^?]",
                    &fin, &ver, &packet_len, &payload_len, anchor) != 5)
             return NULL;
     } else {

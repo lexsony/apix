@@ -94,17 +94,17 @@ void vpop(vec_t *self, /* out */ void *value)
 {
     assert(self->offset + self->size <= self->cap);
     assert(self->size > 0);
-    memcpy(value, vat(self, self->offset), self->type_size);
+    memcpy(value, vat(self, self->size - 1), self->type_size);
     self->size -= 1;
-    self->offset += 1;
 }
 
-void vpop_back(vec_t *self, /* out */ void *value)
+void vpop_front(vec_t *self, /* out */ void *value)
 {
     assert(self->offset + self->size <= self->cap);
     assert(self->size > 0);
-    memcpy(value, vat(self, self->offset + self->size - 1), self->type_size);
+    memcpy(value, vat(self, 0), self->type_size);
     self->size -= 1;
+    self->offset += 1;
 }
 
 void vpack(vec_t *self, const void *value, size_t cnt)

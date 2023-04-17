@@ -31,7 +31,7 @@ void vpush(vec_t *self, const void *value);
 void vpop(vec_t *self, /* out */ void *value);
 
 //void vpush_front(vec_t *self, const void *value);
-void vpop_back(vec_t *self, /* out */ void *value);
+void vpop_front(vec_t *self, /* out */ void *value);
 
 void vpack(vec_t *self, const void *value, size_t cnt);
 void vdump(vec_t *self, /* out */ void *value, size_t cnt);
