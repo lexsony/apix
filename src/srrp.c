@@ -238,10 +238,12 @@ struct srrp_packet *srrp_parse(const u8 *buf, u32 len)
 
     pac->anchor = str_new(anchor);
     assert(pac->anchor);
-    if (pac->payload_len == 0)
+    if (pac->payload_len == 0) {
         pac->payload = vraw(pac->raw) + strlen(vraw(pac->raw));
-    else
-        pac->payload = (u8 *)strstr(vraw(pac->raw), "?") + 1;
+    } else {
+        pac->payload = (u8 *)strstr(vraw(pac->raw), "?");
+        if (pac->payload) pac->payload += 1;
+    }
 
     pac->crc16 = crc;
 #ifdef DEBUG_SRRP
@@ -355,10 +357,12 @@ struct srrp_packet *srrp_new(
 
     pac->anchor = str_new(anchor);
     assert(pac->anchor);
-    if (pac->payload_len == 0)
+    if (pac->payload_len == 0) {
         pac->payload = vraw(pac->raw) + strlen(vraw(pac->raw));
-    else
-        pac->payload = (u8 *)strstr(vraw(pac->raw), "?") + 1;
+    } else {
+        pac->payload = (u8 *)strstr(vraw(pac->raw), "?");
+        if (pac->payload) pac->payload += 1;
+    }
 
     sscanf(vraw(v) + vsize(v) - CRC_SIZE, "%4hx", &pac->crc16);
 
