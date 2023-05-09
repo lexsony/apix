@@ -54,11 +54,11 @@ extern "C" {
 
 #define SRRP_PACKET_MAX 65535
 #define SRRP_DST_ALIAS_MAX 64
+#define SRRP_ID_MAX 256
 #define SRRP_ANCHOR_MAX 1024
 
 #define SRRP_CTRL_SYNC "/sync"
 #define SRRP_CTRL_NODEID_DUP "/sync/nodeid/dup"
-#define SRRP_CTRL_NODEID_ZERO "/sync/nodeid/zero"
 
 struct srrp_packet;
 
@@ -67,8 +67,8 @@ u8 srrp_get_fin(const struct srrp_packet *pac);
 u16 srrp_get_ver(const struct srrp_packet *pac);
 u16 srrp_get_packet_len(const struct srrp_packet *pac);
 u32 srrp_get_payload_len(const struct srrp_packet *pac);
-u32 srrp_get_srcid(const struct srrp_packet *pac);
-u32 srrp_get_dstid(const struct srrp_packet *pac);
+const char *srrp_get_srcid(const struct srrp_packet *pac);
+const char *srrp_get_dstid(const struct srrp_packet *pac);
 const char *srrp_get_anchor(const struct srrp_packet *pac);
 const u8 *srrp_get_payload(const struct srrp_packet *pac);
 u16 srrp_get_crc16(const struct srrp_packet *pac);
@@ -116,9 +116,9 @@ struct srrp_packet *srrp_parse(const u8 *buf, u32 len);
  * srrp_new
  * - create new srrp packet
  */
-struct srrp_packet *
-srrp_new(char leader, u8 fin, u32 srcid, u32 dstid,
-         const char *anchor, const u8 *payload, u32 payload_len);
+struct srrp_packet *srrp_new(
+    char leader, u8 fin, const char *srcid, const char *dstid,
+    const char *anchor, const u8 *payload, u32 payload_len);
 
 /**
  * srrp_new_ctrl

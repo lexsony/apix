@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
-    apix_upgrade_to_srrp(stream, 0x10086);
+    apix_upgrade_to_srrp(stream, "10086");
 
     for (;;) {
         struct stream *stream = apix_wait_stream(ctx);

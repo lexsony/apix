@@ -41,7 +41,7 @@ static void *apix_thread(void *arg)
         LOG_ERROR("open unix socket at %s failed!", opt_string(opt));
         exit(-1);
     }
-    apix_upgrade_to_srrp(server_unix, 0x1);
+    apix_upgrade_to_srrp(server_unix, "1");
     LOG_INFO("open unix socket #%d at %s", apix_get_raw_fd(server_unix), opt_string(opt));
 
     opt = find_opt("tcp", opttab);
@@ -51,7 +51,7 @@ static void *apix_thread(void *arg)
         LOG_ERROR("open tcp socket at %s failed!", opt_string(opt));
         exit(-1);
     }
-    apix_upgrade_to_srrp(server_tcp, 0x2);
+    apix_upgrade_to_srrp(server_tcp, "2");
     LOG_INFO("open tcp socket #%d at %s", apix_get_raw_fd(server_tcp), opt_string(opt));
 
     for (;;) {

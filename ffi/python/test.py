@@ -8,7 +8,7 @@ ctx.enable_posix()
 ctx.set_wait_timeout(0)
 
 stream = ctx.open_unix_client("/tmp/apix")
-pac = srrp.srrp_new_ctrl(0xff01, "/sync", "")
+pac = srrp.srrp_new_ctrl("ff01", "/sync", "")
 stream.send(pac.raw())
 
 while run_flag:

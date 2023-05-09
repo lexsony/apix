@@ -101,9 +101,10 @@ impl ApixStream {
         }
     }
 
-    pub fn upgrade_to_srrp(&self, nodeid: u32) {
+    pub fn upgrade_to_srrp(&self, nodeid: &str) {
+        let nodeid = std::ffi::CString::new(nodeid).unwrap();
         unsafe {
-            apix_sys::apix_upgrade_to_srrp(self.stream, nodeid);
+            apix_sys::apix_upgrade_to_srrp(self.stream, nodeid.as_ptr() as *const i8);
         }
     }
 
@@ -223,8 +224,8 @@ pub struct SrrpPacket {
     pub ver: u16,
     pub packet_len: u16,
     pub payload_len: u32,
-    pub srcid: u32,
-    pub dstid: u32,
+    pub srcid: String,
+    pub dstid: String,
     pub anchor: String,
     pub payload: String,
     pub crc16: u16,
@@ -249,6 +250,8 @@ impl Srrp {
     fn from_raw_packet(pac: *mut apix_sys::srrp_packet) -> SrrpPacket {
         unsafe {
             let packet_len = apix_sys::srrp_get_packet_len(pac);
+            let srcid = apix_sys::srrp_get_srcid(pac);
+            let dstid = apix_sys::srrp_get_dstid(pac);
             let anchor = apix_sys::srrp_get_anchor(pac);
             let payload = apix_sys::srrp_get_payload(pac);
             let raw = apix_sys::srrp_get_raw(pac);
@@ -258,8 +261,8 @@ impl Srrp {
                 ver: apix_sys::srrp_get_ver(pac),
                 packet_len: packet_len,
                 payload_len: apix_sys::srrp_get_payload_len(pac),
-                srcid: apix_sys::srrp_get_srcid(pac),
-                dstid: apix_sys::srrp_get_dstid(pac),
+                srcid: std::ffi::CStr::from_ptr(srcid).to_str().unwrap().to_owned(),
+                dstid: std::ffi::CStr::from_ptr(dstid).to_str().unwrap().to_owned(),
                 anchor: std::ffi::CStr::from_ptr(anchor).to_str().unwrap().to_owned(),
                 payload: match payload.is_null() {
                     true => String::from(""),
@@ -298,12 +301,16 @@ impl Srrp {
         }
     }
 
-    pub fn new(leader: char, fin: u8, srcid: u32, dstid: u32, anchor: &str, payload: &str)
+    pub fn new(leader: char, fin: u8, srcid: &str, dstid: &str, anchor: &str, payload: &str)
                -> Option<SrrpPacket> {
         unsafe {
+            let srcid = std::ffi::CString::new(srcid).unwrap();
+            let dstid = std::ffi::CString::new(dstid).unwrap();
             let anchor = std::ffi::CString::new(anchor).unwrap();
             let pac = apix_sys::srrp_new(
-                leader as i8, fin, srcid, dstid,
+                leader as i8, fin,
+                srcid.as_ptr() as *const i8,
+                dstid.as_ptr() as *const i8,
                 anchor.as_ptr() as *const i8,
                 payload.as_ptr() as *const u8,
                 payload.len() as u32,
@@ -318,27 +325,27 @@ impl Srrp {
         }
     }
 
-    pub fn new_ctrl(srcid: u32, anchor: &str, payload: &str) -> Option<SrrpPacket> {
-        return Self::new('=', 1, srcid, 0, anchor, payload);
+    pub fn new_ctrl(srcid: &str, anchor: &str, payload: &str) -> Option<SrrpPacket> {
+        return Self::new('=', 1, srcid, "", anchor, payload);
     }
 
-    pub fn new_request(srcid: u32, dstid: u32, anchor: &str, payload: &str) -> Option<SrrpPacket> {
+    pub fn new_request(srcid: &str, dstid: &str, anchor: &str, payload: &str) -> Option<SrrpPacket> {
         return Self::new('>', 1, srcid, dstid, anchor, payload);
     }
 
-    pub fn new_response(srcid: u32, dstid: u32, anchor: &str, payload: &str) -> Option<SrrpPacket> {
+    pub fn new_response(srcid: &str, dstid: &str, anchor: &str, payload: &str) -> Option<SrrpPacket> {
         return Self::new('<', 1, srcid, dstid, anchor, payload);
     }
 
     pub fn new_subscribe(anchor: &str, payload: &str) -> Option<SrrpPacket> {
-        return Self::new('+', 1, 0, 0, anchor, payload);
+        return Self::new('+', 1, "", "", anchor, payload);
     }
 
     pub fn new_unsubscribe(anchor: &str, payload: &str) -> Option<SrrpPacket> {
-        return Self::new('-', 1, 0, 0, anchor, payload);
+        return Self::new('-', 1, "", "", anchor, payload);
     }
 
     pub fn new_publish(anchor: &str, payload: &str) -> Option<SrrpPacket> {
-        return Self::new('@', 1, 0, 0, anchor, payload);
+        return Self::new('@', 1, "", "", anchor, payload);
     }
 }

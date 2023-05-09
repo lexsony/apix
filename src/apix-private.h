@@ -9,6 +9,7 @@
 #include "types.h"
 #include "list.h"
 #include "vec.h"
+#include "str.h"
 #include "srrp.h"
 
 #define SINK_ID_SIZE 64
@@ -117,8 +118,8 @@ struct stream {
 
     // only for srrp
     int srrp_mode;
-    u32 l_nodeid; /* local nodeid */
-    u32 r_nodeid; /* remote nodeid */
+    str_t *l_nodeid; /* local nodeid */
+    str_t *r_nodeid; /* remote nodeid */
     vec_p_t *sub_topics;
     struct srrp_packet *rxpac_unfin;
     struct list_head msgs;
@@ -134,9 +135,9 @@ void stream_free(struct stream *stream);
 
 struct stream *find_stream_in_apix(struct apix *ctx, int fd);
 struct stream *find_stream_in_sink(struct sink *sink, int fd);
-struct stream *find_stream_by_l_nodeid(struct apix *ctx, u32 nodeid);
-struct stream *find_stream_by_r_nodeid(struct apix *ctx, u32 nodeid);
-struct stream *find_stream_by_nodeid(struct apix *ctx, u32 nodeid);
+struct stream *find_stream_by_l_nodeid(struct apix *ctx, const char *nodeid);
+struct stream *find_stream_by_r_nodeid(struct apix *ctx, const char *nodeid);
+struct stream *find_stream_by_nodeid(struct apix *ctx, const char *nodeid);
 
 /**
  * message

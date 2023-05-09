@@ -69,8 +69,8 @@ static void parse_packet(struct stream *stream)
             assert(srrp_get_fin(stream->rxpac_unfin) == SRRP_FIN_0);
             if (srrp_get_leader(pac) != srrp_get_leader(stream->rxpac_unfin) ||
                 srrp_get_ver(pac) != srrp_get_ver(stream->rxpac_unfin) ||
-                srrp_get_srcid(pac) != srrp_get_srcid(stream->rxpac_unfin) ||
-                srrp_get_dstid(pac) != srrp_get_dstid(stream->rxpac_unfin) ||
+                strcmp(srrp_get_srcid(pac), srrp_get_srcid(stream->rxpac_unfin)) != 0 ||
+                strcmp(srrp_get_dstid(pac), srrp_get_dstid(stream->rxpac_unfin)) != 0 ||
                 strcmp(srrp_get_anchor(pac), srrp_get_anchor(stream->rxpac_unfin)) != 0) {
                 // drop pre pac
                 srrp_free(stream->rxpac_unfin);
@@ -125,7 +125,7 @@ handle_ctrl(struct message *am)
 {
     assert(am->stream->type != STREAM_T_LISTEN);
 
-    u32 nodeid = 0;
+    str_t *nodeid = NULL;
     if (am->stream->type == STREAM_T_ACCEPT) {
         assert(am->stream->father);
         nodeid = am->stream->father->l_nodeid;
@@ -133,18 +133,10 @@ handle_ctrl(struct message *am)
         nodeid = am->stream->l_nodeid;
     }
 
-    if (srrp_get_srcid(am->pac) == 0) {
-        struct srrp_packet *pac = srrp_new_ctrl(nodeid, SRRP_CTRL_NODEID_ZERO, "");
-        apix_srrp_send(am->stream, pac);
-        srrp_free(pac);
-        am->stream->state = STREAM_ST_NODEID_ZERO;
-        goto out;
-    }
-
     struct stream *tmp = find_stream_by_nodeid(
         am->stream->ctx, srrp_get_srcid(am->pac));
     if (tmp != NULL && tmp != am->stream) {
-        struct srrp_packet *pac = srrp_new_ctrl(nodeid, SRRP_CTRL_NODEID_DUP, "");
+        struct srrp_packet *pac = srrp_new_ctrl(sget(nodeid), SRRP_CTRL_NODEID_DUP, "");
         apix_srrp_send(am->stream, pac);
         srrp_free(pac);
         am->stream->state = STREAM_ST_NODEID_DUP;
@@ -152,7 +144,8 @@ handle_ctrl(struct message *am)
     }
 
     if (strcmp(srrp_get_anchor(am->pac), SRRP_CTRL_SYNC) == 0) {
-        am->stream->r_nodeid = srrp_get_srcid(am->pac);
+        str_free(am->stream->r_nodeid);
+        am->stream->r_nodeid = str_new(srrp_get_srcid(am->pac));
         am->stream->state = STREAM_ST_NODEID_NORMAL;
         am->stream->ts_sync_in = time(0);
         goto out;
@@ -161,12 +154,6 @@ handle_ctrl(struct message *am)
     if (strcmp(srrp_get_anchor(am->pac), SRRP_CTRL_NODEID_DUP) == 0) {
         LOG_WARN("[%p:handle_ctrl] recv nodeid dup:%s",
                  am->stream->ctx, srrp_get_raw(am->pac));
-        goto out;
-    }
-
-    if (strcmp(srrp_get_anchor(am->pac), SRRP_CTRL_NODEID_ZERO) == 0) {
-        LOG_ERROR("[%p:handle_ctrl] recv nodeid zero:%s",
-                  am->stream->ctx, srrp_get_raw(am->pac));
         goto out;
     }
 
@@ -354,14 +341,14 @@ static void sync_nodeid(struct stream *stream)
 
     LOG_TRACE("[%p:sync_nodeid] #%d sync", stream->ctx, stream->fd);
 
-    u32 nodeid = 0;
+    str_t *nodeid = NULL;
     if (stream->type == STREAM_T_ACCEPT) {
         assert(stream->father);
         nodeid = stream->father->l_nodeid;
     } else {
         nodeid = stream->l_nodeid;
     }
-    struct srrp_packet *pac = srrp_new_ctrl(nodeid, SRRP_CTRL_SYNC, "");
+    struct srrp_packet *pac = srrp_new_ctrl(sget(nodeid), SRRP_CTRL_SYNC, "");
     apix_send(stream, srrp_get_raw(pac), srrp_get_packet_len(pac));
     srrp_free(pac);
     stream->ts_sync_out = time(0);
@@ -622,11 +609,11 @@ struct srrp_packet *apix_wait_srrp_packet(struct stream *stream)
     return NULL;
 }
 
-int apix_upgrade_to_srrp(struct stream *stream, u32 nodeid)
+int apix_upgrade_to_srrp(struct stream *stream, const char *nodeid)
 {
     stream->srrp_mode = 1;
-    assert(nodeid != 0);
-    stream->l_nodeid = nodeid;
+    assert(nodeid != NULL);
+    stream->l_nodeid = str_new(nodeid);
     return 0;
 }
 
@@ -770,8 +757,8 @@ struct stream *stream_new(struct sink *sink)
     stream->ev.bits.open = 1;
 
     stream->srrp_mode = 0;
-    stream->l_nodeid = 0;
-    stream->r_nodeid = 0;
+    stream->l_nodeid = str_new("");
+    stream->r_nodeid = str_new("");
     stream->sub_topics = vec_new(sizeof(void *), 3);
     stream->rxpac_unfin = NULL;
     INIT_LIST_HEAD(&stream->msgs);
@@ -797,6 +784,9 @@ void stream_free(struct stream *stream)
 
     vec_free(stream->txbuf);
     vec_free(stream->rxbuf);
+
+    str_free(stream->l_nodeid);
+    str_free(stream->r_nodeid);
 
     while (vsize(stream->sub_topics)) {
         str_t *tmp = 0;
@@ -836,34 +826,35 @@ struct stream *find_stream_in_sink(struct sink *sink, int fd)
     return NULL;
 }
 
-struct stream *find_stream_by_l_nodeid(struct apix *ctx, u32 nodeid)
+struct stream *find_stream_by_l_nodeid(struct apix *ctx, const char *nodeid)
 {
-    if (nodeid == 0) return NULL;
+    if (nodeid == NULL) return NULL;
     struct stream *pos, *n;
     list_for_each_entry_safe(pos, n, &ctx->streams, ln_ctx) {
-        if (pos->l_nodeid == nodeid)
+        if (strcmp(sget(pos->l_nodeid), nodeid) == 0)
             return pos;
     }
     return NULL;
 }
 
-struct stream *find_stream_by_r_nodeid(struct apix *ctx, u32 nodeid)
+struct stream *find_stream_by_r_nodeid(struct apix *ctx, const char *nodeid)
 {
     if (nodeid == 0) return NULL;
     struct stream *pos, *n;
     list_for_each_entry_safe(pos, n, &ctx->streams, ln_ctx) {
-        if (pos->r_nodeid == nodeid)
+        if (strcmp(sget(pos->r_nodeid), nodeid) == 0)
             return pos;
     }
     return NULL;
 }
 
-struct stream *find_stream_by_nodeid(struct apix *ctx, u32 nodeid)
+struct stream *find_stream_by_nodeid(struct apix *ctx, const char *nodeid)
 {
     if (nodeid == 0) return NULL;
     struct stream *pos, *n;
     list_for_each_entry_safe(pos, n, &ctx->streams, ln_ctx) {
-        if (pos->l_nodeid == nodeid || pos->r_nodeid == nodeid)
+        if (strcmp(sget(pos->l_nodeid), nodeid) == 0 ||
+            strcmp(sget(pos->r_nodeid), nodeid) == 0)
             return pos;
     }
     return NULL;

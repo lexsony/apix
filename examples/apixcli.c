@@ -35,7 +35,7 @@ struct fd_struct {
     atbuf_t *msg;
     char type; /* c: connect, l: listen, a: accept */
     int can_id;
-    int node_id;
+    char node_id[256];
     int srrp_mode;
 };
 
@@ -121,7 +121,7 @@ on_srrp_packet(struct stream *stream, struct srrp_packet *pac, void *priv)
 
     if (srrp_get_leader(pac) == SRRP_REQUEST_LEADER) {
         char hdr[1024];
-        snprintf(hdr, sizeof(hdr), "%d:%s", srrp_get_dstid(pac), srrp_get_anchor(pac));
+        snprintf(hdr, sizeof(hdr), "%s:%s", srrp_get_dstid(pac), srrp_get_anchor(pac));
         struct service_private *svc_priv = svcx_get_service_private(svcx, hdr);
         struct srrp_packet *resp;
         if (svc_priv) {
@@ -385,7 +385,7 @@ static void on_cmd_fds(const char *cmd)
     for (int i = 0; i < sizeof(fds) / sizeof(fds[0]); i++) {
         if (fds[i].fd == 0)
             continue;
-        printf("fd:%d, mode:%s, type:%c, addr:%s, nodeid:0x%x, srrpmode:%s\n",
+        printf("fd:%d, mode:%s, type:%c, addr:%s, nodeid:%s, srrpmode:%s\n",
                fds[i].fd, fds[i].mode, fds[i].type, fds[i].addr,
                fds[i].node_id, fds[i].srrp_mode ? "on" : "off");
     }
@@ -719,22 +719,11 @@ static void on_cmd_setid(const char *cmd)
         return;
     }
 
-    int id = 0;
-    if (strstr(cmd, "0x")) {
-        int nr = sscanf(cmd, "setid 0x%x", &id);
-        if (nr != 1) {
-            printf("param error\n");
-            return;
-        }
-    } else {
-        int nr = sscanf(cmd, "setid %d", &id);
-        if (nr != 1) {
-            printf("param error\n");
-            return;
-        }
+    int nr = sscanf(cmd, "setid %s", fds[cur_fd].node_id);
+    if (nr != 1) {
+        printf("param error\n");
+        return;
     }
-
-    fds[cur_fd].node_id = id;
 }
 
 static void on_cmd_srrpmode(const char *cmd)
@@ -774,10 +763,10 @@ static void on_cmd_srrpget(const char *cmd)
         return;
     }
 
-    int dstid = 0;
+    char dstid[256] = {0};
     char hdr[256] = {0};
     char msg[4096] = {0};
-    int nr = sscanf(cmd, "srrpget 0x%x:%[^?]?%[^\r\n]", &dstid, hdr, msg);
+    int nr = sscanf(cmd, "srrpget %[^:]:%[^?]?%[^\r\n]", dstid, hdr, msg);
     if (nr != 3) {
         printf("param error\n");
         return;
@@ -821,7 +810,7 @@ static void on_cmd_srrpadd(const char *cmd)
     struct service_private *priv = calloc(1, sizeof(*priv));
     priv->fd = cur_fd;
     strcpy(priv->msg, msg);
-    snprintf(msg, sizeof(msg), "%d:%s", fds[cur_fd].node_id, hdr);
+    snprintf(msg, sizeof(msg), "%s:%s", fds[cur_fd].node_id, hdr);
     svcx_add_service(svcx, msg, priv);
 }
 
@@ -843,7 +832,7 @@ static void on_cmd_srrpdel(const char *cmd)
     }
 
     char tmp[1024] = {0};
-    snprintf(tmp, sizeof(tmp), "%d:%s", fds[cur_fd].node_id, hdr);
+    snprintf(tmp, sizeof(tmp), "%s:%s", fds[cur_fd].node_id, hdr);
     free(svcx_get_service_private(svcx, tmp));
     svcx_del_service(svcx, tmp);
 }

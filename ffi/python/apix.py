@@ -96,9 +96,9 @@ class ApixStream():
 
     def upgrade_to_srrp(self, nodeid):
         func = lib.apix_upgrade_to_srrp
-        func.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        func.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
         func.restype = ctypes.c_int32
-        return func(self.stream, nodeid)
+        return func(self.stream, ctypes.cast(nodeid, ctypes.c_char_p))
 
     def srrp_forward(self, pac):
         func = lib.apix_srrp_forward

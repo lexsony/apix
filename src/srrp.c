@@ -12,10 +12,6 @@
 
 #define CRC_SIZE 5 /* <crc16>\0 */
 
-static vec_t *__srrp_new_raw(
-    char leader, u8 fin, u32 srcid, u32 dstid,
-    const char *anchor, const u8 *payload, u32 payload_len);
-
 struct srrp_packet {
     char leader;
     u8 fin;
@@ -24,8 +20,8 @@ struct srrp_packet {
     u16 packet_len;
     u32 payload_len;
 
-    u32 srcid;
-    u32 dstid;
+    str_t *srcid;
+    str_t *dstid;
 
     str_t *anchor;
     const u8 *payload;
@@ -59,14 +55,14 @@ u32 srrp_get_payload_len(const struct srrp_packet *pac)
     return pac->payload_len;
 }
 
-u32 srrp_get_srcid(const struct srrp_packet *pac)
+const char *srrp_get_srcid(const struct srrp_packet *pac)
 {
-    return pac->srcid;
+    return sget(pac->srcid);
 }
 
-u32 srrp_get_dstid(const struct srrp_packet *pac)
+const char *srrp_get_dstid(const struct srrp_packet *pac)
 {
-    return pac->dstid;
+    return sget(pac->dstid);
 }
 
 const char *srrp_get_anchor(const struct srrp_packet *pac)
@@ -110,6 +106,8 @@ void srrp_free(struct srrp_packet *pac)
     printf("srrp_free: %p\n", pac);
 #endif
 
+    str_free(pac->srcid);
+    str_free(pac->dstid);
     str_free(pac->anchor);
     vec_free(pac->raw);
 
@@ -136,9 +134,9 @@ struct srrp_packet *srrp_cat(
         return NULL;
     if (fst->ver != snd->ver)
         return NULL;
-    if (fst->srcid != snd->srcid)
+    if (strcmp(sget(fst->srcid), sget(snd->srcid)) != 0)
         return NULL;
-    if (fst->dstid != snd->dstid)
+    if (strcmp(sget(fst->dstid), sget(snd->dstid)) != 0)
         return NULL;
     if (strcmp(sget(fst->anchor), sget(snd->anchor)) != 0)
         return NULL;
@@ -150,7 +148,7 @@ struct srrp_packet *srrp_cat(
 
     struct srrp_packet *retpac = srrp_new(
         fst->leader, snd->fin,
-        fst->srcid, fst->dstid,
+        sget(fst->srcid), sget(fst->dstid),
         sget(fst->anchor),
         vraw(v), vsize(v));
 
@@ -185,7 +183,9 @@ struct srrp_packet *srrp_parse(const u8 *buf, u32 len)
     char leader = 0;
     u8 fin = 0;
     u16 ver = 0, packet_len = 0;
-    u32 payload_len = 0, srcid = 0, dstid = 0;
+    u32 payload_len = 0;
+    char srcid[SRRP_ID_MAX] = {0};
+    char dstid[SRRP_ID_MAX] = {0};
     char anchor[SRRP_ANCHOR_MAX] = {0};
 
     leader = buf[0];
@@ -194,15 +194,17 @@ struct srrp_packet *srrp_parse(const u8 *buf, u32 len)
         leader == SRRP_REQUEST_LEADER ||
         leader == SRRP_RESPONSE_LEADER) {
         // 1024 means SRRP_ANCHOR_MAX
-        if (sscanf((char *)buf + 1, "%c%hx#%hx#%x#%x#%x:%1024[^?]",
+        if (sscanf((char *)buf + 1, "%c%hx#%hx#%x#%255[^#]#%255[^:]:%1023[^?]",
                    &fin, &ver, &packet_len, &payload_len,
-                   &srcid, &dstid, anchor) != 7)
+                   srcid, dstid, anchor) != 7)
+            return NULL;
+        if (strlen(srcid) == 0 || strlen(dstid) == 0)
             return NULL;
     } else if (leader == SRRP_SUBSCRIBE_LEADER ||
                leader == SRRP_UNSUBSCRIBE_LEADER ||
                leader == SRRP_PUBLISH_LEADER) {
         // 1024 means SRRP_ANCHOR_MAX
-        if (sscanf((char *)buf + 1, "%c%hx#%hx#%x:%1024[^?]",
+        if (sscanf((char *)buf + 1, "%c%hx#%hx#%x:%1023[^?]",
                    &fin, &ver, &packet_len, &payload_len, anchor) != 5)
             return NULL;
     } else {
@@ -233,8 +235,8 @@ struct srrp_packet *srrp_parse(const u8 *buf, u32 len)
     pac->packet_len = packet_len;
     pac->payload_len = payload_len;
 
-    pac->srcid = srcid;
-    pac->dstid = dstid;
+    pac->srcid = str_new(srcid);
+    pac->dstid = str_new(dstid);
 
     pac->anchor = str_new(anchor);
     assert(pac->anchor);
@@ -253,7 +255,7 @@ struct srrp_packet *srrp_parse(const u8 *buf, u32 len)
 }
 
 static vec_t *__srrp_new_raw(
-    char leader, u8 fin, u32 srcid, u32 dstid,
+    char leader, u8 fin, const char *srcid, const char *dstid,
     const char *anchor, const u8 *payload, u32 payload_len)
 {
     char tmp[32] = {0};
@@ -289,11 +291,17 @@ static vec_t *__srrp_new_raw(
         leader == SRRP_REQUEST_LEADER ||
         leader == SRRP_RESPONSE_LEADER) {
         // srcid
-        snprintf(tmp, sizeof(tmp), "#%x", srcid);
-        vpack(v, tmp, strlen(tmp));
+        assert(srcid);
+        vpack(v, "#", 1);
+        vpack(v, srcid, strlen(srcid));
         // dstid
-        snprintf(tmp, sizeof(tmp), "#%x", dstid);
-        vpack(v, tmp, strlen(tmp));
+        vpack(v, "#", 1);
+        if (leader == SRRP_CTRL_LEADER) {
+            vpack(v, "0", 1);
+        } else {
+            assert(dstid);
+            vpack(v, dstid, strlen(dstid));
+        }
     }
 
     // anchor
@@ -336,7 +344,7 @@ static vec_t *__srrp_new_raw(
 }
 
 struct srrp_packet *srrp_new(
-    char leader, u8 fin, u32 srcid, u32 dstid,
+    char leader, u8 fin, const char *srcid, const char *dstid,
     const char *anchor, const u8 *payload, u32 payload_len)
 {
     vec_t *v = __srrp_new_raw(
@@ -352,8 +360,16 @@ struct srrp_packet *srrp_new(
     pac->packet_len = vsize(v);
     pac->payload_len = payload_len;
 
-    pac->srcid = srcid;
-    pac->dstid = dstid;
+    if (srcid) {
+        pac->srcid = str_new(srcid);
+    } else {
+        pac->srcid = str_new("");
+    }
+    if (dstid) {
+        pac->dstid = str_new(dstid);
+    } else {
+        pac->dstid = str_new("");
+    }
 
     pac->anchor = str_new(anchor);
     assert(pac->anchor);

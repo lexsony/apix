@@ -11,8 +11,8 @@ type SrrpPacket struct {
     Ver uint16
     PacketLen uint16
     PayloadLen uint32
-    Srcid uint32
-    Dstid uint32
+    Srcid string
+    Dstid string
     Anchor string
     Payload string
     Crc16 uint16
@@ -32,8 +32,8 @@ func from_raw_packet(pac *C.struct_srrp_packet) (SrrpPacket) {
         Fin: uint8(C.srrp_get_fin(pac)),
         Ver: uint16(C.srrp_get_ver(pac)),
         PayloadLen: uint32(C.srrp_get_payload_len(pac)),
-        Srcid: uint32(C.srrp_get_srcid(pac)),
-        Dstid: uint32(C.srrp_get_dstid(pac)),
+        Srcid: C.GoString(C.srrp_get_srcid(pac)),
+        Dstid: C.GoString(C.srrp_get_dstid(pac)),
         Anchor: C.GoString(C.srrp_get_anchor(pac)),
         Payload: C.GoString((*C.char)(unsafe.Pointer(C.srrp_get_payload(pac)))),
         Crc16: uint16(C.srrp_get_crc16(pac)),
@@ -59,13 +59,13 @@ func Parse(buf []byte) (SrrpPacket, error) {
     }
 }
 
-func New(leader uint8, fin uint8, srcid uint32, dstid uint32,
+func New(leader uint8, fin uint8, srcid string, dstid string,
         anchor string, payload string) (SrrpPacket, error) {
     pac := C.srrp_new(
         C.char(leader),
         C.uchar(fin),
-        C.uint(srcid),
-        C.uint(dstid),
+        C.CString(srcid),
+        C.CString(dstid),
         C.CString(anchor),
         (*C.uchar)(unsafe.Pointer(C.CString(payload))),
         C.uint(len(payload)),
@@ -80,28 +80,28 @@ func New(leader uint8, fin uint8, srcid uint32, dstid uint32,
     }
 }
 
-func NewCtrl(srcid uint32, anchor string, payload string) (SrrpPacket, error) {
-    return New('=', 1, srcid, 0, anchor, payload)
+func NewCtrl(srcid string, anchor string, payload string) (SrrpPacket, error) {
+    return New('=', 1, srcid, "", anchor, payload)
 }
 
-func NewRequest(srcid uint32, dstid uint32,
+func NewRequest(srcid string, dstid string,
     anchor string, payload string) (SrrpPacket, error) {
     return New('>', 1, srcid, dstid, anchor, payload)
 }
 
-func NewResponse(srcid uint32, dstid uint32,
+func NewResponse(srcid string, dstid string,
         anchor string, payload string) (SrrpPacket, error) {
     return New('<', 1, srcid, dstid, anchor, payload)
 }
 
 func NewSubscribe(anchor string, payload string) (SrrpPacket, error) {
-    return New('+', 1, 0, 0, anchor, payload)
+    return New('+', 1, "", "", anchor, payload)
 }
 
 func NewUnsubscribe(anchor string, payload string) (SrrpPacket, error) {
-    return New('-', 1, 0, 0, anchor, payload)
+    return New('-', 1, "", "", anchor, payload)
 }
 
 func NewPublish(anchor string, payload string) (SrrpPacket, error) {
-    return New('@', 1, 0, 0, anchor, payload)
+    return New('@', 1, "", "", anchor, payload)
 }

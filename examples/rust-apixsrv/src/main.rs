@@ -49,14 +49,14 @@ fn main() {
         Ok(x) => x,
         Err(e) => panic!("{}", e),
     };
-    server_unix.upgrade_to_srrp(0x1);
+    server_unix.upgrade_to_srrp("1");
 
     // server_tcp init
     let server_tcp = match ctx.open_tcp_server("127.0.0.1:3824") {
         Ok(x) => x,
         Err(e) => panic!("{}", e),
     };
-    server_tcp.upgrade_to_srrp(0x2);
+    server_tcp.upgrade_to_srrp("2");
 
     // signal
     ctrlc::set_handler(move || {
@@ -92,7 +92,7 @@ fn main() {
                             debug!("#{} srrp_packet: srcid:{}, dstid:{}, {}?{}",
                                 s.fd, pac.srcid, pac.dstid, pac.anchor, pac.payload);
                             let resp = apix::Srrp::new_response(
-                                pac.dstid, pac.srcid, &pac.anchor,
+                                &pac.dstid, &pac.srcid, &pac.anchor,
                                 "j:{\"err\":404,\"msg\":\"Service not found\"}")
                                 .unwrap();
                             debug!("#{} resp: srcid:{}, dstid:{}, {}?{}",

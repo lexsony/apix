@@ -81,11 +81,11 @@ static void *requester_thread(void *args)
     apix_set_wait_timeout(ctx, 0);
     struct stream *stream = apix_open_unix_client(ctx, UNIX_ADDR);
     assert_true(stream);
-    apix_upgrade_to_srrp(stream, 0x3333);
+    apix_upgrade_to_srrp(stream, "3333");
 
     sleep(1);
 
-    struct srrp_packet *pac = srrp_new_request(0x3333, 0x8888, "/hello", PAYLOAD);
+    struct srrp_packet *pac = srrp_new_request("3333", "8888", "/hello", PAYLOAD);
     int rc = apix_srrp_send(stream, pac);
     assert_true(rc != -1);
     srrp_free(pac);
@@ -139,7 +139,7 @@ static void *responser_thread(void *args)
     apix_enable_posix(ctx);
     struct stream *stream = apix_open_unix_client(ctx, UNIX_ADDR);
     assert_true(stream);
-    apix_upgrade_to_srrp(stream, 0x8888);
+    apix_upgrade_to_srrp(stream, "8888");
 
     for (;;) {
         if (responser_finished)
@@ -201,7 +201,7 @@ static void test_api_request_response(void **status)
     apix_enable_posix(ctx);
     struct stream *server = apix_open_unix_server(ctx, UNIX_ADDR);
     assert_true(server);
-    apix_upgrade_to_srrp(server, 0x1);
+    apix_upgrade_to_srrp(server, "1");
 
     pthread_t responser_pid;
     pthread_create(&responser_pid, NULL, responser_thread, NULL);
@@ -281,7 +281,7 @@ static void *publish_thread(void *args)
 
     sleep(1);
 
-    struct srrp_packet *pac_sync = srrp_new_ctrl(0x9999, SRRP_CTRL_SYNC, "");
+    struct srrp_packet *pac_sync = srrp_new_ctrl("9999", SRRP_CTRL_SYNC, "");
     send(fd, srrp_get_raw(pac_sync), srrp_get_packet_len(pac_sync), 0);
     srrp_free(pac_sync);
 
@@ -310,7 +310,7 @@ static void *subscribe_thread(void *args)
     apix_enable_posix(ctx);
     struct stream *stream = apix_open_tcp_client(ctx, TCP_ADDR);
     assert_true(stream);
-    apix_upgrade_to_srrp(stream, 0x6666);
+    apix_upgrade_to_srrp(stream, "6666");
 
     int rc = 0;
 
@@ -375,7 +375,7 @@ static void test_api_subscribe_publish(void **status)
     apix_enable_posix(ctx);
     struct stream *server = apix_open_tcp_server(ctx, TCP_ADDR);
     assert_true(server);
-    apix_upgrade_to_srrp(server, 0x1);
+    apix_upgrade_to_srrp(server, "1");
 
     pthread_t subscribe_pid;
     pthread_create(&subscribe_pid, NULL, subscribe_thread, NULL);

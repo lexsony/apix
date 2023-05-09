@@ -16,8 +16,8 @@ static void test_srrp_base(void **status)
     struct srrp_packet *pac1 = NULL;
     struct srrp_packet *pac2 = NULL;
 
-    pac0 = srrp_new_request(0x3333, 0x8888, "/hello/x", "j:{\"err\":0,");
-    pac1 = srrp_new_request(0x3333, 0x8888, "/hello/x", "\"msg\":\"ok\"}");
+    pac0 = srrp_new_request("3333", "8888", "/hello/x", "j:{\"err\":0,");
+    pac1 = srrp_new_request("3333", "8888", "/hello/x", "\"msg\":\"ok\"}");
     srrp_set_fin(pac0, SRRP_FIN_0);
     assert_true(srrp_get_fin(pac0) == SRRP_FIN_0);
     assert_true(srrp_get_fin(pac1) == SRRP_FIN_1);
@@ -40,15 +40,15 @@ static void test_srrp_request_reponse(void **status)
     uint32_t buf_idx = 0;
 
     // 1
-    txpac = srrp_new_request(0x3333, 0x8888, "/hello/x",
+    txpac = srrp_new_request("3333", "8888", "/hello/x",
                              "j:{name:'yon',age:'18',equip:['hat','shoes']}");
     assert_true(txpac);
     rxpac = srrp_parse(srrp_get_raw(txpac), srrp_get_packet_len(txpac));
     assert_true(rxpac);
     assert_true(srrp_get_packet_len(rxpac) == srrp_get_packet_len(txpac));
     assert_true(srrp_get_leader(rxpac) == SRRP_REQUEST_LEADER);
-    assert_true(srrp_get_srcid(rxpac) == 0x3333);
-    assert_true(srrp_get_dstid(rxpac) == 0x8888);
+    assert_string_equal(srrp_get_srcid(rxpac), "3333");
+    assert_string_equal(srrp_get_dstid(rxpac), "8888");
     assert_true(strcmp(srrp_get_anchor(rxpac), "/hello/x") == 0);
     memcpy(buf, srrp_get_raw(txpac), srrp_get_packet_len(txpac));
     buf_idx = srrp_get_packet_len(txpac);
@@ -57,13 +57,13 @@ static void test_srrp_request_reponse(void **status)
 
     // 2
     txpac = srrp_new_response(
-        0x8888, 0x3333, "/hello/x", "j:{err:0,errmsg:'succ',data:{msg:'world'}}");
+        "8888", "3333", "/hello/x", "j:{err:0,errmsg:'succ',data:{msg:'world'}}");
     rxpac = srrp_parse(srrp_get_raw(txpac), srrp_get_packet_len(txpac));
     assert_true(rxpac);
     assert_true(srrp_get_packet_len(rxpac) == srrp_get_packet_len(txpac));
     assert_true(srrp_get_leader(rxpac) == SRRP_RESPONSE_LEADER);
-    assert_true(srrp_get_srcid(rxpac) == 0x8888);
-    assert_true(srrp_get_dstid(rxpac) == 0x3333);
+    assert_string_equal(srrp_get_srcid(rxpac), "8888");
+    assert_string_equal(srrp_get_dstid(rxpac), "3333");
     assert_true(strcmp(srrp_get_anchor(rxpac), "/hello/x") == 0);
     memcpy(buf + buf_idx, srrp_get_raw(txpac), srrp_get_packet_len(txpac));
     srrp_free(txpac);
@@ -73,8 +73,8 @@ static void test_srrp_request_reponse(void **status)
     rxpac = srrp_parse(buf, sizeof(buf));
     assert_true(rxpac);
     assert_true(srrp_get_leader(rxpac) == SRRP_REQUEST_LEADER);
-    assert_true(srrp_get_srcid(rxpac) == 0x3333);
-    assert_true(srrp_get_dstid(rxpac) == 0x8888);
+    assert_string_equal(srrp_get_srcid(rxpac), "3333");
+    assert_string_equal(srrp_get_dstid(rxpac), "8888");
     assert_true(strcmp(srrp_get_anchor(rxpac), "/hello/x") == 0);
     int len = srrp_get_packet_len(rxpac);
     srrp_free(rxpac);
@@ -82,8 +82,8 @@ static void test_srrp_request_reponse(void **status)
     rxpac = srrp_parse(buf + len, sizeof(buf) - len);
     assert_true(rxpac);
     assert_true(srrp_get_leader(rxpac) == SRRP_RESPONSE_LEADER);
-    assert_true(srrp_get_srcid(rxpac) == 0x8888);
-    assert_true(srrp_get_dstid(rxpac) == 0x3333);
+    assert_string_equal(srrp_get_srcid(rxpac), "8888");
+    assert_string_equal(srrp_get_dstid(rxpac), "3333");
     assert_true(strcmp(srrp_get_anchor(rxpac), "/hello/x") == 0);
     srrp_free(rxpac);
 }

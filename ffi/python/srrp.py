@@ -53,14 +53,14 @@ class Srrp():
     def srcid(self):
         func = lib.srrp_get_srcid
         func.argtypes = [ctypes.c_void_p]
-        func.restype = ctypes.c_uint32
-        return func(self.pac)
+        func.restype = ctypes.c_char_p
+        return func(self.pac).decode("utf-8")
 
     def dstid(self):
         func = lib.srrp_get_dstid
         func.argtypes = [ctypes.c_void_p]
-        func.restype = ctypes.c_uint32
-        return func(self.pac)
+        func.restype = ctypes.c_char_p
+        return func(self.pac).decode("utf-8")
 
     def anchor(self):
         func = lib.srrp_get_anchor
@@ -102,11 +102,13 @@ def srrp_parse(buf):
 def srrp_new(leader, fin, srcid, dstid, anchor, payload, payload_len):
     func = lib.srrp_new
     func.argtypes = [ctypes.c_char, ctypes.c_uint8,
-                     ctypes.c_uint32, ctypes.c_uint32,
+                     ctypes.c_char_p, ctypes.c_char_p,
                      ctypes.c_char_p, ctypes.c_char_p,
                      ctypes.c_uint32]
     func.restype = ctypes.c_void_p
-    pac = func(leader, fin, srcid, dstid,
+    pac = func(leader, fin,
+               ctypes.c_char_p(srcid.encode('utf-8')),
+               ctypes.c_char_p(dstid.encode('utf-8')),
                ctypes.c_char_p(anchor.encode('utf-8')),
                ctypes.c_char_p(payload.encode('utf-8')),
                payload_len)
@@ -114,7 +116,7 @@ def srrp_new(leader, fin, srcid, dstid, anchor, payload, payload_len):
     return Srrp(pac, True)
 
 def srrp_new_ctrl(srcid, anchor, payload):
-    return srrp_new(0x3D, 1, srcid, 0, anchor, payload, len(payload))
+    return srrp_new(0x3D, 1, srcid, "", anchor, payload, len(payload))
 
 def srrp_new_request(srcid, dstid, anchor, payload):
     return srrp_new(0x3E, 1, srcid, dstid, anchor, payload, len(payload))
@@ -123,10 +125,10 @@ def srrp_new_response(srcid, dstid, anchor, payload):
     return srrp_new(0x3C, 1, srcid, dstid, anchor, payload, len(payload))
 
 def srrp_new_subscribe(anchor, payload):
-    return srrp_new(0x2B, 1, 0, 0, anchor, payload, len(payload))
+    return srrp_new(0x2B, 1, "", "", anchor, payload, len(payload))
 
 def srrp_new_unsubscribe(anchor, payload):
-    return srrp_new(0x2D, 1, 0, 0, anchor, payload, len(payload))
+    return srrp_new(0x2D, 1, "", "", anchor, payload, len(payload))
 
 def srrp_new_publish(anchor, payload):
-    return srrp_new(0x40, 1, 0, 0, anchor, payload, len(payload))
+    return srrp_new(0x40, 1, "", "", anchor, payload, len(payload))

@@ -13,7 +13,7 @@ func TestBase(T *testing.T) {
     ctx.SetWaitTimeout(0)
     stream := ctx.OpenUnixClient("/tmp/apix")
 
-    pac, _ := srrp.NewCtrl(0xff00, "/sync", "")
+    pac, _ := srrp.NewCtrl("ff00", "/sync", "")
     stream.Send(pac.Raw)
 
     for true {

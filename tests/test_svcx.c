@@ -26,8 +26,8 @@ static void test_svc(void **status)
     struct svcx *svcx = svcx_new();
     svcx_add_service(svcx, "8888:/echo", on_echo);
 
-    struct srrp_packet *req = srrp_new_request(3333, 8888, "/echo", "{msg:'hello'}");
-    struct srrp_packet *resp = srrp_new_response(0, 0, "", "");
+    struct srrp_packet *req = srrp_new_request("3333", "8888", "/echo", "{msg:'hello'}");
+    struct srrp_packet *resp = srrp_new_response("x", "x", "", "");
     ((srrp_request_handle_func_t)(svcx_get_service_private(svcx, "8888:/echo")))(req, resp);
     assert_true(strcmp((char *)srrp_get_payload(resp), "t:{msg:'world'}") == 0);
     srrp_free(req);

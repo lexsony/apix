@@ -122,7 +122,7 @@ struct srrp_packet *apix_wait_srrp_packet(struct stream *stream);
  * apix_upgrade_to_srrp
  * - enable srrp mode
  */
-int apix_upgrade_to_srrp(struct stream *stream, u32 nodeid);
+int apix_upgrade_to_srrp(struct stream *stream, const char *nodeid);
 
 /**
  * apix_srrp_forward
