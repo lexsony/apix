@@ -1,11 +1,11 @@
-#include "srrp.h"
 #include <assert.h>
+#include <errno.h>
 #include <ctype.h>
-#include <inttypes.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <errno.h>
+
+#include "srrp.h"
 #include "crc16.h"
 #include "str.h"
 #include "vec.h"
@@ -16,6 +16,7 @@ struct srrp_packet {
     char leader;
     u8 fin;
     u16 ver;
+    u8 payload_type;
 
     u16 packet_len;
     u32 payload_len;
@@ -43,6 +44,11 @@ u8 srrp_get_fin(const struct srrp_packet *pac)
 u16 srrp_get_ver(const struct srrp_packet *pac)
 {
     return pac->ver;
+}
+
+u8 srrp_get_payload_type(const struct srrp_packet *pac)
+{
+    return pac->payload_type;
 }
 
 u16 srrp_get_packet_len(const struct srrp_packet *pac)
@@ -100,6 +106,11 @@ void srrp_set_fin(struct srrp_packet *pac, u8 fin)
              CRC_SIZE, "%.4x", crc);
 }
 
+void srrp_set_payload_type(struct srrp_packet *pac, u8 payload_type)
+{
+    pac->payload_type = payload_type;
+}
+
 void srrp_free(struct srrp_packet *pac)
 {
 #ifdef DEBUG_SRRP
@@ -120,7 +131,7 @@ struct srrp_packet *srrp_move(struct srrp_packet *fst, struct srrp_packet *snd)
     str_free(snd->anchor);
     vec_free(snd->raw);
     *snd = *fst;
-    bzero(fst, sizeof(*fst));
+    memset(fst, 0, sizeof(*fst));
     free(fst);
     return snd;
 }
@@ -182,7 +193,9 @@ struct srrp_packet *srrp_parse(const u8 *buf, u32 len)
 {
     char leader = 0;
     u8 fin = 0;
-    u16 ver = 0, packet_len = 0;
+    u16 ver = 0;
+    u8 payload_type = 0;
+    u16 packet_len = 0;
     u32 payload_len = 0;
     char srcid[SRRP_ID_MAX] = {0};
     char dstid[SRRP_ID_MAX] = {0};
@@ -194,9 +207,9 @@ struct srrp_packet *srrp_parse(const u8 *buf, u32 len)
         leader == SRRP_REQUEST_LEADER ||
         leader == SRRP_RESPONSE_LEADER) {
         // 1024 means SRRP_ANCHOR_MAX
-        if (sscanf((char *)buf + 1, "%c%hx#%hx#%x#%255[^#]#%255[^:]:%1023[^?]",
-                   &fin, &ver, &packet_len, &payload_len,
-                   srcid, dstid, anchor) != 7)
+        if (sscanf((char *)buf + 1, "%c%hx%c#%hx#%x#%255[^#]#%255[^:]:%1023[^?]",
+                   &fin, &ver, &payload_type, &packet_len, &payload_len,
+                   srcid, dstid, anchor) != 8)
             return NULL;
         if (strlen(srcid) == 0 || strlen(dstid) == 0)
             return NULL;
@@ -204,8 +217,8 @@ struct srrp_packet *srrp_parse(const u8 *buf, u32 len)
                leader == SRRP_UNSUBSCRIBE_LEADER ||
                leader == SRRP_PUBLISH_LEADER) {
         // 1024 means SRRP_ANCHOR_MAX
-        if (sscanf((char *)buf + 1, "%c%hx#%hx#%x:%1023[^?]",
-                   &fin, &ver, &packet_len, &payload_len, anchor) != 5)
+        if (sscanf((char *)buf + 1, "%c%hx%c#%hx#%x:%1023[^?]",
+                   &fin, &ver, &payload_type, &packet_len, &payload_len, anchor) != 6)
             return NULL;
     } else {
         return NULL;
@@ -232,6 +245,7 @@ struct srrp_packet *srrp_parse(const u8 *buf, u32 len)
     pac->leader = leader;
     pac->fin = fin - '0';
     pac->ver = ver;
+    pac->payload_type = payload_type;
     pac->packet_len = packet_len;
     pac->payload_len = payload_len;
 
@@ -274,6 +288,9 @@ static vec_t *__srrp_new_raw(
     snprintf(tmp, sizeof(tmp), "%.1x%.1x", SRRP_VERSION_MAJOR, SRRP_VERSION_MINOR);
     assert(strlen(tmp) == 2);
     vpack(v, tmp, 2);
+
+    // payload_type, default json
+    vpack(v, "j", 1);
 
 //#define VINSERT
 #ifndef VINSERT
@@ -323,13 +340,13 @@ static vec_t *__srrp_new_raw(
     assert(packet_len < SRRP_PACKET_MAX);
     snprintf(tmp, sizeof(tmp), "%.4x", packet_len);
     assert(strlen(tmp) == 4);
-    memcpy((char *)vraw(v) + 5, tmp, 4);
+    memcpy((char *)vraw(v) + 6, tmp, 4);
 #else
     u16 packet_len = vsize(v) + CRC_SIZE + 4;
     assert(packet_len < SRRP_PACKET_MAX);
     snprintf(tmp, sizeof(tmp), "%.4x", packet_len);
     assert(strlen(tmp) == 4);
-    vinsert(v, 5, tmp, 4);
+    vinsert(v, 6, tmp, 4);
 #endif
 
     // crc16
@@ -357,6 +374,7 @@ struct srrp_packet *srrp_new(
     pac->leader = leader;
     pac->fin = fin;
     pac->ver = SRRP_VERSION;
+    pac->payload_type = SRRP_PAYLOAD_JSON;
     pac->packet_len = vsize(v);
     pac->payload_len = payload_len;
 

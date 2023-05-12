@@ -9,33 +9,24 @@ extern "C" {
 #endif
 
 /**
- * Data type:
- *   ascii hex: packet_len, fin, payload_len, srcid, dstid, crc16
- *   acsii str: anchor
+ * Ctrl: =[fin][ver2][payload_type]#[packet_len]#[payload_len]#[srcid]#0:[/anchor]?[payload]\0<crc16>\0
+ *   =101j#[packet_len]#[payload_len]#F1#0:/sync?{"alias":["google.com","a.google.com","b.google.com"]}\0<crc16>\0
  *
- * Payload type:
- *   b: binary
- *   t: txt
- *   j: json
+ * Request: >[fin][ver2][payload_type]#[packet_len]#[payload_len]#[srcid]#[dstid]:[/anchor]?[payload]\0<crc16>\0
+ *   >001j#[packet_len]#[payload_len]#F1#8A8F:/echo?{"err":0,\0<crc16>\0
+ *   >101j#[packet_len]#[payload_len]#F1#8A8F:/echo?"msg":"ok"}\0<crc16>\0
  *
- * Ctrl: =[fin][ver2]#[packet_len]#[payload_len]#[srcid]#0:[/anchor]?[payload_type]:[payload]\0<crc16>\0
- *   =101#[packet_len]#[payload_len]#F1#0:/sync?j:{"alias":["google.com","a.google.com","b.google.com"]}\0<crc16>\0
+ * Response: <[fin][ver2][payload_type]#[packet_len]#[payload_len]#[srcid]#[dstid]:[/anchor]?[payload]\0<crc16>\0
+ *   <101j#[packet_len]#[payload_len]#8A8F#F1:/echo?{"err":0,"msg":"ok","v":"good news"}\0<crc16>\0
  *
- * Request: >[fin][ver2]#[packet_len]#[payload_len]#[srcid]#[dstid]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
- *   >001#[packet_len]#[payload_len]#F1#8A8F:/echo?j:{"err":0,\0<crc16>\0
- *   >101#[packet_len]#[payload_len]#F1#8A8F:/echo?j:"msg":"ok"}\0<crc16>\0
+ * Subscribe: +[fin][ver2][payload_type]#[packet_len]#[payload_len]:[/anchor]?[payload]\0<crc16>\0
+ *   +101j#[packet_len]#0:/motor/speed\0<crc16>\0
  *
- * Response: <[fin][ver2]#[packet_len]#[payload_len]#[srcid]#[dstid]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
- *   <101#[packet_len]#[payload_len]#8A8F#F1:/echo?j:{"err":0,"msg":"ok","v":"good news"}\0<crc16>\0
+ * UnSubscribe: -[fin][ver2][payload_type]#[packet_len]#[payload_len]:[/anchor]?[payload]\0<crc16>\0
+ *   -101j#[packet_len]#0:/motor/speed\0<crc16>\0
  *
- * Subscribe: +[fin][ver2]#[packet_len]#[payload_len]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
- *   +101#[packet_len]#0:/motor/speed\0<crc16>\0
- *
- * UnSubscribe: -[fin][ver2]#[packet_len]#[payload_len]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
- *   -101#[packet_len]#0:/motor/speed\0<crc16>\0
- *
- * Publish: @[fin][ver2]#[packet_len]#[payload_len]:[/anchor]?[payload_type]:[payload]\0<crc16>\0
- *   @101#[packet_len]#[payload_len]:/motor/speed?j:{"speed":12,"voltage":24}\0<crc16>\0
+ * Publish: @[fin][ver2][payload_type]#[packet_len]#[payload_len]:[/anchor]?[payload]\0<crc16>\0
+ *   @101j#[packet_len]#[payload_len]:/motor/speed?{"speed":12,"voltage":24}\0<crc16>\0
  */
 
 #define SRRP_VERSION_MAJOR 0 // 0 ~ 15
@@ -52,6 +43,10 @@ extern "C" {
 #define SRRP_FIN_0 0
 #define SRRP_FIN_1 1
 
+#define SRRP_PAYLOAD_JSON 'j'
+#define SRRP_PAYLOAD_TEXT 't'
+#define SRRP_PAYLOAD_BINARY 'b'
+
 #define SRRP_PACKET_MAX 65535
 #define SRRP_DST_ALIAS_MAX 64
 #define SRRP_ID_MAX 256
@@ -65,6 +60,7 @@ struct srrp_packet;
 char srrp_get_leader(const struct srrp_packet *pac);
 u8 srrp_get_fin(const struct srrp_packet *pac);
 u16 srrp_get_ver(const struct srrp_packet *pac);
+u8 srrp_get_payload_type(const struct srrp_packet *pac);
 u16 srrp_get_packet_len(const struct srrp_packet *pac);
 u32 srrp_get_payload_len(const struct srrp_packet *pac);
 const char *srrp_get_srcid(const struct srrp_packet *pac);
@@ -75,6 +71,7 @@ u16 srrp_get_crc16(const struct srrp_packet *pac);
 const u8 *srrp_get_raw(const struct srrp_packet *pac);
 
 void srrp_set_fin(struct srrp_packet *pac, u8 fin);
+void srrp_set_payload_type(struct srrp_packet *pac, u8 payload_type);
 
 /**
  * srrp_free
