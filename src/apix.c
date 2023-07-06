@@ -120,8 +120,7 @@ static int apix_response(
     return rc;
 }
 
-static void
-handle_ctrl(struct message *am)
+static void handle_ctrl(struct message *am)
 {
     assert(am->stream->type != STREAM_T_LISTEN);
 
@@ -161,8 +160,7 @@ out:
     message_finish(am);
 }
 
-static void
-handle_subscribe(struct message *am)
+static void handle_subscribe(struct message *am)
 {
     assert(am->stream->type != STREAM_T_LISTEN);
 
@@ -185,8 +183,7 @@ handle_subscribe(struct message *am)
     message_finish(am);
 }
 
-static void
-handle_unsubscribe(struct message *am)
+static void handle_unsubscribe(struct message *am)
 {
     assert(am->stream->type != STREAM_T_LISTEN);
 
@@ -259,8 +256,7 @@ static void forward_publish(struct message *am)
     message_finish(am);
 }
 
-static void
-handle_forward(struct message *am)
+static void handle_forward(struct message *am)
 {
     LOG_TRACE("[%p:handle_forward] state:%d, raw:%s",
               am->stream->ctx, am->state, srrp_get_raw(am->pac));
@@ -697,8 +693,7 @@ int apix_srrp_send(struct stream *stream, struct srrp_packet *pac)
  * sink
  */
 
-void sink_init(struct sink *sink, const char *name,
-               const struct sink_operations *ops)
+void sink_init(struct sink *sink, const char *name, const struct sink_operations *ops)
 {
     assert(strlen(name) < SINK_ID_SIZE);
     INIT_LIST_HEAD(&sink->streams);

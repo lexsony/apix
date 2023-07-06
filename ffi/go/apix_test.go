@@ -1,7 +1,7 @@
 package apix_test
-import "github.com/yonzkon/apix/go/apix"
-import "github.com/yonzkon/apix/go/srrp"
-import "github.com/yonzkon/apix/go/log"
+import "github.com/yonzkon/apix/ffi/go/apix"
+import "github.com/yonzkon/apix/ffi/go/srrp"
+import "github.com/yonzkon/apix/ffi/go/log"
 import "testing"
 import "fmt"
 
@@ -11,9 +11,13 @@ func TestBase(T *testing.T) {
     ctx := apix.New()
     ctx.EnablePosix()
     ctx.SetWaitTimeout(0)
-    stream := ctx.OpenUnixClient("/tmp/apix")
+    stream := ctx.OpenUnixClient("/tmp/srrp")
+    stream.UpgradeToSrrp("testid")
 
-    pac, _ := srrp.NewCtrl("ff00", "/sync", "")
+    pac, _ := srrp.NewCtrl("testid", "/sync", "")
+    stream.Send(pac.Raw)
+
+    pac, _ = srrp.NewRequest("testid", "test_dstid", "/hello", "{}")
     stream.Send(pac.Raw)
 
     for true {
@@ -28,16 +32,23 @@ func TestBase(T *testing.T) {
             fmt.Println("never enter accept")
             break;
         case apix.EventPollin:
-            buf := make([]byte, 256)
-            nr := stream.ReadFromBuffer( buf)
-            if nr > 0 {
-                pac, err := srrp.Parse(buf)
-                if err == nil {
-                    fmt.Println("recv srrp: " + string(pac.Raw))
-                } else {
-                    fmt.Println("recv raw: " + string(buf))
-                }
+            pac, err := stream.WaitSrrpPacket();
+            if err == nil {
+                fmt.Println("recv srrp: " + string(pac.Raw))
+            } else {
+                //fmt.Println(err)
             }
+
+            //buf := make([]byte, 256)
+            //nr := stream.ReadFromBuffer( buf)
+            //if nr > 0 {
+            //    pac, err := srrp.Parse(buf)
+            //    if err == nil {
+            //        fmt.Println("recv srrp: " + string(pac.Raw))
+            //    } else {
+            //        fmt.Println("recv raw: " + string(buf))
+            //    }
+            //}
             break;
         default:
             break;

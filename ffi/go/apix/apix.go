@@ -7,6 +7,8 @@ package apix
 // #include <apix/log.h>
 import "C"
 import "unsafe"
+import "errors"
+import "github.com/yonzkon/apix/ffi/go/srrp"
 
 const (
     EventNone uint = 0
@@ -63,6 +65,51 @@ func (self *ApixStream) ReadFromBuffer(buf []byte) (int) {
 
 func (self *ApixStream) WaitEvent() (uint) {
     return uint(C.apix_wait_event(self.stream))
+}
+
+func from_raw_packet_apix(pac *C.struct_srrp_packet) (srrp.SrrpPacket) {
+    if pac == nil {
+        panic("raw point of srrp_packet is null")
+    }
+
+    return srrp.SrrpPacket {
+        Leader: int8(C.srrp_get_leader(pac)),
+        PacketLen: uint16(C.srrp_get_packet_len(pac)),
+        Fin: uint8(C.srrp_get_fin(pac)),
+        Ver: uint16(C.srrp_get_ver(pac)),
+        PayloadLen: uint32(C.srrp_get_payload_len(pac)),
+        Srcid: C.GoString(C.srrp_get_srcid(pac)),
+        Dstid: C.GoString(C.srrp_get_dstid(pac)),
+        Anchor: C.GoString(C.srrp_get_anchor(pac)),
+        Payload: C.GoString((*C.char)(unsafe.Pointer(C.srrp_get_payload(pac)))),
+        Crc16: uint16(C.srrp_get_crc16(pac)),
+        Raw: C.GoBytes(unsafe.Pointer(C.srrp_get_raw(pac)),
+            (C.int)(C.srrp_get_packet_len(pac))),
+        Pac: unsafe.Pointer(pac),
+    }
+}
+
+func (self *ApixStream) WaitSrrpPacket() (srrp.SrrpPacket, error) {
+    pac := C.apix_wait_srrp_packet(self.stream)
+
+    if pac == nil {
+        return srrp.SrrpPacket {}, errors.New("wait srrp packet failed")
+    } else {
+        ret := from_raw_packet_apix(pac)
+        return ret, nil
+    }
+}
+
+func (self *ApixStream) UpgradeToSrrp(nodeid string) (int) {
+    return int(C.apix_upgrade_to_srrp(self.stream, C.CString(nodeid)))
+}
+
+func (self *ApixStream) SrrpForward(pac srrp.SrrpPacket) () {
+    C.apix_srrp_forward(self.stream, (*C.struct_srrp_packet)(pac.Pac))
+}
+
+func (self *ApixStream) SrrpSend(pac srrp.SrrpPacket) (int) {
+    return int(C.apix_srrp_send(self.stream, (*C.struct_srrp_packet)(pac.Pac)))
 }
 
 type Apix struct {

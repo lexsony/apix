@@ -17,6 +17,7 @@ type SrrpPacket struct {
     Payload string
     Crc16 uint16
     Raw []byte
+    Pac unsafe.Pointer
 }
 
 type Srrp struct {}
@@ -39,6 +40,7 @@ func from_raw_packet(pac *C.struct_srrp_packet) (SrrpPacket) {
         Crc16: uint16(C.srrp_get_crc16(pac)),
         Raw: C.GoBytes(unsafe.Pointer(C.srrp_get_raw(pac)),
             (C.int)(C.srrp_get_packet_len(pac))),
+        Pac: unsafe.Pointer(pac),
     }
 }
 
@@ -75,7 +77,7 @@ func New(leader uint8, fin uint8, srcid string, dstid string,
         return SrrpPacket {}, errors.New("srrp parse failed")
     } else {
         ret := from_raw_packet(pac)
-        C.srrp_free(pac)
+        defer C.srrp_free((*C.struct_srrp_packet)(ret.Pac))
         return ret, nil
     }
 }
