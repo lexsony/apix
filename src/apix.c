@@ -496,8 +496,9 @@ static int apix_poll(struct apix *ctx)
 
         // parse rxbuf to srrp_packet
         // FIXME: timercmp will fail when ntpdate just time in large diff sec
-        if (timercmp(&ctx->poll_ts, &pos_fd->ts_poll_recv, <) &&
-            vsize(pos_fd->rxbuf) && pos_fd->ev.bits.pollin) {
+        //if (timercmp(&ctx->poll_ts, &pos_fd->ts_poll_recv, <) &&
+        //    vsize(pos_fd->rxbuf) && pos_fd->ev.bits.pollin) {
+        if (timercmp(&ctx->poll_ts, &pos_fd->ts_poll_recv, <)) {
             assert(vsize(pos_fd->rxbuf));
             assert(pos_fd->ev.bits.pollin);
             ctx->poll_cnt++;
